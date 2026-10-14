@@ -53,3 +53,16 @@ A setup may report `eve link` as a prerequisite; run it, then retry the continua
 ## Validate the change
 
 Run the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.
+
+## TrustBench completion gate
+
+Never mark a planning-workbook row `Completed` merely because some code or documentation exists. Completion requires all of the following:
+
+1. Every implementation step in that row is resolved.
+2. Every listed data/input requirement is available and used honestly.
+3. The exact acceptance criterion passes an executable or inspectable check.
+4. The expected evidence exists at the recorded evidence path.
+5. Risks, exclusions, failed checks, and missing external prerequisites are not hidden.
+6. The saved workbook reopens with correct formulas and no evidence gap.
+
+If any item is missing, use `In Progress` or `Blocked` and state the unresolved item in the workbook's blocker/next-action column. Never substitute synthetic, estimated, copied, or proposed metrics for measured results without labeling them explicitly.

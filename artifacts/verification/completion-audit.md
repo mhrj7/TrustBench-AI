@@ -1,4 +1,4 @@
-# Completion audit for TB-001 through TB-004
+# Completion audit for completed TrustBench tasks
 
 **Audit date:** 2026-10-14
 
@@ -10,5 +10,6 @@ The status `Completed` is used only when the exact spreadsheet acceptance criter
 | TB-002 | Attack surfaces and excluded threats are explicit; no novelty claim. | `docs/threat-model.md` | The document contains 16 enumerated attack surfaces, an explicit excluded-threats table, workflow mappings, and an explicit statement that no research-novelty claim is made. | Completed |
 | TB-003 | Fresh checkout installs and runs one fixture without credentials. | `docs/development-environment.md`, `fixtures/smoke/environment.json`, and `artifacts/verification/tb003-clean-install.json` | A fresh `git clone --no-local` checkout on `/Volumes/MHRJ` runs `npm ci --ignore-scripts` and `npm run verify` with common provider credential variables removed. | Completed only if the recorded command passes |
 | TB-004 | Invalid events are rejected; a trace reconstructs all executed tool calls. | `schemas/trace.ts`, `fixtures/traces/valid-run.jsonl`, `tests/trace-contract.test.ts`, and `docs/trace-contract.md` | Ten executable tests cover lossless JSONL round trip, two-call reconstruction, and eight invalid or unsafe cases. | Completed only if `npm run test:trace` passes |
+| TB-006 | Protocol specifies exclusions, uncertainty method and holdout policy. | `protocol/preregister.md`, `protocol/experiment-registry.yaml`, and `scripts/verify-protocol.mjs` | Executable verification checks 12 required sections, the two frozen primary metrics, 20% holdout, 10,000 cluster-bootstrap resamples, model-revision separation and pre-result freeze. | Completed only if `npm run verify:protocol` passes |
 
-No later task is implied by these statuses. In particular, runtime budgets, experiment protocol, datasets, agent implementation, policy gateway, evaluations, dashboard, and report remain incomplete until their own rows pass their own criteria.
+No later task is implied by these statuses. TB-005 remains In Progress until its real provider pilot exists. Datasets, agent implementation, policy gateway, evaluations, dashboard and report remain incomplete until their own rows pass their own criteria.
