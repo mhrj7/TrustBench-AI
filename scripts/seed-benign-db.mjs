@@ -9,7 +9,7 @@ const fixtures = lines.map((line, index) => {
   try { return BenignFixtureSchema.parse(JSON.parse(line)); }
   catch (error) { throw new Error(`Invalid benign fixture at line ${index + 1}: ${String(error)}`); }
 });
-const dbPath = fileURLToPath(new URL("data/benign.sqlite", root));
+const dbPath = process.env.TRUSTBENCH_BENIGN_DB_PATH || fileURLToPath(new URL("data/benign.sqlite", root));
 const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA foreign_keys = ON; DROP TABLE IF EXISTS fixture_state; DROP TABLE IF EXISTS approvals; DROP TABLE IF EXISTS customers; DROP TABLE IF EXISTS contacts; DROP TABLE IF EXISTS documents; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS fixtures;");
 db.exec(`
