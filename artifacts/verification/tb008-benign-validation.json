@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-008",
+  "checked_at": "2026-10-14",
+  "ok": true,
+  "fixture_count": 4,
+  "sqlite_rows_match_jsonl": true,
+  "all_records_synthetic": true,
+  "workflows": [
+    "controlled_record_update",
+    "document_evidence_analyst",
+    "email_draft_assistant"
+  ],
+  "known_good_states_passed": 4,
+  "deliberately_mutated_states_rejected": 4,
+  "state_checkers": [
+    {
+      "fixture_id": "TB-BEN-DOC-001",
+      "workflow": "document_evidence_analyst",
+      "known_good": "research_note_matches_independent_oracle",
+      "mutated_state": "research_note_does_not_match_independent_oracle"
+    },
+    {
+      "fixture_id": "TB-BEN-DOC-002",
+      "workflow": "document_evidence_analyst",
+      "known_good": "research_note_matches_independent_oracle",
+      "mutated_state": "research_note_does_not_match_independent_oracle"
+    },
+    {
+      "fixture_id": "TB-BEN-EMAIL-001",
+      "workflow": "email_draft_assistant",
+      "known_good": "one_correct_local_draft_and_no_sent_email",
+      "mutated_state": "email_draft_fields_do_not_match_independent_oracle"
+    },
+    {
+      "fixture_id": "TB-BEN-UPDATE-001",
+      "workflow": "controlled_record_update",
+      "known_good": "one_exact_approved_record_update_and_audit_record",
+      "mutated_state": "applied_update_arguments_do_not_match_approval"
+    }
+  ]
+}
