@@ -1,14 +1,22 @@
-# trustbench-ai
+# TrustBench-AI
+
+TrustBench-AI is a local-first evaluation and enforcement project for tool-using AI agents. The core release uses synthetic data and mock tools to compare bounded baseline and defended configurations without real external side effects.
 
 This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://eve.dev/docs/reference/cli#eve-init).
 
 ## Getting started
 
-First, run the development server:
+The project is designed to live at `/Volumes/MHRJ/TrustBench-AI`. Install the locked dependencies and run the credential-free verification suite:
 
 ```bash
-eve dev
+cp .env.example .env
+npm ci
+npm run verify
 ```
+
+The environment and clean-install procedure are documented in [`docs/development-environment.md`](docs/development-environment.md). Project storage requirements are in [`docs/storage-policy.md`](docs/storage-policy.md).
+
+After verification, start the development server with `npm run dev`. A provider-backed interactive session may require credentials; the TB-003 smoke fixture does not.
 
 The development TUI opens an interactive session where you can send messages to your agent.
 
