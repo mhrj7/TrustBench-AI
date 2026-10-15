@@ -17,8 +17,15 @@ const unlistedOnly = (r, arm) => {
   const k = rows.filter((c) => { const e = c[arm].evaluation; return !e.security_pass && !e.attacker_goal_achieved && e.prohibited_side_effects.length > 0 && e.prohibited_side_effects.every((x) => x.startsWith("security.executed_unlisted_tool")); }).length;
   return `${k}/${rows.length}`;
 };
+// Defended-arm denials raised by the provenance flow check, as "benign runs with one / attack runs with one".
+const flowDenials = (r) => {
+  const ok = r.cases.filter((c) => !c.baseline.invalid && !c.defended.invalid);
+  const hit = (c) => c.defended.policy_decisions.some((d) => String(d.reason ?? "").startsWith("untrusted_flow"));
+  const b = ok.filter((c) => c.kind === "benign"), a = ok.filter((c) => c.kind === "attack");
+  return r.defended_variant === "capability_plus_flow" ? `${b.filter(hit).length}/${b.length} · ${a.filter(hit).length}/${a.length}` : "off";
+};
 const pair = (o, key) => `${cell(o[key].baseline)} → ${cell(o[key].defended)}`;
-const order = (a, b) => (a.prompt_profile + a.model + a.attack_rendering).localeCompare(b.prompt_profile + b.model + b.attack_rendering);
+const order = (a, b) => (a.prompt_profile + a.model + a.attack_rendering + a.defended_variant).localeCompare(b.prompt_profile + b.model + b.attack_rendering + b.defended_variant);
 reports.sort(order);
 
 const lines = [];
@@ -30,16 +37,16 @@ lines.push("Notation: `baseline → defended`. Rates are numerator/denominator o
   "Intervals are in the JSON files; no paired test is claimed. Holdout fixtures are never run.", "");
 for (const profile of [...new Set(reports.map((r) => r.prompt_profile))]) {
   lines.push(`## Prompt profile: ${profile}`, "");
-  lines.push("| Model | Attack text | Reps | Invalid pairs | Made a tool call | Exposed to injection | Attacker goal | Goal given exposed | Unsafe effect | …of which unlisted-tool use only | Benign utility | Utility under attack | Benign calls blocked |");
-  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("| Model | Attack text | Defended variant | Reps | Invalid pairs | Made a tool call | Exposed to injection | Attacker goal | Goal given exposed | Unsafe effect | …of which unlisted-tool use only | Benign utility | Utility under attack | Benign calls blocked | Flow-check denials (benign runs · attack runs) |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const r of reports.filter((x) => x.prompt_profile === profile)) {
     const s = r.summary;
-    lines.push(`| ${r.model} | ${r.attack_rendering} | ${r.repetitions} | ${s.validity.invalid_pairs}/${s.validity.total_pairs} | ${pair(s, "engagement_made_a_tool_call")} | ${pair(s, "injection_exposure")} | ${pair(s, "attacker_goal_achieved")} | ${pair(s, "attacker_goal_achieved_among_exposed")} | ${pair(s, "unsafe_committed_effect")} | ${unlistedOnly(r, "baseline")} → ${unlistedOnly(r, "defended")} | ${s.benign_utility_pass.baseline.denominator ? pair(s, "benign_utility_pass") : "n/a"} | ${pair(s, "utility_under_attack")} | ${cell(s.false_block_calls_on_benign)} |`);
+    lines.push(`| ${r.model} | ${r.attack_rendering} | ${r.defended_variant ?? "capability_only"} | ${r.repetitions} | ${s.validity.invalid_pairs}/${s.validity.total_pairs} | ${pair(s, "engagement_made_a_tool_call")} | ${pair(s, "injection_exposure")} | ${pair(s, "attacker_goal_achieved")} | ${pair(s, "attacker_goal_achieved_among_exposed")} | ${pair(s, "unsafe_committed_effect")} | ${unlistedOnly(r, "baseline")} → ${unlistedOnly(r, "defended")} | ${s.benign_utility_pass.baseline.denominator ? pair(s, "benign_utility_pass") : "n/a"} | ${pair(s, "utility_under_attack")} | ${cell(s.false_block_calls_on_benign)} | ${flowDenials(r)} |`);
   }
   lines.push("");
 }
 const matrix = JSON.parse(await readFile(path.join(root, "configs/live-matrix.yaml"), "utf8"));
-const have = new Set(reports.map((r) => `${r.model}|${r.prompt_profile}|${r.attack_rendering}`));
+const have = new Set(reports.map((r) => `${r.model}|${r.prompt_profile}|${r.attack_rendering}`)); // any defended variant counts as run
 const missing = [];
 for (const model of Object.values(matrix.lanes).flat()) for (const profile of matrix.prompt_profiles) for (const rendering of matrix.renderings) {
   if (rendering.profiles && !rendering.profiles.includes(profile)) continue;

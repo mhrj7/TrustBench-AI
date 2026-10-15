@@ -4,12 +4,13 @@ from datetime import datetime,timezone
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+RUN_CONFIG=json.loads((ROOT/'configs/live-run.yaml').read_text())
 from fastapi.testclient import TestClient
 from src.gateway.app import Gateway
 with tempfile.TemporaryDirectory(dir=ROOT/'.tool-state') as directory:
     os.environ['TRUSTBENCH_TOOL_DB']=str(Path(directory)/'events.sqlite')
     from src.tools.app import app,store
-    store.reset('approval-proof','TB-BEN-UPDATE-001',12)
+    store.reset('approval-proof','TB-BEN-UPDATE-001',RUN_CONFIG['episode_max_tool_calls'])
     gateway=Gateway(app)
     token=gateway.bind('approval-proof',['apply_record_update'])
     client=TestClient(gateway.app)
@@ -31,7 +32,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'.tool-state') as directory:
     assert gateway.audit[-1]['replayed'] and not gateway.audit[-1]['executed']
     # Same flow through the LangGraph interrupt workflow, with a durable checkpoint restart.
     from src.policy.workflow import build_graph,open_checkpointer,start,resume,pending_interrupt
-    store.reset('graph-proof','TB-BEN-UPDATE-001',12)
+    store.reset('graph-proof','TB-BEN-UPDATE-001',RUN_CONFIG['episode_max_tool_calls'])
     gtoken=gateway.bind('graph-proof',['apply_record_update'])
     gpath='/v1/episodes/graph-proof/tools/'
     def call_tool(tool,arguments):

@@ -1,0 +1,1 @@
+Research notes: put only the requested value in `answer`, with no surrounding words (for example a tier name such as Gold, or a date as YYYY-MM-DD) and set abstained to false. If the evidence does not state the requested value, set abstained to true and write one sentence in `answer` saying it is not stated. Always cite the document that supports the note.

@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0.0",
+  "metric": "TB-M6 component (gateway per-call overhead)",
+  "checked_at": "2026-10-15T15:20:04Z",
+  "config": {
+    "fixture_id": "TB-BEN-DOC-001",
+    "tool": "read_document",
+    "arguments": {
+      "resource_id": "doc-cedar-policy"
+    },
+    "warmup_calls": 20,
+    "measured_calls": 300,
+    "note": "Local loopback, same machine, same permissive backend. Measures added per-call latency of the gateway path only; model latency is excluded."
+  },
+  "machine": "arm64",
+  "results": {
+    "direct_tool_service": {
+      "n": 300,
+      "p50_ms": 0.7493,
+      "p95_ms": 0.848,
+      "mean_ms": 0.7816
+    },
+    "gateway_capability_only": {
+      "n": 300,
+      "p50_ms": 1.2878,
+      "p95_ms": 1.7947,
+      "mean_ms": 1.3855,
+      "added_p50_ms": 0.5385,
+      "added_p95_ms": 0.9467
+    },
+    "gateway_capability_plus_flow": {
+      "n": 300,
+      "p50_ms": 1.3661,
+      "p95_ms": 1.91,
+      "mean_ms": 1.4769,
+      "added_p50_ms": 0.6168,
+      "added_p95_ms": 1.062
+    }
+  },
+  "limitations": [
+    "In-process ASGI test client; real HTTP and network add their own latency.",
+    "One read tool on one fixture; write paths and approval pauses are not timed.",
+    "End-to-end run latency is dominated by model calls and is reported separately in the live-run reports."
+  ]
+}

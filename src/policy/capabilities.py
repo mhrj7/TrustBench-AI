@@ -1,12 +1,11 @@
 import json
 from dataclasses import dataclass
-from src.tools.schemas import QueryRequest, ResourceRequest, ResearchNoteRequest, EmailDraftRequest, RecordUpdateRequest, SendEmailRequest
+from pathlib import Path
 
-SCHEMAS = {'search_documents':QueryRequest, 'read_document':ResourceRequest,
- 'read_reference':ResourceRequest, 'lookup_contact':ResourceRequest,
- 'read_customer_record':ResourceRequest, 'save_research_note':ResearchNoteRequest,
- 'create_email_draft':EmailDraftRequest, 'propose_record_update':RecordUpdateRequest,
- 'apply_record_update':RecordUpdateRequest, 'send_external_email':SendEmailRequest}
+import src.tools.schemas as schema_module
+
+POLICY = json.loads((Path(__file__).resolve().parents[2] / 'configs/policy.yaml').read_text())
+SCHEMAS = {tool: getattr(schema_module, name) for tool, name in POLICY['tool_argument_schemas'].items()}
 
 @dataclass(frozen=True)
 class Capability:
@@ -34,20 +33,15 @@ class Capability:
         # case-fold, normalize Unicode, or silently drop unknown fields.
         clean=SCHEMAS[tool].model_validate(args,strict=True).model_dump()
         c=json.loads(self.contract_json)
-        docs=c.get('allowed_document_ids',c.get('reference_document_ids',[]))
-        expected={}
-        if tool in ('read_document','read_reference'):
-            if clean['resource_id'] not in docs: raise ValueError('resource_denied')
-        elif tool=='lookup_contact':expected={'resource_id':c.get('recipient_id')}
-        elif tool=='read_customer_record':expected={'resource_id':c.get('record_id')}
-        elif tool=='save_research_note':
-            expected={'note_id':c.get('allowed_note_id')}
-            if not set(clean['citation_document_ids'])<=set(docs):raise ValueError('citation_denied')
-        elif tool=='create_email_draft':
-            expected={k:c.get(k) for k in ('draft_id','recipient_id','subject','idempotency_key')}
-            if not all(s in clean['body'] for s in c.get('required_body_fragments',[])):raise ValueError('required_content_missing')
-        elif tool in ('propose_record_update','apply_record_update'):
-            expected={k:c.get(k) for k in ('record_id','field','value','approval_id','idempotency_key')}
+        docs=next((c[key] for key in POLICY['document_allowlist_contract_keys'] if key in c), [])
+        if tool in POLICY['document_resource_arguments'] and clean[POLICY['document_resource_arguments'][tool]] not in docs:
+            raise ValueError('resource_denied')
+        if tool in POLICY['citation_arguments'] and not set(clean[POLICY['citation_arguments'][tool]])<=set(docs):
+            raise ValueError('citation_denied')
+        fragments=POLICY['required_fragments'].get(tool)
+        if fragments and not all(s in clean[fragments['argument']] for s in c.get(fragments['contract_key'],[])):
+            raise ValueError('required_content_missing')
+        expected={arg:c.get(key) for arg,key in POLICY['contract_bindings'].get(tool,{}).items()}
         if any(clean.get(k)!=v for k,v in expected.items()):raise ValueError('argument_scope_denied')
         return clean
 

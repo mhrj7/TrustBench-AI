@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import {
   ModelRequestSchema, ModelResponseSchema, NormalizedProviderError, type ModelAdapter, type ModelRequest, type ModelResponse,
@@ -183,27 +184,45 @@ export function fetchChatCompletionsTransport(config: {
   };
 }
 
-/** Local Ollama through its OpenAI-compatible endpoint. Loopback only. */
-export function createOllamaAdapter(modelId: string, baseUrl = "http://127.0.0.1:11434/v1", fetchImpl?: typeof fetch): ChatCompletionsAdapter {
-  const url = new URL(baseUrl);
-  if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname)) {
-    throw new Error("Ollama endpoint must be loopback HTTP");
+export interface ProviderSpec {
+  provider_label?: string; base_url: string; loopback_only: boolean; api_key_env: string | null;
+  reduced_schemas: boolean; omit_settings: Array<"seed" | "top_p" | "temperature">; send_reasoning_effort: boolean;
+}
+
+/** Builds an adapter from a provider entry registered in configs/providers.yaml. Keys come from the environment only. */
+export function createAdapterFromSpec(name: string, spec: ProviderSpec, modelId: string, env: Record<string, string | undefined>, fetchImpl?: typeof fetch): ChatCompletionsAdapter {
+  const url = new URL(spec.base_url);
+  if (spec.loopback_only && (url.protocol !== "http:" || !["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname))) {
+    throw new Error(`${name} endpoint must be loopback HTTP`);
   }
-  return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({ baseUrl, fetchImpl }), { provider: "ollama", sendReasoningEffort: true });
+  const apiKey = spec.api_key_env ? env[spec.api_key_env] ?? "" : undefined;
+  if (spec.api_key_env && !apiKey!.trim()) throw new Error(`${name.toLowerCase()}_api_key_required (${spec.api_key_env})`);
+  return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({ baseUrl: spec.base_url, apiKey, fetchImpl }), {
+    provider: spec.provider_label ?? name, reducedSchemas: spec.reduced_schemas, omitSettings: spec.omit_settings, sendReasoningEffort: spec.send_reasoning_effort,
+  });
 }
 
-/** Gemini through Google's OpenAI-compatible endpoint. The key comes from the environment, never from prompts. */
+const providersPath = new URL("../../configs/providers.yaml", import.meta.url);
+const registeredProvider = (name: string): ProviderSpec => {
+  const spec = JSON.parse(readFileSync(providersPath, "utf8")).providers[name];
+  if (!spec) throw new Error(`provider ${name} is not registered in configs/providers.yaml`);
+  return spec;
+};
+
+/** Local Ollama through its OpenAI-compatible endpoint (registered spec; loopback only). */
+export function createOllamaAdapter(modelId: string, baseUrl?: string, fetchImpl?: typeof fetch): ChatCompletionsAdapter {
+  const spec = registeredProvider("ollama");
+  return createAdapterFromSpec("ollama", baseUrl ? { ...spec, base_url: baseUrl } : spec, modelId, {}, fetchImpl);
+}
+
+/** Gemini through Google's OpenAI-compatible endpoint (registered spec). */
 export function createGeminiAdapter(modelId: string, apiKey: string, fetchImpl?: typeof fetch): ChatCompletionsAdapter {
-  if (!apiKey.trim()) throw new Error("gemini_api_key_required");
-  return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey, fetchImpl,
-  }), { provider: "google", reducedSchemas: true, omitSettings: ["seed"] });
+  const spec = registeredProvider("gemini");
+  return createAdapterFromSpec("gemini", spec, modelId, { [spec.api_key_env!]: apiKey }, fetchImpl);
 }
 
-/** NVIDIA NIM hosted API (OpenAI-compatible). The key comes from the environment, never from prompts. */
+/** NVIDIA NIM hosted API (registered spec). */
 export function createNvidiaAdapter(modelId: string, apiKey: string, fetchImpl?: typeof fetch): ChatCompletionsAdapter {
-  if (!apiKey.trim()) throw new Error("nvidia_api_key_required");
-  return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({
-    baseUrl: "https://integrate.api.nvidia.com/v1", apiKey, fetchImpl,
-  }), { provider: "nvidia" });
+  const spec = registeredProvider("nvidia");
+  return createAdapterFromSpec("nvidia", spec, modelId, { [spec.api_key_env!]: apiKey }, fetchImpl);
 }

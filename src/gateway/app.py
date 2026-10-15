@@ -9,17 +9,20 @@ from fastapi.responses import JSONResponse
 import httpx2 as httpx
 from .provenance import digest, wrap
 from pydantic import ValidationError
-from src.policy.capabilities import Capability
+from src.policy.capabilities import Capability, POLICY
 from src.policy.approvals import ApprovalStore, execution_context
+from src.policy.flow import FlowGuard
 
 @dataclass(frozen=True)
 class Binding:
     episode_id: str
     allowed_tools: frozenset[str]
     capability: Capability
+    flow: FlowGuard | None = None
 
 class Gateway:
-    def __init__(self, backend, audit_path=None):
+    def __init__(self, backend, audit_path=None, flow_check=False):
+        self.flow_check = flow_check
         self.app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
         self._audit_path = audit_path
         self._flushed = 0
@@ -66,8 +69,14 @@ class Gateway:
                 reason = 'invalid_arguments' if isinstance(error, ValidationError) else str(error)
                 self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason})
                 return JSONResponse(status_code=422 if isinstance(error, ValidationError) else 403, content={'detail':reason})
+            if binding.flow is not None:
+                violation = binding.flow.check(tool_name, arguments, self.store.snapshot(episode_id)['state'])
+                if violation is not None:
+                    reason = f"untrusted_flow:{violation['rule']}"
+                    self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason,'flow':violation})
+                    return JSONResponse(status_code=403, content={'detail':reason})
             approval_id = None
-            if tool_name == 'apply_record_update':
+            if tool_name in POLICY['approval_required_tools']:
                 try:
                     approval = self.approvals.request(binding.capability, tool_name, arguments)
                 except ValueError as error:
@@ -102,16 +111,20 @@ class Gateway:
                     record.update(malformed_output=True)
                     return JSONResponse(status_code=502, content={'detail': 'malformed_tool_output'})
                 return JSONResponse(status_code=response.status_code, content=body)
-            sources = [f'episode:{episode_id}:tool:{tool_name}']
+            ps = POLICY['provenance_sources']
+            sources = [ps['operation_source_template'].format(episode=episode_id, tool=tool_name)]
             if isinstance(body, dict):
-                if isinstance(body.get('document_id'), str):
-                    sources.append('document:' + body['document_id'])
-                results = body.get('results')
-                for result in (results if isinstance(results, list) else []):
-                    if isinstance(result, dict) and isinstance(result.get('document_id'), str):
-                        sources.append('document:' + result['document_id'])
+                if isinstance(body.get(ps['id_field']), str):
+                    sources.append(ps['source_prefix'] + body[ps['id_field']])
+                for list_field in ps['list_fields']:
+                    items = body.get(list_field)
+                    for result in (items if isinstance(items, list) else []):
+                        if isinstance(result, dict) and isinstance(result.get(ps['id_field']), str):
+                            sources.append(ps['source_prefix'] + result[ps['id_field']])
             envelope = wrap(body, sources).model_dump(mode='json')
             record['provenance'] = envelope['provenance']
+            if binding.flow is not None:
+                binding.flow.observe(envelope)
             return envelope
 
     def bind(self, episode_id: str, allowed_tools: list[str], user_id: str | None = None) -> str:
@@ -123,7 +136,8 @@ class Gateway:
             raise ValueError('invalid tool')
         token = secrets.token_urlsafe(32)
         capability = Capability.issue(self.store, episode_id, allowed_tools, user_id)
-        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability)
+        flow = FlowGuard(POLICY, capability.contract_json) if self.flow_check else None
+        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability, flow)
         return token
 
     def revoke(self, token: str):

@@ -10,7 +10,7 @@ from src.arms.fixtures import materialize, write_jsonl
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True); m.add_argument('--rendering', default='as_authored'); m.add_argument('--model-name', default='the assistant')
+    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True); m.add_argument('--rendering', default='as_authored'); m.add_argument('--model-name', default=None)
     s = sub.add_parser('snapshot'); s.add_argument('--db', type=Path, required=True); s.add_argument('--episode', required=True)
     e = sub.add_parser('evaluate'); e.add_argument('--fixtures', type=Path, required=True)
     args = parser.parse_args()

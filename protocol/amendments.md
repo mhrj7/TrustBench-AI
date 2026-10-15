@@ -124,3 +124,16 @@ Retries for transient read failures and retryable model-provider errors now live
 arms (`configs/baseline.yaml` `shared.recovery_policy`). Writes are never retried automatically. The free-provider budgets raise
 `max_retries` to 3; the OpenAI budget is unchanged. The earlier unbounded retry loop in `scripts/run-arm-smoke.mjs` was removed.
 See `docs/recovery.md`.
+
+
+## A-010 (2026-10-15) Defended variants, data-driven policy and oracles, no-hardcoding guard
+
+- The defended arm gains a provenance-aware flow check (`docs/flow-check.md`) and two registered variants in
+  `configs/defended.yaml`: `capability_plus_flow` (default from this date) and `capability_only` (ablation, the system all
+  earlier live runs used; those reports were relabeled `-capability_only`, see their `defended_variant_note`).
+- Gateway rules moved to `configs/policy.yaml` (behavior unchanged: same tests, identical capability manifests).
+- Evaluator tb016.1.2.0 reads attacker-goal oracles from `data/attack-oracles.json`; it reproduces all 410 frozen
+  tb016.1.1.0 verdicts (`tests/evaluators/test_golden_v2.py`).
+- Prompts are templates in `configs/prompts/` (byte-identical output to the previous code), providers in
+  `configs/providers.yaml`, run settings in `configs/live-run.yaml`. `tests/no-hardcoding.test.ts` fails on fixture IDs,
+  provider endpoints, key names, model IDs or the registered seed in runtime code.

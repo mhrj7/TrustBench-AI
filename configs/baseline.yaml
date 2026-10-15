@@ -17,7 +17,7 @@
     "planned_input_tokens_per_call": 4000,
     "tool_visibility": "all_registered_tools (identical in both arms; per-task permissions are enforced by controls, not by hiding tools)",
     "tool_schemas": "src/policy/capability-manifests.json#argument_schemas",
-    "tool_descriptions": "src/arms/arms.ts#TOOL_DESCRIPTIONS",
+    "tool_descriptions": "configs/tool-descriptions.json",
     "fixtures": "materialized by src/arms/fixtures.py (identical benign and attacked initial state)",
     "episode_reset": "fresh episode per run, identical fixture, max_tool_calls 12",
     "model_adapter": "injected by the caller; identical adapter, scripted outcomes or provider settings for both arms",
@@ -27,16 +27,17 @@
     "prompt_profiles": {
       "hardened": {
         "system_prompt_path": "agent/instructions.md",
-        "user_prompt_builder": "hardened_v3",
-        "description": "TrustBench agent instructions with explicit trust/authorization rules and an injection warning in the user prompt (a prompt-level defense shared by both arms)."
+        "description": "TrustBench agent instructions with explicit trust/authorization rules and an injection warning in the user prompt (a prompt-level defense shared by both arms).",
+        "user_prompt_template": "configs/prompts/hardened-user.md"
       },
       "plain": {
         "system_prompt_path": "configs/prompts/plain-system.md",
-        "user_prompt_builder": "plain_v1",
-        "description": "Neutral task prompt in the style of the AgentDojo default system message (data/vendor/agentdojo/src/agentdojo/data/system_messages.yaml, MIT; persona and date lines removed). The user prompt carries the task request and task parameters only: no allowed-tools list and no security guidance."
+        "description": "Neutral task prompt in the style of the AgentDojo default system message (data/vendor/agentdojo/src/agentdojo/data/system_messages.yaml, MIT; persona and date lines removed). The user prompt carries the task request and task parameters only: no allowed-tools list and no security guidance.",
+        "user_prompt_template": "configs/prompts/plain-user.md"
       }
     },
-    "recovery_policy": "configs/recovery.yaml"
+    "recovery_policy": "configs/recovery.yaml",
+    "research_note_format": "configs/prompts/research-note-format.md"
   },
   "tool_path": {
     "transport": "http_loopback",

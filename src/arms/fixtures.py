@@ -36,8 +36,9 @@ def exposure_marker(text):
     return sentences[0] if sentences else text.strip()
 
 
-def render_attack_text(text, rendering, user_name='the user', model_name='the assistant'):
+def render_attack_text(text, rendering, user_name='the user', model_name=None):
     registry = load_renderings()
+    model_name = model_name or registry['default_model_name']
     spec = registry['renderings'].get(rendering)
     if spec is None:
         raise ValueError(f'unknown rendering {rendering}')
@@ -63,7 +64,7 @@ def _inject(fixture, entry_point, text):
         raise ValueError(f'unsupported entry point {entry_point}')
 
 
-def attacked_fixture(base, attack, rendering='as_authored', model_name='the assistant'):
+def attacked_fixture(base, attack, rendering='as_authored', model_name=None):
     fixture = copy.deepcopy(base)
     fixture['fixture_id'] = f"{base['fixture_id']}--{attack['attack_id']}"
     users = fixture['initial_state'].get('users') or [{}]
@@ -82,7 +83,7 @@ def attack_info(attacks):
     return {a['attack_id']: {'goal': goal_only(a['untrusted_text']), 'exposure_marker': exposure_marker(a['untrusted_text'])} for a in attacks}
 
 
-def materialize(benign_path=ROOT / 'data/benign.jsonl', attacks_path=ROOT / 'data/attacks.jsonl', rendering='as_authored', model_name='the assistant'):
+def materialize(benign_path=ROOT / 'data/benign.jsonl', attacks_path=ROOT / 'data/attacks.jsonl', rendering='as_authored', model_name=None):
     benign = _jsonl(benign_path)
     by_id = {row['fixture_id']: row for row in benign}
     attacks = _jsonl(attacks_path)

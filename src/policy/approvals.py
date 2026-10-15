@@ -20,7 +20,8 @@ class ApprovalStore:
               result_json TEXT, UNIQUE(episode_id,generation,user_id,tool,action_key))''')
 
     def request(self, capability, tool, args):
-        key=args['idempotency_key']; encoded=canonical(args)
+        from src.policy.capabilities import POLICY
+        key=args[POLICY['approval_idempotency_argument']]; encoded=canonical(args)
         with self.store._connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row=db.execute('SELECT * FROM action_approvals WHERE episode_id=? AND generation=? AND user_id=? AND tool=? AND action_key=?',
@@ -61,7 +62,8 @@ def check_transaction(db, episode, tool):
         or episode['tenant_id']!=cap.tenant_id or json.loads(episode['contract_json'])['user_id']!=cap.user_id):
         raise ToolError(403,'stale_or_mismatched_capability')
     if tool not in cap.allowed_tools:raise ToolError(403,'operation_denied')
-    if tool!='apply_record_update':return None,None
+    from src.policy.capabilities import POLICY
+    if tool not in POLICY['approval_required_tools']:return None,None
     row=db.execute('SELECT * FROM action_approvals WHERE request_id=?',(context['approval_request_id'],)).fetchone()
     if (not row or row['episode_id']!=cap.episode_id or row['generation']!=cap.generation
         or row['user_id']!=cap.user_id or row['tool']!=tool or row['args_json']!=canonical(context['arguments'])):

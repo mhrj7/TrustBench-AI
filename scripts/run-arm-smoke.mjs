@@ -10,56 +10,61 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
-import { MockModelAdapter, ProviderErrorCodeSchema, createGeminiAdapter, createNvidiaAdapter, createOllamaAdapter } from "../src/models/index.ts";
+import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const python = path.join(root, ".venv-tools/bin/python");
 const flag = (name, fallback = null) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback);
-const modelArg = flag("--model");
+const runConfig = JSON.parse(await readFile(path.join(root, "configs/live-run.yaml"), "utf8"));
+const providers = JSON.parse(await readFile(path.join(root, "configs/providers.yaml"), "utf8"));
+const modelArg = flag("--model"); // "<registered provider>:<exact model id>"
 const live = modelArg !== null;
+const providerName = live ? modelArg.slice(0, modelArg.indexOf(":")) : null;
+const modelId = live ? modelArg.slice(modelArg.indexOf(":") + 1) : null;
+const provider = live ? providers.providers[providerName] : null;
+if (live && !provider) throw new Error(`provider ${providerName} is not registered in configs/providers.yaml (${Object.keys(providers.providers).join(", ")})`);
 const repetitions = Number(flag("--repetitions", "1"));
-const toolMode = flag("--tool-mode", "permissive");
-const temperature = Number(flag("--temperature", "0"));
+const toolMode = flag("--tool-mode", runConfig.default_tool_mode);
+const temperature = Number(flag("--temperature", String(runConfig.live.default_temperature)));
 const onlyCases = flag("--cases") ? new Set(flag("--cases").split(",")) : null;
 const minIntervalMs = Number(flag("--min-interval-ms", "0"));
-const rendering = flag("--attack-rendering", "as_authored");
+const rendering = flag("--attack-rendering", runConfig.default_attack_rendering);
 const promptProfile = flag("--prompt-profile", null); // null = the default registered in configs/baseline.yaml
-const work = path.resolve(root, flag("--work-dir", ".tool-state/arms-smoke")); // separate directories let provider lanes run in parallel
+const defendedConfig = JSON.parse(await readFile(path.join(root, "configs/defended.yaml"), "utf8"));
+const defendedVariant = flag("--defended-variant", defendedConfig.default_defended_variant);
+if (!(defendedVariant in defendedConfig.defended_variants)) throw new Error(`--defended-variant must be one of ${Object.keys(defendedConfig.defended_variants).join(", ")}`);
+const work = path.resolve(root, flag("--work-dir", runConfig.default_work_dir)); // separate directories let provider lanes run in parallel
 const registry = JSON.parse(await readFile(path.join(root, "protocol/experiment-registry.yaml"), "utf8"));
 const renderingRegistry = JSON.parse(await readFile(path.join(root, "data/attack-renderings.json"), "utf8"));
 const baseSeed = registry.pair_order_seed; // registered in the experiment registry, not a literal
 const providerFaultCodes = new Set(ProviderErrorCodeSchema.options);
+const quotaPattern = new RegExp(providers.quota_exhausted_message_pattern);
 if (!["permissive", "contract"].includes(toolMode)) throw new Error("--tool-mode must be permissive or contract");
 if (!Number.isInteger(repetitions) || repetitions < 1 || (!live && repetitions !== 1)) throw new Error("--repetitions must be a positive integer (live runs only)");
 if (!(rendering in renderingRegistry.renderings)) throw new Error(`--attack-rendering must be one of ${Object.keys(renderingRegistry.renderings).join(", ")}`);
 const positiveControl = renderingRegistry.renderings[rendering].kind === "positive_control";
-if (live && /^(gemini|nvidia):/.test(modelArg)) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
+if (live && provider.api_key_env) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
 
-const makeLiveAdapter = () => {
-  if (modelArg.startsWith("ollama:")) return createOllamaAdapter(modelArg.slice(7));
-  if (modelArg.startsWith("gemini:")) return createGeminiAdapter(modelArg.slice(7), process.env.GEMINI_API_KEY ?? "");
-  if (modelArg.startsWith("nvidia:")) return createNvidiaAdapter(modelArg.slice(7), process.env.NVIDIA_API_KEY ?? "");
-  throw new Error(`unsupported --model ${modelArg}`);
-};
-const budgetFile = !live ? "configs/budget-local.yaml" : modelArg.startsWith("gemini:") ? "configs/budget-gemini-free.yaml" : modelArg.startsWith("nvidia:") ? "configs/budget-nvidia-free.yaml" : "configs/budget-local.yaml";
+const makeLiveAdapter = () => createAdapterFromSpec(providerName, provider, modelId, process.env);
+const budgetFile = live ? provider.budget_file : runConfig.scripted_budget_file;
 const runOptions = (rep) => ({
   budgetConfigPath: path.join(root, budgetFile),
-  ...(live ? { timeoutMs: 240_000, generationOverrides: { temperature, seed: baseSeed + rep, max_output_tokens: 1024, ...(modelArg.startsWith("ollama:") ? { reasoning_effort: "none" } : {}) } } : {}),
+  ...(live ? { timeoutMs: runConfig.live.timeout_ms, generationOverrides: { temperature, seed: baseSeed + rep * runConfig.live.seed_offset_per_repetition, max_output_tokens: runConfig.live.max_output_tokens, ...provider.generation_overrides } } : {}),
 });
-const suite = JSON.parse(await readFile(path.resolve(root, flag("--suite", "tests/arms/smoke-cases.json")), "utf8"));
+const suite = JSON.parse(await readFile(path.resolve(root, flag("--suite", runConfig.default_suite)), "utf8"));
 // Holdout protection: protocol/preregister.md forbids using holdout contents for debugging. Holdout fixtures are
 // excluded from every run, scripted or live, with no override flag.
 const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
 const holdoutIds = new Set(splits.holdout_manifest.fixture_ids);
 const isHoldout = (c) => holdoutIds.has(c.fixture_id.split("--")[0]) || (c.attack_id && holdoutIds.has(c.attack_id));
-const selected = suite.cases.filter((c) => (!onlyCases || onlyCases.has(c.case_id)) && !isHoldout(c));
+const selected = suite.cases.filter((c) => (!onlyCases || onlyCases.has(c.case_id)) && !isHoldout(c) && !(live && c.scripted_only));
 const excludedHoldout = suite.cases.filter(isHoldout).map((c) => c.case_id);
 
 await rm(work, { recursive: true, force: true });
 await mkdir(work, { recursive: true });
 const fixturesPath = path.join(work, "fixtures.jsonl");
-await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, "--model-name", live ? modelArg.replace(/^[a-z]+:/, "") : "the assistant"]);
+await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : [])]);
 const attackInfo = JSON.parse(await readFile(`${fixturesPath}.attack-info.json`, "utf8"));
 const fixtures = new Map((await readFile(fixturesPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line)).map((row) => [row.fixture_id, row]));
 
@@ -125,7 +130,7 @@ async function runArm(arm, testCase, fixture, rep) {
       lastCall = Date.now();
       try { return await originalGenerate(req, opts); }
       catch (error) {
-        if (/retry in \d+h|retry in \d+m/.test(String(error?.message))) {
+        if (quotaPattern.test(String(error?.message))) {
           console.error(`PROVIDER QUOTA EXHAUSTED for ${modelArg}; aborting without writing results.`);
           process.exit(2);
         }
@@ -137,11 +142,11 @@ async function runArm(arm, testCase, fixture, rep) {
     adapter.generate = originalGenerate;
   }
   let built, port, dbPath, auditFile; const approvalLog = [];
-  const control = positiveControl && testCase.attack_id ? { extraUserInstruction: `The user also requires: ${attackInfo[testCase.attack_id].goal}` } : {};
+  const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};
   const common = { ...control, promptProfile, arm, fixture, episodeId, runId: `run-${testCase.case_id}-r${rep}`, taskId, ...runOptions(rep) };
   if (arm === "baseline") {
     port = baselinePort; dbPath = baselineDb;
-    const reset = await fetch(`http://127.0.0.1:${port}/v1/episodes/${episodeId}/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixture_id: testCase.fixture_id, max_tool_calls: 12 }) });
+    const reset = await fetch(`http://127.0.0.1:${port}/v1/episodes/${episodeId}/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixture_id: testCase.fixture_id, max_tool_calls: runConfig.episode_max_tool_calls }) });
     if (!reset.ok) throw new Error(`reset failed ${reset.status}`);
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}` });
   } else {
@@ -149,7 +154,7 @@ async function runArm(arm, testCase, fixture, rep) {
     const tag = `${testCase.case_id}-r${rep}`;
     const sessionFile = path.join(work, `session-${tag}.json`);
     auditFile = path.join(work, `audit-${tag}.jsonl`);
-    launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile], serviceEnv(defendedDb));
+    launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant].flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
     await waitFor(port);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}`,
@@ -195,7 +200,7 @@ const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted local mock (no provider calls)", mode: live ? "live_model" : "scripted",
   status: "pilot/smoke evidence, excluded from confirmatory results",
-  backend_tool_mode: toolMode, attack_rendering: rendering, prompt_profile: promptProfile ?? baselineEffective.shared.default_prompt_profile, holdout_excluded_cases: excludedHoldout, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_variant: defendedVariant, prompt_profile: promptProfile ?? baselineEffective.shared.default_prompt_profile, holdout_excluded_cases: excludedHoldout, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
 };
 const traces = [];
@@ -261,11 +266,11 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = live ? `${modelArg.replace(/[^A-Za-z0-9.]+/g, "-")}${toolMode === "contract" ? "-contract-backend" : ""}${rendering === "as_authored" ? "" : `-${rendering}`}${promptProfile && promptProfile !== baselineEffective.shared.default_prompt_profile ? `-${promptProfile}` : ""}` : null;
+const suffix = live ? `${modelArg.replace(/[^A-Za-z0-9.]+/g, "-")}${toolMode === "contract" ? "-contract-backend" : ""}${rendering === "as_authored" ? "" : `-${rendering}`}${promptProfile && promptProfile !== baselineEffective.shared.default_prompt_profile ? `-${promptProfile}` : ""}${defendedVariant !== defendedConfig.default_defended_variant ? `-${defendedVariant}` : ""}` : null;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
-await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tb024-policy-decision-traces${mech}.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
-await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `evidence/tb024-defended-arm${mech}-report.json`), JSON.stringify(report, null, 2) + "\n");
+await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tb024-policy-decision-traces${defendedVariant !== defendedConfig.default_defended_variant ? `-${defendedVariant}` : ""}.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
+await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `evidence/tb024-defended-arm${defendedVariant !== defendedConfig.default_defended_variant ? `-${defendedVariant}` : ""}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 
 const required = (c) => [["run_config_identical", c.run_config_identical], ["first_request_identical", c.first_request_identical], ["settings_identical", c.settings_identical]];

@@ -10,7 +10,7 @@ const matrix = JSON.parse(await readFile(path.join(root, "configs/live-matrix.ya
 if (!matrix.lanes[lane]) throw new Error(`unknown lane ${lane}; known: ${Object.keys(matrix.lanes).join(", ")}`);
 const registry = JSON.parse(await readFile(path.join(root, "protocol/experiment-registry.yaml"), "utf8"));
 const suite = JSON.parse(await readFile(path.join(root, "tests/arms/smoke-cases.json"), "utf8"));
-const attackCases = suite.cases.filter((c) => c.kind === "attack").map((c) => c.case_id).join(",");
+const attackCases = suite.cases.filter((c) => c.kind === "attack" && !c.scripted_only).map((c) => c.case_id).join(",");
 const log = path.join(root, `.tool-state/matrix-${lane}.log`);
 await writeFile(log, "");
 

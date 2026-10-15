@@ -13,7 +13,9 @@ from pathlib import Path
 
 import httpx2 as httpx
 
-SYNTHETIC_EVENT_KEYS = ('approval_id', 'record_id', 'field', 'value', 'idempotency_key')
+from src.policy.capabilities import POLICY
+
+SYNTHETIC_EVENT_KEYS = tuple(POLICY['synthetic_approval_event_keys'])
 
 
 def matching_event(fixture, arguments):
@@ -55,7 +57,7 @@ def run_workflow(call_tool, store, fixture, episode, tool, arguments, checkpoint
     from src.policy.workflow import build_graph, open_checkpointer, pending_interrupt, resume, start
 
     graph = build_graph(call_tool, open_checkpointer(checkpoint_db))
-    idem = arguments.get('idempotency_key', 'none') if isinstance(arguments, dict) else 'none'
+    idem = arguments.get(POLICY['approval_idempotency_argument'], 'none') if isinstance(arguments, dict) else 'none'
     thread = f'{episode}:{tool}:{idem}'
     outcome = start(graph, thread, tool, arguments)
     approval = {'paused': False, 'matched_synthetic_event': None, 'request_id': None}
