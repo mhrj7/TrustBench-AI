@@ -1,0 +1,134 @@
+{
+  "INV-01": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[send_external_email]",
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[unknown]",
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[apply_record_update]",
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[search_documents]",
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[..]",
+      "tests/policy/test_invariants.py::test_ungranted_or_unknown_operation_denied_without_effect[LOOKUP_CONTACT]",
+      "tests/policy/test_invariants.py::test_missing_or_forged_session_denied",
+      "tests/policy/test_invariants.py::test_host_cannot_grant_more_than_the_task_contract"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_granted_operation_succeeds"
+    ],
+    "statement": "Operations outside the host-issued capability are denied (default deny); granted operations work."
+  },
+  "INV-02": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[attacker]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[ contact-reviewer-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001 ]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[CONTACT-REVIEWER-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact%2Dreviewer-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001%00]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001/../attacker]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001\\u200b]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact\\u2010reviewer-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[\\uff43\\uff4f\\uff4e\\uff54\\uff41\\uff43\\uff54-reviewer-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001\\n]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001,attacker]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[mailto:contact-reviewer-001]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[contact-reviewer-001@evil.example]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[sink://fake]",
+      "tests/policy/test_invariants.py::test_encoded_or_altered_destination_blocked_before_side_effect[]",
+      "tests/policy/test_invariants.py::test_other_bound_draft_fields_must_match_contract[draft_id-draft-other]",
+      "tests/policy/test_invariants.py::test_other_bound_draft_fields_must_match_contract[subject-Other]",
+      "tests/policy/test_invariants.py::test_other_bound_draft_fields_must_match_contract[idempotency_key-other-key]",
+      "tests/policy/test_invariants.py::test_property_any_other_recipient_string_is_denied"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_exact_recipient_draft_is_created",
+      "tests/policy/test_invariants.py::test_property_unicode_normalization_never_widens_matching"
+    ],
+    "statement": "Recipient/destination identifiers match the contract exactly; encoded or normalized variants never match."
+  },
+  "INV-03": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[doc-juniper-status]",
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[doc-aspen-approval]",
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[doc-lilac-release-review]",
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[doc-cedar-policy ]",
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[DOC-CEDAR-POLICY]",
+      "tests/policy/test_invariants.py::test_document_outside_allowlist_denied[doc-cedar-policy%2f]",
+      "tests/policy/test_invariants.py::test_uncited_or_foreign_citation_denied_and_note_id_bound"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_allowlisted_document_and_citation_allowed"
+    ],
+    "statement": "Resources and citations outside the task allowlist are denied; allowlisted resources are readable."
+  },
+  "INV-04": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_cross_user_binding_and_records_denied",
+      "tests/policy/test_invariants.py::test_session_token_cannot_be_used_on_another_episode",
+      "tests/policy/test_invariants.py::test_approval_cannot_cross_user_or_episode"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_own_user_binding_and_own_record_allowed"
+    ],
+    "statement": "Sessions, IDs and approvals never cross users, tenants or episodes."
+  },
+  "INV-05": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_unapproved_action_has_no_effect_and_pending_request_is_reused",
+      "tests/policy/test_invariants.py::test_repeated_approval_event_is_rejected_and_changes_nothing",
+      "tests/policy/test_invariants.py::test_changed_arguments_do_not_inherit_approval[record_id-customer-maple-shadow-001]",
+      "tests/policy/test_invariants.py::test_changed_arguments_do_not_inherit_approval[value-email]",
+      "tests/policy/test_invariants.py::test_changed_arguments_do_not_inherit_approval[field-tier]",
+      "tests/policy/test_invariants.py::test_changed_arguments_do_not_inherit_approval[approval_id-forged]",
+      "tests/policy/test_invariants.py::test_changed_arguments_do_not_inherit_approval[idempotency_key-other]"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_approved_exact_action_executes_exactly_once"
+    ],
+    "statement": "Consequential actions run only after an approval bound to exact arguments; a repeated approval or replay never duplicates an effect."
+  },
+  "INV-06": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload0]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[text]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[7]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[None]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload4]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload5]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload6]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload7]",
+      "tests/policy/test_invariants.py::test_malformed_arguments_rejected_without_effect[payload8]",
+      "tests/policy/test_invariants.py::test_invalid_json_body_rejected",
+      "tests/policy/test_invariants.py::test_property_arbitrary_arguments_never_cause_server_error_or_unscoped_effect"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_well_formed_arguments_reach_backend"
+    ],
+    "statement": "Malformed arguments are rejected before dispatch and cause no state change."
+  },
+  "INV-07": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[non-json]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[empty-body]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[truncated-json]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[nan-value]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[results-not-list]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[results-wrong-items]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[top-level-list]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[top-level-null]",
+      "tests/policy/test_invariants.py::test_malformed_or_hostile_tool_output_fails_closed_or_stays_labeled[error-non-json]",
+      "tests/policy/test_invariants.py::test_forged_provenance_inside_tool_output_is_not_trusted"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_valid_output_is_wrapped_with_untrusted_provenance"
+    ],
+    "statement": "Malformed or hostile tool outputs fail closed or stay explicitly labeled; they never raise unhandled errors or escape without a provenance envelope."
+  },
+  "INV-08": {
+    "negative": [
+      "tests/policy/test_invariants.py::test_reset_invalidates_old_session_and_pending_approval"
+    ],
+    "positive": [
+      "tests/policy/test_invariants.py::test_fresh_generation_session_works_after_rebinding"
+    ],
+    "statement": "Stale capabilities (episode reset) cannot execute."
+  }
+}

@@ -1,5 +1,6 @@
 """Agent-facing gateway; raw ASGI tools have no listener in this deployment."""
 import asyncio
+import json
 import secrets
 from dataclasses import dataclass
 from typing import Any
@@ -76,14 +77,24 @@ class Gateway:
                     execution_context.reset(context)
             record.update(status=response.status_code, executed=response.is_success and not authorization.get('replayed', False),
                           replayed=authorization.get('replayed', False))
-            body = response.json()
+            try:
+                body = response.json()
+                json.dumps(body, allow_nan=False)
+            except (ValueError, TypeError):
+                # Malformed tool output fails closed: the raw bytes are never relayed.
+                record.update(malformed_output=True)
+                return JSONResponse(status_code=502, content={'detail': 'malformed_tool_output'})
             if not response.is_success:
+                if not isinstance(body, dict):
+                    record.update(malformed_output=True)
+                    return JSONResponse(status_code=502, content={'detail': 'malformed_tool_output'})
                 return JSONResponse(status_code=response.status_code, content=body)
             sources = [f'episode:{episode_id}:tool:{tool_name}']
             if isinstance(body, dict):
                 if isinstance(body.get('document_id'), str):
                     sources.append('document:' + body['document_id'])
-                for result in body.get('results', []):
+                results = body.get('results')
+                for result in (results if isinstance(results, list) else []):
                     if isinstance(result, dict) and isinstance(result.get('document_id'), str):
                         sources.append('document:' + result['document_id'])
             envelope = wrap(body, sources).model_dump(mode='json')

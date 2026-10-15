@@ -70,3 +70,18 @@ application is the gateway, under the TB-019 host boundary.
 Run `npm run test:policy` and `npm run test:approval`. Evidence is in the corresponding
 JUnit reports under `reports/`. These are functional/security checks on synthetic
 fixtures, not new benchmark attack-success measurements.
+
+## Boundary and normalization tests (TB-023)
+
+`fixtures/policy/invariants.json` declares eight security invariants (default deny,
+exact destinations, resource scope, cross user/tenant/episode isolation, approval and
+replay, malformed arguments, malformed tool outputs, stale capabilities). Every one
+needs at least one positive and one negative test; `tests/policy/conftest.py` aborts
+collection if any is missing and writes `reports/policy-invariant-coverage.json`.
+Adversarial inputs live in `fixtures/policy/adversarial.json`; Hypothesis property tests
+cover arbitrary recipients, Unicode forms and arbitrary JSON arguments. The gateway now
+fails closed (HTTP 502 `malformed_tool_output`) on non-JSON, NaN or non-object error
+output. Run `npm run test:policy` (report: `reports/policy-tests.xml`).
+
+These are synthetic fixtures and randomized probes: passing them does not prove security
+against all attacks, only that the declared invariants hold on the exercised inputs.
