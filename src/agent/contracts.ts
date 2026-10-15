@@ -24,6 +24,8 @@ export interface ToolExecutionContext {
   taskId: string;
   callId: string;
   signal: AbortSignal;
+  /** 1-based attempt number when bounded recovery is enabled. */
+  attempt?: number;
 }
 
 export interface ToolExecutionResult {
@@ -58,7 +60,15 @@ export interface AgentToolRecord {
   output: unknown | null;
   state_change_ids: string[];
   error_code: string | null;
+  /** Attempts made (0 when a duplicate write was suppressed). Present only with bounded recovery. */
+  attempts?: number;
+  /** A failed write whose effect may have committed; it was not retried. */
+  outcome_unknown?: boolean;
+  /** Result replayed from an earlier identical successful write instead of executing again. */
+  replayed?: boolean;
 }
+
+import type { RecoverySummary } from "./recovery.ts";
 
 export interface BaselineAgentResult {
   run_id: string;
@@ -72,6 +82,7 @@ export interface BaselineAgentResult {
   transitions: AgentTransition[];
   tool_records: AgentToolRecord[];
   failures: AgentFailure[];
+  recovery?: RecoverySummary;
   budget: {
     model_calls: number;
     tool_calls: number;

@@ -116,3 +116,11 @@ gateway against both a hardened and an ordinary agent, `configs/baseline.yaml` r
 Results are generated into `docs/pilot-results-tb024.md` from the evidence files. The matrix in `configs/live-matrix.yaml` was stopped
 before completion by the project owner's time limit; unfinished cells are listed in that document and none is counted.
 Gemini's free quota was exhausted by earlier runs; its results were excluded rather than partially reported.
+
+
+## A-009 (2026-10-15) Bounded recovery in the shared runner (TB-025)
+
+Retries for transient read failures and retryable model-provider errors now live in the shared runner and apply identically to both
+arms (`configs/baseline.yaml` `shared.recovery_policy`). Writes are never retried automatically. The free-provider budgets raise
+`max_retries` to 3; the OpenAI budget is unchanged. The earlier unbounded retry loop in `scripts/run-arm-smoke.mjs` was removed.
+See `docs/recovery.md`.

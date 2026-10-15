@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Injected fault data for TB-025 tests and scripts/verify-recovery.mjs. 'attempt' numbers count requests per tool name within one episode, starting at 1.",
+  "rules": {
+    "read_503_twice_then_ok": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1,
+          2
+        ],
+        "mode": "fail_before",
+        "http_status": 503
+      }
+    ],
+    "read_timeout_then_ok": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "hang"
+      }
+    ],
+    "read_connection_reset_then_ok": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "reset_before"
+      }
+    ],
+    "read_429_rate_limit_always": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "mode": "fail_before",
+        "http_status": 429,
+        "detail": "rate_limited"
+      }
+    ],
+    "write_response_lost_after_commit": [
+      {
+        "tool": "send_external_email",
+        "attempts": [
+          1
+        ],
+        "mode": "reset_after"
+      }
+    ],
+    "write_503_after_commit": [
+      {
+        "tool": "send_external_email",
+        "attempts": [
+          1
+        ],
+        "mode": "fail_after",
+        "http_status": 503
+      }
+    ],
+    "write_503_before_reach": [
+      {
+        "tool": "send_external_email",
+        "attempts": [
+          1
+        ],
+        "mode": "fail_before",
+        "http_status": 503
+      }
+    ]
+  },
+  "seeded_trials": {
+    "trials": 300,
+    "transient_read_fault_rate": 0.3,
+    "write_response_loss_rate": 0.3,
+    "reads_per_trial": 3,
+    "backoff_virtual_sleep": true,
+    "retry_budgets_to_sweep": [
+      0,
+      1,
+      2,
+      3,
+      5
+    ],
+    "scripted_steps": [
+      "read_document",
+      "read_document",
+      "read_document",
+      "send_external_email"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Bounded recovery policy (TB-025). JSON content (valid YAML). The retry budget itself is limits.max_retries in the run's budget file; this file only decides what may be retried and how. Writes are never retried automatically: the schema forbids enabling it.",
+  "tool_classes": {
+    "read": ["search_documents", "read_document", "read_reference", "lookup_contact", "read_customer_record", "propose_record_update"],
+    "write": ["save_research_note", "create_email_draft", "apply_record_update", "send_external_email"],
+    "classification_notes": {
+      "propose_record_update": "Commits nothing (returns committed:false), so repeating it cannot duplicate an effect; it is treated like a read."
+    }
+  },
+  "retry": {
+    "attempt_timeout_ms": 20000,
+    "max_attempts_per_call": 4,
+    "backoff": {"base_ms": 250, "factor": 2, "max_ms": 4000, "jitter": "full"},
+    "transient_http_status": [408, 429, 502, 503, 504],
+    "non_transient_details": ["episode_tool_call_limit_exceeded"],
+    "transient_error_names": ["TypeError", "TimeoutError", "AbortError"],
+    "transient_error_codes": ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"]
+  },
+  "writes": {
+    "auto_retry": false,
+    "suppress_exact_duplicates": true,
+    "definite_not_executed_http_status": {"min": 400, "max": 499},
+    "unknown_outcome_error_code": "write_outcome_unknown_not_retried"
+  },
+  "model": {
+    "retry_provider_codes": ["rate_limit", "timeout", "server", "network"]
+  }
+}

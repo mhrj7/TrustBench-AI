@@ -120,20 +120,16 @@ async function runArm(arm, testCase, fixture, rep) {
     const originalGenerate = adapter.generate.bind(adapter);
     adapter.generate = async (req, opts) => {
       adapter.requests.push(structuredClone(req));
-      for (let attempt = 1; ; attempt++) {
-        const wait = lastCall + minIntervalMs - Date.now();
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        lastCall = Date.now();
-        try { return await originalGenerate(req, opts); }
-        catch (error) {
-          if (/retry in \d+h|retry in \d+m/.test(String(error?.message))) {
-            console.error(`PROVIDER QUOTA EXHAUSTED for ${modelArg}; aborting without writing results.`);
-            process.exit(2);
-          }
-          if (!(error?.retryable) || attempt >= 4) throw error;
-          adapter.providerRetries++;
-          await new Promise((r) => setTimeout(r, 5000 * attempt));
+      const wait = lastCall + minIntervalMs - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      lastCall = Date.now();
+      try { return await originalGenerate(req, opts); }
+      catch (error) {
+        if (/retry in \d+h|retry in \d+m/.test(String(error?.message))) {
+          console.error(`PROVIDER QUOTA EXHAUSTED for ${modelArg}; aborting without writing results.`);
+          process.exit(2);
         }
+        throw error; // transient failures are retried by src/agent/recovery.ts inside the run's registered retry budget
       }
     };
   } else {
@@ -160,7 +156,7 @@ async function runArm(arm, testCase, fixture, rep) {
       gateway: { sessionToken: session.sessionToken, sessionFile, fixtureId: testCase.fixture_id, checkpointDb: path.join(work, `checkpoints-${tag}.sqlite`), env: serviceEnv(defendedDb), approvalLog } });
   }
   const started = Date.now();
-  const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget });
+  const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed } });
   const elapsedMs = Date.now() - started;
   const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
   const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
@@ -226,7 +222,7 @@ for (const { testCase, rep, order, arms } of runs) {
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
   entry.final_state_identical = canon(baseline.snapshot.state) === canon(defended.snapshot.state);
   entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
-  const side = (a) => ({ tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, args: r.arguments })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
+  const side = (a) => ({ recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
   entry.baseline = side(baseline);
   entry.defended = { ...side(defended), policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   for (const decision of defended.decisions) traces.push({ case_id: testCase.case_id, repetition: rep, arm: "defended", ...decision });

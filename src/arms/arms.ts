@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { loadBudgetConfig, type BudgetConfig } from "../../runtime/budget.ts";
+import { loadRecoveryPolicy, type RecoveryPolicy } from "../agent/recovery.ts";
 import { AgentRunConfigSchema, type AgentRunConfig, type AgentToolRegistry } from "../agent/contracts.ts";
 import { createHttpToolRegistry, ToolServiceError } from "../agent/http-tools.ts";
 import { createGatewayToolRegistry, decodeGatewayOutput } from "../gateway/adapter.ts";
@@ -87,7 +88,7 @@ export interface BuildInput {
   };
 }
 
-export interface BuiltArm { config: AgentRunConfig; tools: AgentToolRegistry; budget: BudgetConfig }
+export interface BuiltArm { config: AgentRunConfig; tools: AgentToolRegistry; budget: BudgetConfig; recovery: RecoveryPolicy }
 
 export async function buildArm(input: BuildInput): Promise<BuiltArm> {
   const effective = await loadArm(input.arm);
@@ -112,8 +113,9 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
     planned_input_tokens_per_call: shared.planned_input_tokens_per_call,
   });
   const budget = await loadBudgetConfig(input.budgetConfigPath ?? path.join(root, shared.budget_config));
+  const recovery = await loadRecoveryPolicy(path.join(root, shared.recovery_policy), Object.keys(manifests.argument_schemas));
   if (input.arm === "baseline") {
-    return { config, budget, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId }) };
+    return { config, budget, recovery, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId }) };
   }
   const gateway = input.gateway;
   if (!gateway) throw new Error("defended arm requires a gateway session");
@@ -146,7 +148,7 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
       },
     },
   };
-  return { config, budget, tools: guarded };
+  return { config, budget, recovery, tools: guarded };
 }
 
 export async function snapshotEpisode(pythonModule: string, args: string[]): Promise<any> {
