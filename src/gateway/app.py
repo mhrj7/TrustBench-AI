@@ -19,14 +19,27 @@ class Binding:
     capability: Capability
 
 class Gateway:
-    def __init__(self, backend):
+    def __init__(self, backend, audit_path=None):
         self.app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+        self._audit_path = audit_path
+        self._flushed = 0
         self._backend = backend
         self.store = backend.state.episode_store
         self.approvals = ApprovalStore(self.store)
         self._bindings: dict[str, Binding] = {}
         self.audit: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
+
+        @self.app.middleware('http')
+        async def flush_policy_decisions(request: Request, call_next):
+            # Host-only JSONL trace of policy decisions; contains argument hashes, never tokens.
+            response = await call_next(request)
+            if self._audit_path is not None:
+                with open(self._audit_path, 'a', encoding='utf-8') as sink:
+                    while self._flushed < len(self.audit):
+                        sink.write(json.dumps({'seq': self._flushed, **self.audit[self._flushed]}, sort_keys=True) + '\n')
+                        self._flushed += 1
+            return response
 
         @self.app.post('/v1/episodes/{episode_id}/tools/{tool_name}')
         async def dispatch(episode_id: str, tool_name: str, request: Request):

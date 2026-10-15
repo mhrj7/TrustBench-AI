@@ -10,13 +10,18 @@ def main():
     parser.add_argument('--episode', required=True)
     parser.add_argument('--session-file', type=Path, required=True)
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--audit-file', type=Path, default=None, help='append-only policy decision trace (host-only)')
     args = parser.parse_args()
     from src.tools.app import app, store
     from src.gateway.app import Gateway
     import uvicorn
     fixture = store.fixtures[args.fixture]
     store.reset(args.episode, args.fixture, 12)
-    gateway = Gateway(app)
+    if args.audit_file is not None:
+        args.audit_file.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(args.audit_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(fd)
+    gateway = Gateway(app, audit_path=args.audit_file)
     token = gateway.bind(args.episode, fixture['task_contract']['allowed_tools'])
     # Exclusive create protects existing credentials and refuses symlink overwrite.
     args.session_file.parent.mkdir(parents=True, exist_ok=True)

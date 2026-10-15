@@ -17,8 +17,8 @@ The session file is exclusively created with mode 0600, is gitignored, and must
 be read only by trusted host code. Pass its fields to `createGatewayToolRegistry`
 in `adapter.ts`; give the resulting registry to the existing bounded runner.
 Tool schemas and prompts receive no token, raw transport, database path, backend
-URL, or arbitrary shell/file tool. Full defended experiment wiring and baseline
-parity are TB-024; this implementation supplies the tested transport boundary.
+URL, or arbitrary shell/file tool. Defended experiment wiring and baseline
+parity live in `src/arms` (TB-024); this directory supplies the tested transport boundary.
 
 Every gateway request checks a host-issued session, bound episode and allowed
 tool before dispatch. The backend still validates the argument schema and task
