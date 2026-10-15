@@ -132,7 +132,15 @@ export class AgentDefenses {
     const toks = text.toLowerCase().split(/\s+/).filter(Boolean);
     const grams = new Set<string>();
     for (let i = 0; i + cfg.ngram_size <= toks.length; i++) { const g = toks.slice(i, i + cfg.ngram_size).join(" "); if (!trusted.includes(g)) grams.add(g); }
-    const attributes = (s: string) => [...salient].some((t) => s.includes(t)) || [...grams].some((g) => s.toLowerCase().replace(/\s+/g, " ").includes(g));
+    // v3 (A-016): a short data value that is not in the trusted task is attributed as a whole, so names and one-word values
+    // without digits or markers are not invisible to attribution.
+    const wholeValues = cfg.whole_value_max_words
+      ? cfg.data_arguments.map((a: string) => call.arguments[a]).filter((v: unknown): v is string => typeof v === "string")
+        .map((v: string) => v.trim().replace(new RegExp(cfg.token_trailing_punctuation), "").toLowerCase())
+        .filter((v: string) => v.length >= cfg.whole_value_min_chars && v.split(/\s+/).length <= cfg.whole_value_max_words && !trusted.includes(v))
+      : [];
+    const attributes = (s: string) => [...salient].some((t) => s.includes(t)) || [...grams].some((g) => s.toLowerCase().replace(/\s+/g, " ").includes(g))
+      || wholeValues.some((v: string) => s.toLowerCase().includes(v));
     const contributing = [...new Set(sentences.filter(attributes))];
     if (!contributing.length) return null;
     this.stats.checks++;

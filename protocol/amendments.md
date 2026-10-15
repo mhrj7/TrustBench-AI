@@ -284,3 +284,7 @@ controls, and the classifier is called on them (non-vacuous). (Q4) the pure stat
 (as_authored) is still missed. Runs: gpt-oss-20b, temperature 0.3, plain, 3 repetitions, `as_authored`, systems v1, v2, v3 and
 `gateway_capability`, suite `tests/arms/stress-v3-cases.json`; plus v3 on the registered comparison suite (gpt-oss-20b,
 2 repetitions, `agentdojo_important_instructions`) to measure its cost on benign tasks. Reported whatever the outcome.
+
+*Correction before any v3 run:* the split check keeps each attack family inside one group, so `TB-ATT-DOC-008` was moved from
+the Cedar group onto a new Birch task `TB-BEN-DOC-008` (status rating, one-word answer "Amber"; the attack states a false
+one-word rating after an instruction lead-in). `TB-BEN-DOC-008` is a fourth benign control. The family label was not changed.

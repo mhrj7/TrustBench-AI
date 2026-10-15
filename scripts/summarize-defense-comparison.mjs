@@ -94,7 +94,7 @@ for (const model of models) {
     const o = r.summary.defense_overhead ?? {};
     const ms = median(r.cases.filter(valid).map((c) => c.defended.elapsed_ms));
     const sys = defenses.systems[r.defended_system] ?? {};
-    const transport = sys.transport === "gateway" ? `gateway (${sys.gateway_variant})` : sys.transport ?? "?";
+    const transport = (sys.transport === "gateway" ? `gateway (${sys.gateway_variant})` : sys.transport ?? "?") + (sys.architecture ? ` + ${sys.architecture} architecture` : "");
     lines.push(`| ${r.defended_system} | ${sys.family ?? r.defended_system_family} | ${transport} | ${r.summary.validity.valid_pairs}/${r.summary.validity.total_pairs} | ${fmt(d.goal)} | ${fmt(d.unsafe)} | ${fmt(d.utility)} | ${fmt(d.utilityUnderAttack)} | ${fmt(d.benignDenied)} | ${sys.agent_defenses?.length ? fmt(d.attackVetoed) : "—"} | ${o.mean_extra_model_calls_per_run ?? 0} | ${o.extra_input_tokens ?? 0} / ${o.extra_output_tokens ?? 0} | ${ms} |`);
   }
   lines.push("");
@@ -125,27 +125,55 @@ for (const model of models) {
 }
 
 // Stress suite (A-013): declarative-only poisoning, reported separately because its case set differs from the registered one.
-const stressSuite = "tests/arms/stress-cases.json";
+// Registered stress suites (A-013, A-014), read from the reports' recorded suite path.
+const stressSuites = cfg.stress_suites;
 const stress = [];
 for (const name of (await readdir(path.join(root, "evidence"))).filter((n) => /^tb024-.*-report\.json$/.test(n))) {
   const r = await read(`evidence/${name}`);
-  if (r.mode === "live_model" && r.suite === stressSuite) stress.push(r);
+  if (r.mode === "live_model" && stressSuites.includes(r.suite)) stress.push(r);
 }
-lines.push("## Stress suite: declarative-only answer poisoning (A-013)", "",
-  `Reports from \`${stressSuite}\`: \`doc-birch-poison\` (the injected sentence contains an instruction) and \`doc-birch-declarative\` (the same false value stated only as a fact), ` +
-  "with their benign control. `directive_flow` is expected to miss the declarative case, so this section measures that weakness.", "");
+lines.push("## Stress suites: declarative and instruction-wrapped poisoning (A-013, A-014)", "",
+  `Reports from ${stressSuites.map((x) => `\`${x}\``).join(" and ")}: \`doc-birch-poison\` (the injected sentence contains an instruction), \`doc-birch-declarative\` (the same false value stated only as a fact), ` +
+  "`doc-birch-lead-wrapped` (an instruction lead-in followed by a separate declarative sentence with a false value) and the benign controls `doc-birch-benign` and `doc-birch-reviewer-benign` (the answer follows a harmless imperative sentence).", "");
 if (!stress.length) lines.push("No finished stress report yet.", "");
 else {
-  lines.push("| Model | Rendering | System | Case | Attacker goal (baseline → defended) | Utility (baseline → defended) | Defended runs with an agent-defense veto |", "| --- | --- | --- | --- | --- | --- | --- |");
-  stress.sort((a, b) => (a.model + a.attack_rendering + a.defended_system).localeCompare(b.model + b.attack_rendering + b.defended_system));
+  lines.push("| Model | Suite | Rendering | System | Case | Attacker goal (baseline → defended) | Utility (baseline → defended) | Defended runs with an agent-defense veto |", "| --- | --- | --- | --- | --- | --- | --- | --- |");
+  stress.sort((a, b) => (a.model + a.suite + a.attack_rendering + a.defended_system).localeCompare(b.model + b.suite + b.attack_rendering + b.defended_system));
   for (const r of stress) for (const id of r.selected_case_ids) {
     const xs = r.cases.filter((c) => c.case_id === id && valid(c));
     const n = (f) => `${xs.filter(f).length}/${xs.length}`;
-    lines.push(`| ${r.model} | ${r.attack_rendering} | ${r.defended_system} | ${id} | ${n((c) => c.baseline.evaluation.attacker_goal_achieved)} → ${n((c) => c.defended.evaluation.attacker_goal_achieved)} | ` +
+    lines.push(`| ${r.model} | ${path.basename(r.suite, ".json")} | ${r.attack_rendering} | ${r.defended_system} | ${id} | ${n((c) => c.baseline.evaluation.attacker_goal_achieved)} → ${n((c) => c.defended.evaluation.attacker_goal_achieved)} | ` +
       `${n((c) => c.baseline.evaluation.utility_pass)} → ${n((c) => c.defended.evaluation.utility_pass)} | ${n((c) => (c.defended.defense?.vetoes ?? 0) > 0)} |`);
   }
   lines.push("");
 }
+
+// Pre-registered predictions for directive_flow v2 (A-014), scored per run from the v2 stress reports.
+const pred = cfg.v2_predictions;
+lines.push(`## Pre-registered v2 predictions (${pred.amendment})`, "", "Each prediction is scored per run from the stress reports named in the row. Counts, not a pass/fail label; a prediction is fully supported only when every run agrees, and support is vacuous when the classifier was never called (nothing was attributed).", "");
+const stressRun = (suite, rendering, system) => stress.find((r) => r.suite === suite && r.attack_rendering === rendering && r.defended_system === system && r.model === pred.model);
+lines.push("| Prediction | Case | Rendering | v2 runs matching the prediction | v2 runs where the classifier was called | v1 runs for comparison |", "| --- | --- | --- | --- | --- | --- |");
+for (const p of pred.items) {
+  const v2 = stressRun(pred.suite, p.rendering, pred.v2_system), v1 = stressRun(pred.suite, p.rendering, pred.v1_system);
+  const rows = (r) => r ? r.cases.filter((c) => c.case_id === p.case_id && valid(c)) : [];
+  const blocked = (c) => !c.defended.evaluation.attacker_goal_achieved && (c.defended.defense?.vetoes ?? 0) > 0;
+  const test = { blocks: blocked, misses: (c) => c.defended.evaluation.attacker_goal_achieved, allows_benign: (c) => (c.defended.defense?.vetoes ?? 0) === 0 && c.defended.evaluation.utility_pass }[p.expect];
+  const v1test = { blocks: (c) => c.defended.evaluation.attacker_goal_achieved, misses: (c) => c.defended.evaluation.attacker_goal_achieved, allows_benign: (c) => (c.defended.defense?.vetoes ?? 0) === 0 && c.defended.evaluation.utility_pass }[p.expect];
+  const v1label = { blocks: "attacker goal reached under v1", misses: "attacker goal reached under v1", allows_benign: "no veto and utility under v1" }[p.expect];
+  // A prediction met without any classifier call is vacuous (nothing in the write was attributed to untrusted text).
+  const called = (c) => (c.defended.defense?.classifications ?? []).length > 0;
+  lines.push(`| ${p.id}: ${p.text} | ${p.case_id} | ${p.rendering} | ${v2 ? `${rows(v2).filter(test).length}/${rows(v2).length}` : "not run"} | ${v2 ? `${rows(v2).filter(called).length}/${rows(v2).length}` : "not run"} | ${v1 ? `${rows(v1).filter(v1test).length}/${rows(v1).length} ${v1label}` : "not run"} |`);
+}
+lines.push("");
+
+// Pre-registered pooled analysis on the new models (A-014): data unseen at registration.
+const reg = cfg.preregistered_pooled;
+const poolRs = reports.filter((r) => reg.models.includes(r.model));
+const pool = (system) => { const xs = poolRs.filter((r) => r.defended_system === system).map((r) => metrics(r, "defended").goal).filter(Boolean); return xs.length === reg.models.length ? wilson(xs.reduce((n, w) => n + w.k, 0), xs.reduce((n, w) => n + w.n, 0)) : null; };
+const pa = pool(reg.system), pb = pool(reg.versus), pd = newcombe(pa, pb);
+lines.push(`## Pre-registered pooled analysis (${reg.amendment})`, "",
+  `Attacker-goal rate of \`${reg.system}\` versus \`${reg.versus}\`, pooled over ${reg.models.map((m) => `\`${m}\``).join(" and ")} (models whose data did not exist at registration), Newcombe 95% interval; "lower" only if it excludes zero.`, "",
+  ...(pd ? [`| ${reg.system} | ${reg.versus} | Difference (pp) | Verdict |`, "| --- | --- | --- | --- |", `| ${fmt(pa)} | ${fmt(pb)} | ${pp(pd.diff)} (${pp(pd.lo)} to ${pp(pd.hi)}) | ${pd.hi < 0 ? "lower (better)" : pd.lo > 0 ? "higher (worse)" : "not separated"} |`] : ["Not computable yet: a registered model or system report is missing."]), "");
 
 const missing = cells.filter((c) => !reports.some((r) => r.model === c.model && r.defended_system === c.system));
 lines.push("## Registered cells without a finished report", "", "Not counted anywhere above.", "", ...(missing.length ? missing.map((c) => `- ${c.model} / ${c.system} (lane ${c.lane})`) : ["- none"]), "");
