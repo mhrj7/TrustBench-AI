@@ -29,3 +29,11 @@ policy decision traces `reports/tb024-policy-decision-traces.jsonl`.
 
 Limits: scripted runs check wiring and parity, not attack success rates. Live results are pilot-sized
 (`docs/pilot-results-tb024.md`). Free-text content inside an authorized action is not inspected by the gateway.
+
+## Prompt profiles, validity and the live matrix (2026-10-15)
+
+- `--prompt-profile plain|hardened` (registered in `configs/baseline.yaml`), identical for both arms. `plain` carries no allowed-tools list or security guidance.
+- `--attack-rendering <id>` from `data/attack-renderings.json`: authored text, goal-only, project-defined framing, published AgentDojo/InjecAgent templates (cited to the vendored source), and `trusted_user_control` (positive control).
+- Every run records `engaged` (made a tool call), `injection_exposed` (the model saw the injected text) and `invalid` (provider fault); invalid pairs are excluded from all rates and listed.
+- `scripts/run-live-matrix.mjs --lane <lane>` runs `configs/live-matrix.yaml` (models, repetitions, renderings, profiles are config). `scripts/summarize-live-results.mjs` regenerates `docs/pilot-results-tb024.md`.
+- Locked holdout fixtures never run. The sealed replacement holdout (`TB-BEN/ATT-UPDATE-002`) has not been executed by any agent or model.

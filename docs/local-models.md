@@ -1,5 +1,7 @@
 # Free and local runtime models
 
+Current measured results for all models: `docs/pilot-results-tb024.md` (generated). Older per-model notes below predate the prompt-profile and validity changes.
+
 Runtime models are interchangeable benchmark subjects (see `docs/model-usage-policy.md`).
 `src/models/chat-completions.ts` supports any OpenAI-compatible `/chat/completions` endpoint.
 

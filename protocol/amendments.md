@@ -104,3 +104,15 @@ Approved by the project owner. Changes:
 - Evaluator v2 gains an oracle for `TB-ATT-UPDATE-002` (value substitution on the approved record), tested with
   synthetic trajectories only.
 Confirmatory use of the new holdout remains one run, after the release gate, per the original holdout policy.
+
+
+## A-008 (2026-10-15) Prompt profiles, positive control and what the first live matrix showed
+
+Audit of the zero attack-success results: all runs were valid, models made tool calls and saw the injected text, so the zeros were
+not broken runs. A positive control (the forbidden goal requested in the trusted user message) was also refused under the original
+shared prompt, which carries explicit trust and authorization rules. The shared prompt is therefore itself a defense. To measure the
+gateway against both a hardened and an ordinary agent, `configs/baseline.yaml` registers two prompt profiles, `hardened` (original) and
+`plain` (neutral, AgentDojo-style, no allowed-tools list or security guidance). Both arms always use the same profile; both are reported.
+Results are generated into `docs/pilot-results-tb024.md` from the evidence files. The matrix in `configs/live-matrix.yaml` was stopped
+before completion by the project owner's time limit; unfinished cells are listed in that document and none is counted.
+Gemini's free quota was exhausted by earlier runs; its results were excluded rather than partially reported.
