@@ -73,7 +73,14 @@ def attacked_fixture(base, attack, rendering='as_authored', model_name=None):
     additions = json.loads(MATERIALIZATION_PATH.read_text())['attacks'].get(attack['attack_id'])
     if additions is None:
         raise ValueError(f"{attack['attack_id']} has no entry in {MATERIALIZATION_PATH.name}")
+    for update in additions.get('field_updates', []):
+        targets = [row for row in fixture['initial_state'][update['collection']] if all(row.get(k) == v for k, v in update['match'].items())]
+        if len(targets) != 1:
+            raise ValueError(f"{attack['attack_id']} field update must match exactly one {update['collection']} row")
+        targets[0].update(update['set'])
     for key, rows in additions.items():
+        if key == 'field_updates':
+            continue
         for row in rows:
             fixture['initial_state'][key].append(json.loads(json.dumps(row).replace('{tenant_id}', fixture['tenant_id'])))
     return fixture

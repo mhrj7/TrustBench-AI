@@ -1,6 +1,7 @@
 import { BudgetController, BudgetExhaustedError, type BudgetConfig } from "../../runtime/budget.ts";
 import { canonicalJson } from "../../schemas/trace.ts";
 import { RecoveryManager, type RecoveryPolicy, type Sleep } from "./recovery.ts";
+import type { AgentDefenses } from "./defenses.ts";
 import type { ModelAdapter, ModelRequest } from "../models/contracts.ts";
 import {
   AgentRunConfigSchema, type AgentFailure, type AgentNode, type AgentRunConfig, type AgentToolRegistry,
@@ -20,10 +21,10 @@ function failure(node: AgentNode, error: unknown, callId: string | null = null):
   return { node, code, message: message.slice(0, 1000), call_id: callId };
 }
 
-function toolResultMessage(record: AgentToolRecord): ModelMessage {
+function toolResultMessage(record: AgentToolRecord, wrap: (text: string) => string = (t) => t): ModelMessage {
   return {
     role: "user",
-    content: canonicalJson({
+    content: wrap(canonicalJson({
       type: "tool_result",
       call_id: record.call_id,
       tool_name: record.tool_name,
@@ -32,7 +33,7 @@ function toolResultMessage(record: AgentToolRecord): ModelMessage {
       error_code: record.error_code,
       ...(record.outcome_unknown ? { note: "This write may or may not have been applied and was not retried. Verify with a read before repeating it." } : {}),
       ...(record.replayed ? { note: "An identical write already succeeded; its saved result is returned and nothing was executed again." } : {}),
-    }),
+    })),
   };
 }
 
@@ -43,6 +44,8 @@ export async function runBaselineAgent(input: {
   budgetConfig: BudgetConfig;
   /** Bounded recovery (TB-025). Omit to keep the TB-015 behavior: no retries. */
   recovery?: { policy: RecoveryPolicy; seed: number; sleep?: Sleep };
+  /** Agent-side defenses for defended systems (configs/defenses.yaml); omitted for the baseline. */
+  defenses?: AgentDefenses;
 }): Promise<BaselineAgentResult> {
   const config = AgentRunConfigSchema.parse(input.config);
   const budget = new BudgetController(input.budgetConfig);
@@ -53,8 +56,9 @@ export async function runBaselineAgent(input: {
   const manager = input.recovery
     ? new RecoveryManager({ policy: input.recovery.policy, budget, signal: runController.signal, runId: config.run_id, seed: input.recovery.seed, sleep: input.recovery.sleep })
     : null;
+  const defenses = input.defenses ?? null;
   const messages: ModelMessage[] = [
-    { role: "system", content: config.system_prompt },
+    { role: "system", content: defenses ? defenses.systemPrompt(config.system_prompt) : config.system_prompt },
     { role: "user", content: config.user_prompt },
   ];
   const transitions: AgentTransition[] = [];
@@ -78,6 +82,7 @@ export async function runBaselineAgent(input: {
       tool_records: structuredClone(toolRecords),
       failures: structuredClone(failures),
       ...(manager ? { recovery: manager.summary() } : {}),
+      ...(defenses ? { defense: structuredClone(defenses.stats) } : {}),
       budget: {
         model_calls: snapshot.model_calls, tool_calls: snapshot.tool_calls,
         input_tokens: snapshot.input_tokens, output_tokens: snapshot.output_tokens,
@@ -94,8 +99,13 @@ export async function runBaselineAgent(input: {
     transitions.push({ step: steps, node, detail });
   };
 
+  let allowedByFilter: Set<string> | null = null;
   const execute = async (): Promise<BaselineAgentResult> => {
     try {
+      if (defenses) {
+        const chosen = await defenses.filterTools(config, runController.signal);
+        if (chosen) { allowedByFilter = new Set(chosen); config.tools = config.tools.filter((t) => allowedByFilter!.has(t.name)); }
+      }
       while (true) {
         visit("model", `model_call_${budget.snapshot().model_calls + 1}`);
         budget.beginModelCall(config.planned_input_tokens_per_call, config.generation_settings.max_output_tokens);
@@ -127,6 +137,9 @@ export async function runBaselineAgent(input: {
             budget.recordToolCall();
             const tool = input.tools[call.tool_name];
             if (!tool) throw Object.assign(new Error(`Tool is not registered: ${call.tool_name}`), { code: "tool_not_registered" });
+            if (allowedByFilter && !allowedByFilter.has(call.tool_name)) throw Object.assign(new Error(`Tool removed by the tool filter: ${call.tool_name}`), { code: "tool_filtered" });
+            const veto = defenses ? await defenses.veto(call, messages, config, runController.signal) : null;
+            if (veto) throw Object.assign(new Error(`Blocked by ${veto.defense}: the call recurs when the user task is masked`), { code: veto.code });
             const context = { runId: config.run_id, taskId: config.task_id, callId: call.call_id };
             const attemptResult = manager
               ? await manager.callTool(call.tool_name, call.arguments, call.call_id, (signal, attempt) => tool.execute(call.arguments, { ...context, signal, attempt }))
@@ -139,7 +152,7 @@ export async function runBaselineAgent(input: {
               ...(manager ? { attempts: attemptResult.attempts } : {}), ...(attemptResult.replayed ? { replayed: true } : {}),
             };
             toolRecords.push(record);
-            messages.push(toolResultMessage(record));
+            messages.push(toolResultMessage(record, defenses ? (t) => defenses.wrapToolResult(t) : undefined));
           } catch (error) {
             if (error instanceof BudgetExhaustedError || error instanceof AgentTimeoutError) throw error;
             const captured = failure("tool", error, call.call_id);
@@ -151,9 +164,11 @@ export async function runBaselineAgent(input: {
               ...((error as { outcome_unknown?: boolean }).outcome_unknown ? { outcome_unknown: true } : {}),
             };
             toolRecords.push(record);
-            messages.push(toolResultMessage(record));
+            messages.push(toolResultMessage(record, defenses ? (t) => defenses.wrapToolResult(t) : undefined));
           }
         }
+        const reminder = defenses?.reminder(config.user_prompt);
+        if (reminder) messages.push(reminder);
         if (config.on_tool_error === "stop" && toolRecords.slice(-response.tool_calls.length).some((record) => record.status === "failed")) {
           finalText = response.output_text;
           return terminate("failure");

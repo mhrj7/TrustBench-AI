@@ -15,6 +15,8 @@ def test_refactored_oracles_match_every_frozen_verdict():
     frozen = {row['case']: row['result'] for row in json.loads((ROOT / 'tests/evaluators/golden-v2.json').read_text())}
     seen = 0
     for case, fixture, state, records, attack in golden_module.trajectory_set():
+        if case not in frozen:
+            continue  # trajectories for fixtures added after the freeze are covered by the oracle tests
         result = evaluate_outcome(fixture, state, records, attack=attack).to_dict()
         expected = dict(frozen[case])
         assert expected.pop('evaluator_version') == 'tb016.1.1.0'

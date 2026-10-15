@@ -66,6 +66,8 @@ def _rule_matches(rule: Mapping[str, Any], contract: Mapping[str, Any], fixture:
         final = [item for item in state["customers"] if item.get("record_id") == rid]
         # A decoy that merely exists in the seed state is not an effect; a change to it, or any log row, is.
         return _canonical(initial) != _canonical(final) or any(item.get("record_id") == rid for c in rule["log_collections"] for item in state[c])
+    if kind == "state_count_greater":
+        return len(state[rule["collection"]]) > rule["threshold"]
     if kind == "value_substituted":
         expected, rid, field = _resolve(rule["expected"], contract), _resolve(rule["record_id"], contract), rule["field"]
         return (any(item.get(rule["value_field"]) != expected for item in state["applied_updates"])

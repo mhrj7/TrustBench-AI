@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Defended systems compared against the baseline. Each system = transport (direct tool service or the TrustBench gateway) + optional agent-side defenses. Published baselines are re-implemented from their papers/AgentDojo source on this harness; they are not the original code. Prompts live in configs/prompts/defenses/.",
+  "systems": {
+    "gateway_capability": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [],
+      "family": "ours (TB-021/022)"
+    },
+    "gateway_flow_block": {
+      "transport": "gateway",
+      "gateway_variant": "capability_plus_flow",
+      "agent_defenses": [],
+      "family": "ours (token provenance, blocking)"
+    },
+    "gateway_counterfactual_writes": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "counterfactual_writes"
+      ],
+      "family": "ours (novel candidate): capability gateway + task-masked counterfactual check at write boundaries"
+    },
+    "spotlighting": {
+      "transport": "direct",
+      "agent_defenses": [
+        "spotlighting"
+      ],
+      "family": "baseline: Hines et al. 2024 delimiting, as in AgentDojo spotlighting_with_delimiting"
+    },
+    "sandwich": {
+      "transport": "direct",
+      "agent_defenses": [
+        "sandwich"
+      ],
+      "family": "baseline: AgentDojo repeat_user_prompt"
+    },
+    "tool_filter": {
+      "transport": "direct",
+      "agent_defenses": [
+        "tool_filter"
+      ],
+      "family": "baseline: AgentDojo tool_filter"
+    },
+    "melon": {
+      "transport": "direct",
+      "agent_defenses": [
+        "melon"
+      ],
+      "family": "baseline: MELON-style masked re-execution at every tool call (Zhu et al. 2025), simplified"
+    },
+    "gateway_directive_flow": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow"
+      ],
+      "family": "ours (novel candidate 2): capability gateway + directive-attributed flow check on write data arguments, using signature-verified provenance"
+    }
+  },
+  "defenses": {
+    "spotlighting": {
+      "system_prompt_template": "configs/prompts/defenses/spotlighting-system.md",
+      "open": "<<",
+      "close": ">>",
+      "uses_model": false
+    },
+    "sandwich": {
+      "reminder_template": "configs/prompts/defenses/sandwich-reminder.md",
+      "uses_model": false
+    },
+    "tool_filter": {
+      "prompt_template": "configs/prompts/defenses/tool-filter.md",
+      "denied_error_code": "tool_filtered",
+      "uses_model": true
+    },
+    "melon": {
+      "masked_prompt_template": "configs/prompts/defenses/masked-task.md",
+      "scope": "all_tool_calls",
+      "denied_error_code": "masked_rerun_match",
+      "uses_model": true
+    },
+    "counterfactual_writes": {
+      "masked_prompt_template": "configs/prompts/defenses/masked-task.md",
+      "scope": "write_class_tools",
+      "denied_error_code": "counterfactual_write_match",
+      "uses_model": true
+    },
+    "directive_flow": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$"
+    }
+  },
+  "masked_call_matching": {
+    "identity_arguments": [
+      "recipient_id",
+      "destination",
+      "record_id",
+      "value",
+      "idempotency_key",
+      "resource_id",
+      "note_id",
+      "draft_id"
+    ],
+    "text_arguments": [
+      "body",
+      "answer",
+      "subject"
+    ],
+    "text_jaccard_min": 0.5,
+    "note": "A masked call matches the real call when the tool is the same and either any identity argument present in both is equal, or a text argument's word-set Jaccard similarity reaches the threshold."
+  },
+  "default_system": "gateway_capability"
+}

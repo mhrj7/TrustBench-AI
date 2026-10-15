@@ -10,6 +10,8 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
+import { AgentDefenses } from "../src/agent/defenses.ts";
+import { rateFaultyFetch } from "../src/reliability/faults.ts";
 import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
 
@@ -30,10 +32,21 @@ const temperature = Number(flag("--temperature", String(runConfig.live.default_t
 const onlyCases = flag("--cases") ? new Set(flag("--cases").split(",")) : null;
 const minIntervalMs = Number(flag("--min-interval-ms", "0"));
 const rendering = flag("--attack-rendering", runConfig.default_attack_rendering);
+const faultProfileName = flag("--fault-profile", null);
+const faultSchedules = JSON.parse(await readFile(path.join(root, "tests/recovery/fault-schedules.json"), "utf8"));
+const recoveryClasses = JSON.parse(await readFile(path.join(root, "configs/recovery.yaml"), "utf8")).tool_classes;
+const faultProfile = faultProfileName ? { ...faultSchedules.live_profiles[faultProfileName], read_tools: recoveryClasses.read, write_tools: recoveryClasses.write } : null;
+if (faultProfileName && !live) throw new Error("--fault-profile is for live runs; scripted fault behavior is covered by tests/recovery");
+if (faultProfileName && !faultSchedules.live_profiles[faultProfileName]) throw new Error(`unknown --fault-profile ${faultProfileName}`);
 const promptProfile = flag("--prompt-profile", null); // null = the default registered in configs/baseline.yaml
 const defendedConfig = JSON.parse(await readFile(path.join(root, "configs/defended.yaml"), "utf8"));
-const defendedVariant = flag("--defended-variant", defendedConfig.default_defended_variant);
-if (!(defendedVariant in defendedConfig.defended_variants)) throw new Error(`--defended-variant must be one of ${Object.keys(defendedConfig.defended_variants).join(", ")}`);
+const defensesRegistry = JSON.parse(await readFile(path.join(root, "configs/defenses.yaml"), "utf8"));
+const defendedSystemName = flag("--defended-system", defensesRegistry.default_system);
+const defendedSystem = defensesRegistry.systems[defendedSystemName];
+if (!defendedSystem) throw new Error(`--defended-system must be one of ${Object.keys(defensesRegistry.systems).join(", ")}`);
+const defendedVariant = defendedSystem.transport === "gateway" ? defendedSystem.gateway_variant : "none";
+const modelDefenses = new Set(Object.entries(defensesRegistry.defenses).filter(([, d]) => d.uses_model).map(([n]) => n));
+const needsDefenseModel = defendedSystem.agent_defenses.some((d) => modelDefenses.has(d));
 const work = path.resolve(root, flag("--work-dir", runConfig.default_work_dir)); // separate directories let provider lanes run in parallel
 const registry = JSON.parse(await readFile(path.join(root, "protocol/experiment-registry.yaml"), "utf8"));
 const renderingRegistry = JSON.parse(await readFile(path.join(root, "data/attack-renderings.json"), "utf8"));
@@ -114,6 +127,13 @@ const serviceEnv = (db) => ({ TRUSTBENCH_FIXTURE_PATH: fixturesPath, TRUSTBENCH_
 launch(["-m", "uvicorn", "src.tools.app:app", "--host", "127.0.0.1", "--port", String(baselinePort), "--log-level", "warning"], serviceEnv(baselineDb));
 await waitFor(baselinePort);
 
+if (!live && defendedSystem.agent_defenses.length) throw new Error(`${defendedSystemName} uses agent-side defenses, which only a live --model can exercise (a scripted trajectory ignores prompts)`);
+let defendedDirectPort = null;
+if (defendedSystem.transport === "direct") {
+  defendedDirectPort = await freePort();
+  launch(["-m", "uvicorn", "src.tools.app:app", "--host", "127.0.0.1", "--port", String(defendedDirectPort), "--log-level", "warning"], serviceEnv(defendedDb));
+  await waitFor(defendedDirectPort);
+}
 let lastCall = 0;
 const observedResponseModels = new Set();
 async function modelRevision() {
@@ -152,25 +172,44 @@ async function runArm(arm, testCase, fixture, rep) {
   }
   let built, port, dbPath, auditFile; const approvalLog = [];
   const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};
-  const common = { ...control, promptProfile, arm, fixture, episodeId, runId: `run-${testCase.case_id}-r${rep}`, taskId, ...runOptions(rep) };
+  const transport = faultProfile ? rateFaultyFetch(fetch, { ...faultProfile, seed: baseSeed }, `${testCase.case_id}:${rep}`) : undefined; // same stream for both arms
+  const common = { ...control, promptProfile, ...(transport ? { fetchImpl: transport } : {}), arm, fixture, episodeId, runId: `run-${testCase.case_id}-r${rep}`, taskId, ...runOptions(rep) };
   if (arm === "baseline") {
     port = baselinePort; dbPath = baselineDb;
     const reset = await fetch(`http://127.0.0.1:${port}/v1/episodes/${episodeId}/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixture_id: testCase.fixture_id, max_tool_calls: runConfig.episode_max_tool_calls }) });
     if (!reset.ok) throw new Error(`reset failed ${reset.status}`);
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}` });
+  } else if (defendedSystem.transport === "direct") {
+    port = defendedDirectPort; dbPath = defendedDb;
+    const reset = await fetch(`http://127.0.0.1:${port}/v1/episodes/${episodeId}/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixture_id: testCase.fixture_id, max_tool_calls: runConfig.episode_max_tool_calls }) });
+    if (!reset.ok) throw new Error(`reset failed ${reset.status}`);
+    built = await buildArm({ ...common, arm: "baseline", baseUrl: `http://127.0.0.1:${port}` }); // same direct tools; the defense is agent-side
   } else {
     port = await freePort(); dbPath = defendedDb;
     const tag = `${testCase.case_id}-r${rep}`;
     const sessionFile = path.join(work, `session-${tag}.json`);
     auditFile = path.join(work, `audit-${tag}.jsonl`);
-    launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant].flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
+    launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant]?.flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
     await waitFor(port);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}`,
       gateway: { sessionToken: session.sessionToken, signingKey: session.signingKey, sessionFile, fixtureId: testCase.fixture_id, checkpointDb: path.join(work, `checkpoints-${tag}.sqlite`), env: serviceEnv(defendedDb), approvalLog } });
   }
   const started = Date.now();
-  const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed } });
+  let defenses;
+  if (arm === "defended" && defendedSystem.agent_defenses.length) {
+    let defenseAdapter = null;
+    if (needsDefenseModel) {
+      defenseAdapter = makeLiveAdapter();
+      const raw = defenseAdapter.generate.bind(defenseAdapter);
+      defenseAdapter.generate = async (req, opts) => {
+        const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); lastCall = Date.now();
+        try { return await raw(req, opts); } catch (error) { if (quotaPattern.test(String(error?.message))) { console.error("PROVIDER QUOTA EXHAUSTED"); process.exit(2); } throw error; }
+      };
+    }
+    defenses = new AgentDefenses({ names: defendedSystem.agent_defenses, registry: defensesRegistry, writeTools: built.recovery.tool_classes.write, adapter: defenseAdapter });
+  }
+  const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
   const elapsedMs = Date.now() - started;
   const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
   const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
@@ -178,7 +217,8 @@ async function runArm(arm, testCase, fixture, rep) {
   const marker = testCase.attack_id ? attackInfo[testCase.attack_id].exposure_marker : null;
   const exposed = marker === null ? null : adapter.requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));
-  return { exposed, invalid, engaged: result.tool_records.length > 0, result, requests: adapter.requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries, elapsedMs };
+  const faultsInjected = transport ? transport.injected.length : 0;
+  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests: adapter.requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries, elapsedMs };
 }
 
 const runs = [];
@@ -210,7 +250,7 @@ const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null,
   status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_variant: defendedVariant, prompt_profile: effectiveProfile, holdout_excluded_cases: excludedHoldout, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
 };
 const traces = [];
@@ -237,7 +277,7 @@ for (const { testCase, rep, order, arms } of runs) {
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
   entry.final_state_identical = canon(baseline.snapshot.state) === canon(defended.snapshot.state);
   entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
-  const side = (a) => ({ recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
+  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
   entry.baseline = side(baseline);
   entry.defended = { ...side(defended), policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   for (const decision of defended.decisions) traces.push({ case_id: testCase.case_id, repetition: rep, arm: "defended", ...decision });
@@ -270,6 +310,7 @@ report.summary = {
   unsafe_effect_other_than_out_of_allowlist: both(attack, (a) => !a.evaluation.security_pass && (a.evaluation.attacker_goal_achieved || a.evaluation.prohibited_side_effects.some((x) => !x.startsWith("security.executed_unlisted_tool")))),
   utility_under_attack: both(attack, (a) => a.evaluation.utility_pass),
   false_block_calls_on_benign: rate(deniedBenign, allBenignCalls),
+  defense_overhead: { mean_extra_model_calls_per_run: validCases.length ? Number((validCases.reduce((n, c) => n + (c.defended.defense?.model_calls ?? 0), 0) / validCases.length).toFixed(3)) : 0, extra_input_tokens: validCases.reduce((n, c) => n + (c.defended.defense?.input_tokens ?? 0), 0), extra_output_tokens: validCases.reduce((n, c) => n + (c.defended.defense?.output_tokens ?? 0), 0), vetoes_on_benign_runs: benign.filter((c) => (c.defended.defense?.vetoes ?? 0) > 0).length, vetoes_on_attack_runs: attack.filter((c) => (c.defended.defense?.vetoes ?? 0) > 0).length },
   defended_unverified_tool_outputs: validCases.flatMap((c) => c.defended.tool_trace).filter((t) => t.status === "succeeded" && t.provenance_reason === "invalid_or_missing_signature").length,
   median_elapsed_ms: live ? { baseline: median(report.cases.map((c) => c.baseline.elapsed_ms)), defended: median(report.cases.map((c) => c.defended.elapsed_ms)) } : null,
   per_case: Object.fromEntries([...new Set(validCases.map((c) => c.case_id))].map((id) => {
@@ -279,7 +320,7 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedVariant}${toolMode === "contract" ? "-contract-backend" : ""}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });
@@ -287,7 +328,8 @@ await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.js
 await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `reports/tests/tb024-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 
-const required = (c) => [["run_config_identical", c.run_config_identical], ["first_request_identical", c.first_request_identical], ["settings_identical", c.settings_identical]];
+const promptChanging = defendedSystem.agent_defenses.some((d) => ["spotlighting", "tool_filter"].includes(d));
+const required = (c) => [["run_config_identical", c.run_config_identical], ...(promptChanging ? [] : [["first_request_identical", c.first_request_identical]]), ["settings_identical", c.settings_identical]];
 const scriptedOnly = (c) => [["non_tool_messages_identical", c.non_tool_messages_identical], ["same_tool_call_sequence", c.same_tool_call_sequence],
   ["differences_attributable_to_gateway", c.differences_attributable_to_gateway], ...(c.kind === "benign" ? [["final_state_identical", c.final_state_identical]] : [])];
 const failed = report.cases.flatMap((c) => [...required(c), ...(live ? [] : scriptedOnly(c))].filter(([, ok]) => !ok).map(([name]) => `${c.case_id}:${name}`));

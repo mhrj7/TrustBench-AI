@@ -52,6 +52,32 @@ def main():
                                   options.tool, arguments, options.checkpoint_db), sort_keys=True))
 
 
+def human_decision(payload, fixture, policy=POLICY, clock=None):
+    """Queues the exact pending action for a human operator and waits for an explicit decision file."""
+    import time
+    cfg = policy['human_approval']
+    root = Path(__file__).resolve().parents[2] / cfg['queue_dir']
+    (root / 'pending').mkdir(parents=True, exist_ok=True)
+    (root / 'decisions').mkdir(parents=True, exist_ok=True)
+    request_id = payload['request_id']
+    pending = root / 'pending' / f'{request_id}.json'
+    pending.write_text(json.dumps({'request_id': request_id, 'tool': payload['tool'], 'arguments': payload['arguments'],
+                                   'user_id': fixture['task_contract']['user_id'], 'task': fixture['task_contract']['request']}, indent=2, sort_keys=True))
+    decision_path = root / 'decisions' / f'{request_id}.json'
+    clock = clock or time.monotonic
+    deadline = clock() + cfg['wait_timeout_s']
+    try:
+        while clock() < deadline:
+            if decision_path.exists():
+                decision = json.loads(decision_path.read_text())
+                # The decision must name the exact arguments it approves; anything else is a rejection.
+                return decision.get('approved') is True and decision.get('arguments') == payload['arguments']
+            time.sleep(cfg['poll_interval_ms'] / 1000)
+        return False
+    finally:
+        pending.unlink(missing_ok=True)
+
+
 def run_workflow(call_tool, store, fixture, episode, tool, arguments, checkpoint_db):
     from src.policy.approvals import ApprovalStore
     from src.policy.workflow import build_graph, open_checkpointer, pending_interrupt, resume, start
@@ -63,8 +89,12 @@ def run_workflow(call_tool, store, fixture, episode, tool, arguments, checkpoint
     approval = {'paused': False, 'matched_synthetic_event': None, 'request_id': None}
     if '__interrupt__' in outcome:
         (payload,) = pending_interrupt(graph, thread)
-        event = matching_event(fixture, payload['arguments'])
-        approval = {'paused': True, 'matched_synthetic_event': event is not None, 'request_id': payload['request_id']}
+        if POLICY['approval_mode'] == 'human':
+            approved = human_decision(payload, fixture)
+            event = {'source': 'human_operator'} if approved else None
+        else:
+            event = matching_event(fixture, payload['arguments'])
+        approval = {'paused': True, 'mode': POLICY['approval_mode'], 'matched_synthetic_event': event is not None, 'request_id': payload['request_id']}
         if event is not None:
             ApprovalStore(store).approve(payload['request_id'], fixture['task_contract']['user_id'])
         outcome = resume(graph, thread, payload['request_id'], approved=event is not None)

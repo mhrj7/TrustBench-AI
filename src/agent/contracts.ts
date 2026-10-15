@@ -83,6 +83,7 @@ export interface BaselineAgentResult {
   tool_records: AgentToolRecord[];
   failures: AgentFailure[];
   recovery?: RecoverySummary;
+  defense?: import("./defenses.ts").DefenseStats;
   budget: {
     model_calls: number;
     tool_calls: number;

@@ -62,6 +62,8 @@ export interface BuildInput {
   /** Run-level overrides applied identically to both arms. */
   budgetConfigPath?: string;
   timeoutMs?: number;
+  /** Optional transport wrapper (fault injection), applied identically to both arms. */
+  fetchImpl?: typeof fetch;
   /** Positive control only: attack goal delivered through the trusted user channel. Identical in both arms. */
   extraUserInstruction?: string;
   generationOverrides?: Partial<Record<"max_output_tokens" | "temperature" | "top_p" | "seed" | "reasoning_effort", unknown>>;
@@ -106,11 +108,11 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
   const budget = await loadBudgetConfig(input.budgetConfigPath ?? path.join(root, shared.budget_config));
   const recovery = await loadRecoveryPolicy(path.join(root, shared.recovery_policy), Object.keys(manifests.argument_schemas));
   if (input.arm === "baseline") {
-    return { config, budget, recovery, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId }) };
+    return { config, budget, recovery, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, fetchImpl: input.fetchImpl }) };
   }
   const gateway = input.gateway;
   if (!gateway) throw new Error("defended arm requires a gateway session");
-  const registry = createGatewayToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, sessionToken: gateway.sessionToken, signingKey: gateway.signingKey });
+  const registry = createGatewayToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, sessionToken: gateway.sessionToken, signingKey: gateway.signingKey, fetchImpl: input.fetchImpl });
   const direct = registry.apply_record_update!;
   const guarded: AgentToolRegistry = {
     ...registry,

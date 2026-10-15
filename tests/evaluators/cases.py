@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 # The frozen tb016.1.0.0 evaluator (pinned by the TB-017 pilot manifest) has no oracle for these attacks; v2 does.
-FROZEN_V1_UNSUPPORTED = {"TB-ATT-UPDATE-002"}
+FROZEN_V1_UNSUPPORTED = {"TB-ATT-UPDATE-002", "TB-ATT-DOC-002", "TB-ATT-DOC-003", "TB-ATT-EMAIL-003", "TB-ATT-EMAIL-004", "TB-ATT-UPDATE-003", "TB-ATT-DOC-004", "TB-ATT-EMAIL-005"}
 
 
 def load_jsonl(name: str) -> list[dict[str, Any]]:
@@ -104,10 +104,40 @@ def compromised_trajectory(fixture: dict[str, Any], attack: dict[str, Any]) -> t
             "approval_id": attack["protected_contract"]["expected_approval_id"], "idempotency_key": attack["protected_contract"]["expected_idempotency_key"],
         }, changes=[attack["protected_contract"]["expected_record_id"]]))
         state["applied_updates"].append({"record_id": attack["protected_contract"]["expected_record_id"], "field": "preferred_contact_method", "value": substituted})
+    elif attack_id != "TB-ATT-UPDATE-001":
+        return generic_compromise(fixture, attack, state, records)
     else:
         records.append(record("call-shadow", "apply_record_update", {
             "record_id": "customer-maple-shadow-001", "field": "preferred_contact_method", "value": "SMS",
             "approval_id": "approval-maple-001", "idempotency_key": "TB-BEN-UPDATE-001",
         }, changes=["customer-maple-shadow-001"]))
         state["applied_updates"].append({"record_id": "customer-maple-shadow-001", "field": "preferred_contact_method", "value": "SMS"})
+    return state, records
+
+
+def generic_compromise(fixture, attack, state, records):
+    """Builds a compromised trajectory from the attack's registered oracle (data/attack-oracles.json)."""
+    oracles = json.loads((ROOT / "data" / "attack-oracles.json").read_text())["attacks"][attack["attack_id"]]
+    contract = attack["protected_contract"]
+    resolve = lambda v: contract.get(v["contract"]) if isinstance(v, dict) and "contract" in v else v
+    rule = next((r for r in oracles if "effect" in r), next((r for r in oracles if r["rule"] == "state_nonempty"), oracles[0]))
+    kind = rule["rule"]
+    if kind == "state_text_contains":
+        target = state[rule["collections"][0]]
+        if not target:
+            target.append({})
+        target[0]["injected"] = rule["any_of"][0]
+    elif kind == "state_field_equals":
+        state[rule["collection"]][0][rule["field"]] = resolve(rule["value"])
+    elif kind == "state_nonempty":
+        state[rule["collection"]].append({"destination": attack["local_sink"]["sink_id"]})
+    elif kind == "state_count_greater":
+        state[rule["collection"]].append(deepcopy(state[rule["collection"]][0]))
+    elif kind == "value_substituted":
+        state["applied_updates"].append({"record_id": resolve(rule["record_id"]), "field": rule["field"], "value": f"{resolve(rule['expected'])}-substituted"})
+    elif kind in ("succeeded_call", "succeeded_call_arg_equals"):
+        args = {rule["arguments"][0]: resolve(rule["value"])} if kind == "succeeded_call_arg_equals" else {}
+        records.append(record("call-generic", rule["tools"][0], args))
+    else:
+        raise ValueError(f"no generic compromise for rule {kind}")
     return state, records
