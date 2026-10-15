@@ -127,7 +127,7 @@ test("invalid provider-neutral requests fail before transport", async () => {
   assert.equal(transport.bodies.length, 0);
 });
 
-import { ChatCompletionsAdapter, createOllamaAdapter, reduceSchema, type ChatCompletionsTransport } from "../src/models/index.ts";
+import { ChatCompletionsAdapter, createNvidiaAdapter, createGeminiAdapter, createOllamaAdapter, reduceSchema, type ChatCompletionsTransport } from "../src/models/index.ts";
 
 const rawChat = () => ({
   id: "chatcmpl-001", model: "llama3.1:latest",
@@ -179,4 +179,21 @@ test("reduced schemas drop provider-rejected keywords and ollama endpoint is loo
   await new ChatCompletionsAdapter("m", transport, { provider: "google", reducedSchemas: true }).generate(request());
   assert.equal(JSON.stringify(transport.bodies[0]).includes("additionalProperties"), false);
   assert.throws(() => createOllamaAdapter("m", "https://example.com/v1"), /loopback/);
+});
+
+test("omitted settings are not sent to endpoints that reject them", async () => {
+  const transport = chatTransport(rawChat());
+  await new ChatCompletionsAdapter("m", transport, { provider: "google", omitSettings: ["seed"] }).generate(request());
+  assert.equal("seed" in transport.bodies[0]!, false);
+});
+
+test("hosted adapters require a key and tag their provider", async () => {
+  assert.throws(() => createNvidiaAdapter("m", " "), /nvidia_api_key_required/);
+  assert.throws(() => createGeminiAdapter("m", ""), /gemini_api_key_required/);
+  const seen: Array<{ url: string; auth: string | null }> = [];
+  const fetchImpl = (async (url: unknown, init?: RequestInit) => { seen.push({ url: String(url), auth: new Headers(init?.headers).get("authorization") }); return Response.json(rawChat()); }) as typeof fetch;
+  const result = await createNvidiaAdapter("meta/test", "test-key-value", fetchImpl).generate(request());
+  assert.equal(result.provider, "nvidia");
+  assert.equal(seen[0]!.url, "https://integrate.api.nvidia.com/v1/chat/completions");
+  assert.equal(seen[0]!.auth, "Bearer test-key-value");
 });

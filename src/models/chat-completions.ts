@@ -41,6 +41,8 @@ export interface ChatCompletionsOptions {
   reducedSchemas?: boolean;
   /** Send settings.reasoning_effort as reasoning_effort (only for providers that accept it). */
   sendReasoningEffort?: boolean;
+  /** Settings the endpoint rejects; they are omitted from the request (record this in run metadata). */
+  omitSettings?: Array<"seed" | "top_p" | "temperature">;
 }
 
 const UNSUPPORTED_KEYS = new Set(["title", "additionalProperties", "$defs", "$schema", "pattern", "default"]);
@@ -108,9 +110,10 @@ export class ChatCompletionsAdapter implements ModelAdapter {
         },
       }));
     }
-    if (settings.temperature !== null) body.temperature = settings.temperature;
-    if (settings.top_p !== null) body.top_p = settings.top_p;
-    if (settings.seed !== null) body.seed = settings.seed;
+    const omit = new Set(this.options.omitSettings ?? []);
+    if (settings.temperature !== null && !omit.has("temperature")) body.temperature = settings.temperature;
+    if (settings.top_p !== null && !omit.has("top_p")) body.top_p = settings.top_p;
+    if (settings.seed !== null && !omit.has("seed")) body.seed = settings.seed;
     if (settings.reasoning_effort !== null && this.options.sendReasoningEffort) body.reasoning_effort = settings.reasoning_effort;
 
     let raw: unknown;
@@ -194,5 +197,13 @@ export function createGeminiAdapter(modelId: string, apiKey: string, fetchImpl?:
   if (!apiKey.trim()) throw new Error("gemini_api_key_required");
   return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey, fetchImpl,
-  }), { provider: "google", reducedSchemas: true });
+  }), { provider: "google", reducedSchemas: true, omitSettings: ["seed"] });
+}
+
+/** NVIDIA NIM hosted API (OpenAI-compatible). The key comes from the environment, never from prompts. */
+export function createNvidiaAdapter(modelId: string, apiKey: string, fetchImpl?: typeof fetch): ChatCompletionsAdapter {
+  if (!apiKey.trim()) throw new Error("nvidia_api_key_required");
+  return new ChatCompletionsAdapter(modelId, fetchChatCompletionsTransport({
+    baseUrl: "https://integrate.api.nvidia.com/v1", apiKey, fetchImpl,
+  }), { provider: "nvidia" });
 }

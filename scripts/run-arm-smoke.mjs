@@ -5,7 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
-import { MockModelAdapter, createGeminiAdapter, createOllamaAdapter } from "../src/models/index.ts";
+import { MockModelAdapter, createGeminiAdapter, createNvidiaAdapter, createOllamaAdapter } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,16 +13,17 @@ const work = path.join(root, ".tool-state/arms-smoke");
 const python = path.join(root, ".venv-tools/bin/python");
 const modelArg = process.argv.includes("--model") ? process.argv[process.argv.indexOf("--model") + 1] : null; // e.g. ollama:llama3.1:latest
 const live = modelArg !== null;
-if (live && modelArg.startsWith("gemini:")) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
+if (live && /^(gemini|nvidia):/.test(modelArg)) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
 const minIntervalMs = process.argv.includes("--min-interval-ms") ? Number(process.argv[process.argv.indexOf("--min-interval-ms") + 1]) : 0;
 const makeLiveAdapter = () => {
   if (modelArg.startsWith("ollama:")) return createOllamaAdapter(modelArg.slice(7));
   if (modelArg.startsWith("gemini:")) return createGeminiAdapter(modelArg.slice(7), process.env.GEMINI_API_KEY ?? "");
+  if (modelArg.startsWith("nvidia:")) return createNvidiaAdapter(modelArg.slice(7), process.env.NVIDIA_API_KEY ?? "");
   throw new Error(`unsupported --model ${modelArg}`);
 };
 let lastCall = 0;
 const liveOptions = live ? {
-  budgetConfigPath: path.join(root, modelArg.startsWith("gemini:") ? "configs/budget-gemini-free.yaml" : "configs/budget-local.yaml"), timeoutMs: 240_000,
+  budgetConfigPath: path.join(root, modelArg.startsWith("gemini:") ? "configs/budget-gemini-free.yaml" : modelArg.startsWith("nvidia:") ? "configs/budget-nvidia-free.yaml" : "configs/budget-local.yaml"), timeoutMs: 240_000,
   generationOverrides: { temperature: 0, seed: 20261014, max_output_tokens: 1024, ...(modelArg.startsWith("ollama:") ? { reasoning_effort: "none" } : {}) },
 } : {};
 const suite = JSON.parse(await readFile(path.join(root, "tests/arms/smoke-cases.json"), "utf8"));
@@ -92,7 +93,27 @@ for (const testCase of suite.cases) {
     const adapter = live ? makeLiveAdapter() : new MockModelAdapter("mock-arm-smoke", scriptedOutcomes(testCase));
     if (live) adapter.requests = [];
     const originalGenerate = adapter.generate.bind(adapter);
-    if (live) adapter.generate = async (req, opts) => { adapter.requests.push(structuredClone(req)); const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); lastCall = Date.now(); return await originalGenerate(req, opts); };
+    adapter.providerRetries = 0;
+    if (live) adapter.generate = async (req, opts) => {
+      adapter.requests.push(structuredClone(req));
+      for (let attempt = 1; ; attempt++) {
+        const wait = lastCall + minIntervalMs - Date.now();
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        lastCall = Date.now();
+        try { return await originalGenerate(req, opts); }
+        catch (error) {
+          // Transport-level resilience, identical for both arms; every retry is counted in the report.
+          if (/retry in \d+h|retry in \d+m/.test(String(error?.message))) {
+            // Daily/minute quota exhausted: results would only measure provider availability, so abort without evidence.
+            console.error(`PROVIDER QUOTA EXHAUSTED for ${modelArg}; aborting without writing results.`);
+            process.exit(2);
+          }
+          if (!(error?.retryable) || attempt >= 4) throw error;
+          adapter.providerRetries++;
+          await new Promise((r) => setTimeout(r, 5000 * attempt));
+        }
+      }
+    };
     let built, port, session, auditFile, approvalLog = [], dbPath;
     if (arm === "baseline") {
       port = baselinePort; dbPath = baselineDb;
@@ -113,7 +134,7 @@ for (const testCase of suite.cases) {
     const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
     const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
     const decisions = auditFile ? (await readFile(auditFile, "utf8")).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
-    arms[arm] = { result, requests: adapter.requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config };
+    arms[arm] = { result, requests: adapter.requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries };
   }
   cases.push({ testCase, arms });
 }
@@ -150,6 +171,7 @@ for (const { testCase, arms } of cases) {
   entry.non_tool_messages_identical = canon(nonTool(baseline.requests).slice(0, Math.min(baseline.requests.length, defended.requests.length)))
     === canon(nonTool(defended.requests).slice(0, Math.min(baseline.requests.length, defended.requests.length)));
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
+  entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
   entry.baseline = { outcome: baseline.result.outcome, tool_calls: baseline.result.tool_records.length, failures: baseline.result.failures.map((f) => f.code), final_tool_calls: baseline.snapshot.tool_calls, evaluation: baseline.evaluation };
   entry.defended = { outcome: defended.result.outcome, tool_calls: defended.result.tool_records.length, failures: defended.result.failures.map((f) => f.code), final_tool_calls: defended.snapshot.tool_calls, evaluation: defended.evaluation, policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   entry.final_state_identical = JSON.stringify(baseline.snapshot.state) === JSON.stringify(defended.snapshot.state);

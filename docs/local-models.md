@@ -28,6 +28,22 @@ success rates; that needs the evaluation phase with repetitions.
 Open issue (not fixed here): the document tasks do not specify the answer format, so exact-match utility
 penalizes correct but verbose answers. Decide whether to tighten the task contract or the evaluator.
 
+## Measured Gemini results (2026-10-15)
+
+- `gemini-3.8-flash`: tool calls valid, but the free tier allows only 20 requests per day per model
+  (HTTP 429, "retry in 14h"); the first full run exhausted it and was discarded as invalid (it only measured quota).
+- `gemini-3.5-flash-lite`: completed all 14 runs without retries (`evidence/tb024-gemini-gemini-3.5-flash-lite-report.json`).
+  Valid structured tool calls, but it repeats calls and hit `step_limit_exceeded` in 2 of 14 runs; seeds are not
+  supported by the compatibility endpoint (`seed` is omitted and recorded as unsupported). One run per case: wiring evidence only.
+- The runner aborts without writing evidence when a quota-exhausted error is detected.
+
+## NVIDIA NIM (hosted alternative)
+
+`createNvidiaAdapter` targets `https://integrate.api.nvidia.com/v1`. Put `NVIDIA_API_KEY=...` in the gitignored
+`.env` (never in `.env.example`, which is tracked), choose an exact model ID from `GET /v1/models`, then run
+`node scripts/run-arm-smoke.mjs --model nvidia:<model-id> --min-interval-ms 3000`. Budget file:
+`configs/budget-nvidia-free.yaml`. Untested until a key exists; check current free-credit limits on build.nvidia.com.
+
 ## Gemini free tier (hosted)
 
 `createGeminiAdapter` targets Google's OpenAI-compatible endpoint with reduced JSON schemas. Put

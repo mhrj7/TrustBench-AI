@@ -4,7 +4,7 @@ import { z } from "zod";
 export const BudgetConfigSchema = z.object({
   schema_version: z.literal("1.0.0"),
   pricing: z.object({
-    provider: z.enum(["openai", "ollama", "google"]),
+    provider: z.enum(["openai", "ollama", "google", "nvidia"]),
     runtime_model_alias: z.string().min(1),
     pricing_model_id: z.string().min(1),
     service_tier: z.enum(["fast", "free", "local"]),
