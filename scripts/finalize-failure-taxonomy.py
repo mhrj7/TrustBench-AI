@@ -22,7 +22,7 @@ for first in a:
                   'Both reviewers agree; classify from preflight metadata only, not a reconstructed raw trajectory.'),
     rationale_a=first['rationale'],rationale_b=second['rationale'],evidence=first['evidence']))
 with (REPORTS/'failure-taxonomy.csv').open('w',newline='') as f:
- writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
+ writer=csv.DictWriter(f,fieldnames=list(rows[0]),lineterminator='\n');writer.writeheader();writer.writerows(rows)
 paths=['reports/tb018-reviewer-a.json','reports/tb018-reviewer-b.json','reports/failure-taxonomy.csv','runs/baseline-pilot/raw-runs.jsonl','runs/baseline-pilot/outcomes.jsonl','runs/baseline-pilot/preflight-failures.json']
 summary=dict(task_id='TB-018',reviewer_kind='two AI reviewers, not humans',cases=len(rows),
  primary_label_agreement=sum(r['reviewer_a']==r['reviewer_b'] for r in rows),
