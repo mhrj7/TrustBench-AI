@@ -29,7 +29,7 @@ def main():
     args.session_file.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(args.session_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w') as f:
-        json.dump({'baseUrl':f'http://127.0.0.1:{args.port}', 'episodeId':args.episode, 'sessionToken':token}, f)
+        json.dump({'baseUrl':f'http://127.0.0.1:{args.port}', 'episodeId':args.episode, 'sessionToken':token, 'signingKey':gateway.signing_key(token)}, f)
     uvicorn.run(gateway.app, host='127.0.0.1', port=args.port)
 
 if __name__ == '__main__':

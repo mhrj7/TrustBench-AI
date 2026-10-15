@@ -26,6 +26,7 @@ class Envelope(BaseModel):
     version: Literal['tb020.1'] = 'tb020.1'
     payload: Any
     provenance: Provenance
+    signature: str | None = None
 
 def unknown(payload, reason):
     return Envelope(payload=payload, provenance=Provenance(trust='unknown', reason=reason))
@@ -54,3 +55,26 @@ def transform(inputs: list[Envelope], payload, operation: str):
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _integral(value):
+    """Integral floats serialize as integers so Python and TypeScript canonical forms agree."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _integral(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_integral(v) for v in value]
+    return value
+
+
+def signing_bytes(envelope_dict):
+    body = {k: v for k, v in envelope_dict.items() if k != 'signature'}
+    return json.dumps(_integral(body), sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode('utf-8')
+
+
+def sign(envelope_dict, key: bytes):
+    """HMAC-SHA256 over the canonical envelope. Only the gateway holds the per-session key, so a tool output or backend
+    cannot forge a trust label the adapter will accept."""
+    import hmac
+    return {**envelope_dict, 'signature': hmac.new(key, signing_bytes(envelope_dict), hashlib.sha256).hexdigest()}

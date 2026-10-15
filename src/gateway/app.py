@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import httpx2 as httpx
-from .provenance import digest, wrap
+from .provenance import digest, sign, wrap
 from pydantic import ValidationError
 from src.policy.capabilities import Capability, POLICY
 from src.policy.approvals import ApprovalStore, execution_context
@@ -19,6 +19,7 @@ class Binding:
     allowed_tools: frozenset[str]
     capability: Capability
     flow: FlowGuard | None = None
+    signing_key: bytes = b''
 
 class Gateway:
     def __init__(self, backend, audit_path=None, flow_check=False):
@@ -121,7 +122,7 @@ class Gateway:
                     for result in (items if isinstance(items, list) else []):
                         if isinstance(result, dict) and isinstance(result.get(ps['id_field']), str):
                             sources.append(ps['source_prefix'] + result[ps['id_field']])
-            envelope = wrap(body, sources).model_dump(mode='json')
+            envelope = sign(wrap(body, sources).model_dump(mode='json'), binding.signing_key)
             record['provenance'] = envelope['provenance']
             if binding.flow is not None:
                 binding.flow.observe(envelope)
@@ -137,8 +138,12 @@ class Gateway:
         token = secrets.token_urlsafe(32)
         capability = Capability.issue(self.store, episode_id, allowed_tools, user_id)
         flow = FlowGuard(POLICY, capability.contract_json) if self.flow_check else None
-        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability, flow)
+        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability, flow, secrets.token_bytes(32))
         return token
+
+    def signing_key(self, token: str) -> str:
+        """Trusted host only: the per-session envelope key handed to the agent adapter with the session token."""
+        return self._bindings[token].signing_key.hex()
 
     def revoke(self, token: str):
         self._bindings.pop(token, None)

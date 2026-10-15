@@ -2,9 +2,47 @@
   "schema_version": "1.0.0",
   "note": "Runtime model providers for the OpenAI-compatible chat adapter. Keys are read from the environment variable named here (never from prompts or committed files). OpenAI is intentionally absent: no paid credits.",
   "providers": {
-    "ollama": {"base_url": "http://127.0.0.1:11434/v1", "loopback_only": true, "api_key_env": null, "reduced_schemas": false, "omit_settings": [], "send_reasoning_effort": true, "budget_file": "configs/budget-local.yaml", "generation_overrides": {"reasoning_effort": "none"}},
-    "gemini": {"provider_label": "google", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "loopback_only": false, "api_key_env": "GEMINI_API_KEY", "reduced_schemas": true, "omit_settings": ["seed"], "send_reasoning_effort": false, "budget_file": "configs/budget-gemini-free.yaml", "generation_overrides": {}},
-    "nvidia": {"base_url": "https://integrate.api.nvidia.com/v1", "loopback_only": false, "api_key_env": "NVIDIA_API_KEY", "reduced_schemas": false, "omit_settings": [], "send_reasoning_effort": false, "budget_file": "configs/budget-nvidia-free.yaml", "generation_overrides": {}}
+    "ollama": {
+      "base_url": "http://127.0.0.1:11434/v1",
+      "loopback_only": true,
+      "api_key_env": null,
+      "reduced_schemas": false,
+      "omit_settings": [],
+      "send_reasoning_effort": true,
+      "budget_file": "configs/budget-local.yaml",
+      "generation_overrides": {
+        "reasoning_effort": "none"
+      },
+      "revision_lookup": {
+        "url": "http://127.0.0.1:11434/api/tags",
+        "list_field": "models",
+        "name_field": "name",
+        "digest_field": "digest"
+      }
+    },
+    "gemini": {
+      "provider_label": "google",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "loopback_only": false,
+      "api_key_env": "GEMINI_API_KEY",
+      "reduced_schemas": true,
+      "omit_settings": [
+        "seed"
+      ],
+      "send_reasoning_effort": false,
+      "budget_file": "configs/budget-gemini-free.yaml",
+      "generation_overrides": {}
+    },
+    "nvidia": {
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "loopback_only": false,
+      "api_key_env": "NVIDIA_API_KEY",
+      "reduced_schemas": false,
+      "omit_settings": [],
+      "send_reasoning_effort": false,
+      "budget_file": "configs/budget-nvidia-free.yaml",
+      "generation_overrides": {}
+    }
   },
   "quota_exhausted_message_pattern": "retry in \\d+h|retry in \\d+m"
 }

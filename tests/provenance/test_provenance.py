@@ -27,3 +27,15 @@ def test_empty_sources_cannot_be_treated_as_known():
     assert wrap('text',[]).provenance.trust == 'unknown'
     with pytest.raises(ValueError):
         transform([wrap('text',['a'])],'text','')
+
+
+def test_gateway_signature_is_bound_to_payload_provenance_and_key():
+    import hmac, hashlib
+    from src.gateway.provenance import sign, signing_bytes, wrap
+    key = bytes(range(32))
+    env = sign(wrap({'text': 'Ünïcode', 'n': 1.0}, ['document:a']).model_dump(mode='json'), key)
+    expected = hmac.new(key, signing_bytes(env), hashlib.sha256).hexdigest()
+    assert env['signature'] == expected
+    tampered = {**env, 'provenance': {**env['provenance'], 'source_ids': ['document:b']}}
+    assert hmac.new(key, signing_bytes(tampered), hashlib.sha256).hexdigest() != env['signature']
+    assert b'"n":1' in signing_bytes(env), 'integral floats canonicalize like JavaScript numbers'

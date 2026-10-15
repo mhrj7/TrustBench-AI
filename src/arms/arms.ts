@@ -68,6 +68,7 @@ export interface BuildInput {
   /** Defended only. */
   gateway?: {
     sessionToken: string;
+    signingKey?: string;
     sessionFile: string;
     fixtureId: string;
     checkpointDb: string;
@@ -109,7 +110,7 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
   }
   const gateway = input.gateway;
   if (!gateway) throw new Error("defended arm requires a gateway session");
-  const registry = createGatewayToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, sessionToken: gateway.sessionToken });
+  const registry = createGatewayToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, sessionToken: gateway.sessionToken, signingKey: gateway.signingKey });
   const direct = registry.apply_record_update!;
   const guarded: AgentToolRegistry = {
     ...registry,
@@ -133,7 +134,7 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
             const detail = typeof result.result?.detail === "string" ? result.result.detail : result.status === "rejected" ? "approval_rejected" : "approval_failed";
             throw new ToolServiceError(result.http_status ?? 403, detail);
           }
-          return { output: decodeGatewayOutput(result.result), stateChangeIds: [] };
+          return { output: decodeGatewayOutput(result.result, gateway.signingKey), stateChangeIds: [] };
         }
       },
     },
