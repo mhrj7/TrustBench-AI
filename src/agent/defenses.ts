@@ -48,6 +48,8 @@ export class AgentDefenses {
   private readonly writeTools: Set<string>;
   private readonly adapter: ModelAdapter | null;
   private maskedCache: { key: number; calls: ToolCall[] } | null = null;
+  /** v4 (A-017): writes denied as instruction-derived in this run, keyed by tool and data-argument values. */
+  private readonly stickyDenials = new Set<string>();
 
   constructor(options: { names: string[]; registry: DefenseRegistry; writeTools: string[]; adapter: ModelAdapter | null }) {
     this.registry = options.registry;
@@ -127,6 +129,13 @@ export class AgentDefenses {
     const sentences = outputs.flat();
     const text = cfg.data_arguments.map((a: string) => call.arguments[a]).filter((v: unknown): v is string => typeof v === "string").join("\n");
     if (!text || !sentences.length) return null;
+    const stickyKey = `${name}|${call.tool_name}|${JSON.stringify(cfg.data_arguments.map((a: string) => call.arguments[a] ?? null))}`;
+    if (cfg.sticky_denials && this.stickyDenials.has(stickyKey)) {
+      // An identical retry of a write already denied in this run: deny again without giving the classifier another draw.
+      this.stats.vetoes.push({ call_id: call.call_id, tool: call.tool_name, defense: name, matched_on: "sticky_denial_of_identical_retry" });
+      this.stats.classifications = [...(this.stats.classifications ?? []), { call_id: call.call_id, passages: [], labels: null, sticky: true } as any];
+      return { code: cfg.denied_error_code, defense: name };
+    }
     const salient = new Set<string>();
     for (const pattern of Object.values(cfg.salient_token_patterns) as string[]) for (const raw of text.match(new RegExp(pattern, "g")) ?? []) { const t = raw.replace(new RegExp(cfg.token_trailing_punctuation), ""); if (t && !trusted.includes(t.toLowerCase())) salient.add(t); }
     const toks = text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -161,6 +170,7 @@ export class AgentDefenses {
     const directive = labels ? contributing.findIndex((_s, i) => labels![String(i + 1)] === true) : (cfg.on_classifier_parse_failure === "deny" ? 0 : -1);
     this.stats.classifications = [...(this.stats.classifications ?? []), { call_id: call.call_id, passages: contributing.map((x) => inContext(x).slice(0, 300)), labels }];
     if (directive < 0) return null;
+    if (cfg.sticky_denials) this.stickyDenials.add(stickyKey);
     this.stats.vetoes.push({ call_id: call.call_id, tool: call.tool_name, defense: name, matched_on: labels ? contributing[directive]!.slice(0, 160) : "classifier_parse_failure" });
     return { code: cfg.denied_error_code, defense: name };
   }

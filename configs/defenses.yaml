@@ -79,6 +79,14 @@
         "directive_flow_v3"
       ],
       "family": "ours (novel candidate 2, v3, pre-registered A-016): directive_flow v2 plus whole-value attribution of short data values"
+    },
+    "gateway_directive_flow_v4": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow_v4"
+      ],
+      "family": "ours (novel candidate 2, v4, pre-registered A-017): directive_flow v3 plus sticky denials of identical retried writes"
     }
   },
   "defenses": {
@@ -197,6 +205,38 @@
       "context_marker_close": "]]",
       "whole_value_max_words": 6,
       "whole_value_min_chars": 3
+    },
+    "directive_flow_v4": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier-v2.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+      "kind": "directive_flow",
+      "context_window_sentences": 1,
+      "context_marker_open": "[[",
+      "context_marker_close": "]]",
+      "whole_value_max_words": 6,
+      "whole_value_min_chars": 3,
+      "sticky_denials": true
     }
   },
   "masked_call_matching": {
