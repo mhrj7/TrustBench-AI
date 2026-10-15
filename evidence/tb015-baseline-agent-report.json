@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-015",
+  "checked_at": "2026-10-15T03:43:42.423Z",
+  "ok": true,
+  "graph_nodes": [
+    "model",
+    "tool",
+    "termination"
+  ],
+  "allowed_outcomes": [
+    "success",
+    "failure",
+    "timeout",
+    "budget_exhausted"
+  ],
+  "bounded_by": [
+    "max_steps",
+    "wall_clock_timeout",
+    "model_calls",
+    "tool_calls",
+    "input_tokens",
+    "output_tokens",
+    "cost_microusd",
+    "retries",
+    "elapsed_ms"
+  ],
+  "settings_preserved_across_model_calls": true,
+  "failures_preserved": true,
+  "cases": [
+    {
+      "case_id": "success",
+      "outcome": "success",
+      "steps": 3,
+      "failure_codes": [],
+      "terminal_node": "termination"
+    },
+    {
+      "case_id": "model_failure",
+      "outcome": "failure",
+      "steps": 1,
+      "failure_codes": [
+        "server"
+      ],
+      "terminal_node": "termination"
+    },
+    {
+      "case_id": "tool_failure",
+      "outcome": "failure",
+      "steps": 2,
+      "failure_codes": [
+        "synthetic_tool_failure"
+      ],
+      "terminal_node": "termination"
+    },
+    {
+      "case_id": "step_limit",
+      "outcome": "failure",
+      "steps": 2,
+      "failure_codes": [
+        "step_limit_exceeded"
+      ],
+      "terminal_node": "termination"
+    },
+    {
+      "case_id": "budget_exhausted",
+      "outcome": "budget_exhausted",
+      "steps": 3,
+      "failure_codes": [
+        "BudgetExhaustedError"
+      ],
+      "terminal_node": "termination"
+    },
+    {
+      "case_id": "timeout",
+      "outcome": "timeout",
+      "steps": 1,
+      "failure_codes": [
+        "AgentTimeoutError"
+      ],
+      "terminal_node": "termination"
+    }
+  ],
+  "limitations": [
+    "Verification uses deterministic mock model responses and synthetic in-process tools; no live provider result is claimed.",
+    "The HTTP bridge accepts loopback HTTP endpoints only; container and service isolation remain the TB-014 boundary."
+  ]
+}

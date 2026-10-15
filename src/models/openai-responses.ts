@@ -22,7 +22,7 @@ const responseSchema = z.object({
 }).passthrough();
 
 export interface OpenAIResponsesTransport {
-  create(body: Record<string, unknown>): Promise<unknown>;
+  create(body: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<unknown>;
 }
 
 function normalizeError(error: unknown): NormalizedProviderError {
@@ -60,7 +60,7 @@ export class OpenAIResponsesAdapter implements ModelAdapter {
     this.transport = transport;
   }
 
-  async generate(input: ModelRequest): Promise<ModelResponse> {
+  async generate(input: ModelRequest, options?: { signal?: AbortSignal }): Promise<ModelResponse> {
     const request = ModelRequestSchema.parse(input);
     const settings = request.settings;
     const body: Record<string, unknown> = {
@@ -75,7 +75,7 @@ export class OpenAIResponsesAdapter implements ModelAdapter {
     if (settings.reasoning_effort !== null) body.reasoning = { effort: settings.reasoning_effort };
 
     let raw: unknown;
-    try { raw = await this.transport.create(body); }
+    try { raw = await this.transport.create(body, { signal: options?.signal }); }
     catch (error) { throw normalizeError(error); }
     const parsed = responseSchema.safeParse(raw);
     if (!parsed.success) throw new NormalizedProviderError(this.provider, "invalid_response", false, `Malformed OpenAI response: ${parsed.error.message}`);

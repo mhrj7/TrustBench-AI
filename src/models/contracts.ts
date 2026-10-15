@@ -87,5 +87,5 @@ export class NormalizedProviderError extends Error {
 export interface ModelAdapter {
   readonly provider: string;
   readonly modelId: string;
-  generate(request: ModelRequest): Promise<ModelResponse>;
+  generate(request: ModelRequest, options?: { signal?: AbortSignal }): Promise<ModelResponse>;
 }

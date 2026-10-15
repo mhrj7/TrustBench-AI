@@ -15,7 +15,8 @@ export class MockModelAdapter implements ModelAdapter {
     this.outcomes = outcomes;
   }
 
-  async generate(input: ModelRequest): Promise<ModelResponse> {
+  async generate(input: ModelRequest, options?: { signal?: AbortSignal }): Promise<ModelResponse> {
+    if (options?.signal?.aborted) throw options.signal.reason ?? new Error("Model request aborted");
     const request = ModelRequestSchema.parse(input);
     this.requests.push(structuredClone(request));
     const outcome = this.outcomes.shift();
