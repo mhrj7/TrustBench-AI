@@ -4,13 +4,13 @@ import { z } from "zod";
 export const BudgetConfigSchema = z.object({
   schema_version: z.literal("1.0.0"),
   pricing: z.object({
-    provider: z.literal("openai"),
+    provider: z.enum(["openai", "ollama", "google"]),
     runtime_model_alias: z.string().min(1),
     pricing_model_id: z.string().min(1),
-    service_tier: z.literal("fast"),
+    service_tier: z.enum(["fast", "free", "local"]),
     context_band: z.literal("short"),
-    input_usd_per_million_tokens: z.number().positive(),
-    output_usd_per_million_tokens: z.number().positive(),
+    input_usd_per_million_tokens: z.number().nonnegative(),
+    output_usd_per_million_tokens: z.number().nonnegative(),
     verified_at: z.string().datetime({ offset: true }),
     source_url: z.string().url(),
     max_age_hours_at_provider_run: z.number().positive(),

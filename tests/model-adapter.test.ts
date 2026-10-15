@@ -126,3 +126,57 @@ test("invalid provider-neutral requests fail before transport", async () => {
   await assert.rejects(() => new OpenAIResponsesAdapter("gpt-5.6-sol", transport).generate(invalid as ModelRequest));
   assert.equal(transport.bodies.length, 0);
 });
+
+import { ChatCompletionsAdapter, createOllamaAdapter, reduceSchema, type ChatCompletionsTransport } from "../src/models/index.ts";
+
+const rawChat = () => ({
+  id: "chatcmpl-001", model: "llama3.1:latest",
+  choices: [{ index: 0, finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: [
+    { id: "call_a", type: "function", function: { name: "save_research_note", arguments: "{\"answer\":\"Silver\"}" } }] } }],
+  usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+});
+const chatTransport = (outcome: unknown, reject = false): ChatCompletionsTransport & { bodies: Record<string, unknown>[] } => {
+  const bodies: Record<string, unknown>[] = [];
+  return { bodies, async create(body) { bodies.push(structuredClone(body)); if (reject) throw outcome; return outcome; } };
+};
+
+test("chat-completions adapter normalizes tool calls, usage and settings", async () => {
+  const transport = chatTransport(rawChat());
+  const adapter = new ChatCompletionsAdapter("llama3.1:latest", transport, { provider: "ollama" });
+  const result = await adapter.generate(request());
+  assert.equal(result.provider, "ollama");
+  assert.equal(result.requested_model, "llama3.1:latest");
+  assert.deepEqual(result.tool_calls, [{ call_id: "call_a", tool_name: "save_research_note", arguments: { answer: "Silver" } }]);
+  assert.deepEqual(result.usage, { input_tokens: 100, output_tokens: 20, total_tokens: 120 });
+  assert.equal(result.finish_reason, "tool_call");
+  assert.equal(transport.bodies[0]!.seed, 7);
+  assert.equal(transport.bodies[0]!.max_tokens, 256);
+  assert.equal("temperature" in transport.bodies[0]!, false);
+});
+
+test("chat-completions adapter rejects malformed responses and arguments explicitly", async () => {
+  const bad = rawChat(); (bad.choices[0]!.message.tool_calls![0]!.function as any).arguments = "{not json";
+  await assert.rejects(new ChatCompletionsAdapter("m", chatTransport(bad), { provider: "ollama" }).generate(request()), (e: any) => e instanceof NormalizedProviderError && e.code === "invalid_response");
+  const array = rawChat(); (array.choices[0]!.message.tool_calls![0]!.function as any).arguments = "[1]";
+  await assert.rejects(new ChatCompletionsAdapter("m", chatTransport(array), { provider: "ollama" }).generate(request()), (e: any) => e.code === "invalid_response");
+  await assert.rejects(new ChatCompletionsAdapter("m", chatTransport({ nope: true }), { provider: "ollama" }).generate(request()), (e: any) => e.code === "invalid_response");
+  const inconsistent = rawChat(); inconsistent.usage.total_tokens = 5;
+  await assert.rejects(new ChatCompletionsAdapter("m", chatTransport(inconsistent), { provider: "ollama" }).generate(request()), (e: any) => e.code === "invalid_response");
+});
+
+test("chat-completions adapter synthesizes missing call IDs deterministically and maps provider errors", async () => {
+  const noId = rawChat(); delete (noId.choices[0]!.message.tool_calls![0] as any).id;
+  const result = await new ChatCompletionsAdapter("m", chatTransport(noId), { provider: "ollama" }).generate(request());
+  assert.equal(result.tool_calls[0]!.call_id, "chatcmpl-001-call-1");
+  for (const [status, code] of [[401, "authentication"], [429, "rate_limit"], [500, "server"], [400, "invalid_request"]] as const) {
+    await assert.rejects(new ChatCompletionsAdapter("m", chatTransport(Object.assign(new Error("x"), { status }), true), { provider: "ollama" }).generate(request()), (e: any) => e.code === code);
+  }
+});
+
+test("reduced schemas drop provider-rejected keywords and ollama endpoint is loopback only", async () => {
+  assert.deepEqual(reduceSchema({ type: "object", title: "T", additionalProperties: false, properties: { a: { type: "string", pattern: "^x$" } } }), { type: "object", properties: { a: { type: "string" } } });
+  const transport = chatTransport(rawChat());
+  await new ChatCompletionsAdapter("m", transport, { provider: "google", reducedSchemas: true }).generate(request());
+  assert.equal(JSON.stringify(transport.bodies[0]).includes("additionalProperties"), false);
+  assert.throws(() => createOllamaAdapter("m", "https://example.com/v1"), /loopback/);
+});

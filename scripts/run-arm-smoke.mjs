@@ -5,12 +5,26 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
-import { MockModelAdapter } from "../src/models/index.ts";
+import { MockModelAdapter, createGeminiAdapter, createOllamaAdapter } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const work = path.join(root, ".tool-state/arms-smoke");
 const python = path.join(root, ".venv-tools/bin/python");
+const modelArg = process.argv.includes("--model") ? process.argv[process.argv.indexOf("--model") + 1] : null; // e.g. ollama:llama3.1:latest
+const live = modelArg !== null;
+if (live && modelArg.startsWith("gemini:")) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
+const minIntervalMs = process.argv.includes("--min-interval-ms") ? Number(process.argv[process.argv.indexOf("--min-interval-ms") + 1]) : 0;
+const makeLiveAdapter = () => {
+  if (modelArg.startsWith("ollama:")) return createOllamaAdapter(modelArg.slice(7));
+  if (modelArg.startsWith("gemini:")) return createGeminiAdapter(modelArg.slice(7), process.env.GEMINI_API_KEY ?? "");
+  throw new Error(`unsupported --model ${modelArg}`);
+};
+let lastCall = 0;
+const liveOptions = live ? {
+  budgetConfigPath: path.join(root, modelArg.startsWith("gemini:") ? "configs/budget-gemini-free.yaml" : "configs/budget-local.yaml"), timeoutMs: 240_000,
+  generationOverrides: { temperature: 0, seed: 20261014, max_output_tokens: 1024, ...(modelArg.startsWith("ollama:") ? { reasoning_effort: "none" } : {}) },
+} : {};
 const suite = JSON.parse(await readFile(path.join(root, "tests/arms/smoke-cases.json"), "utf8"));
 
 await rm(work, { recursive: true, force: true });
@@ -75,13 +89,16 @@ for (const testCase of suite.cases) {
   const arms = {};
 
   for (const arm of ["baseline", "defended"]) {
-    const adapter = new MockModelAdapter("mock-arm-smoke", scriptedOutcomes(testCase));
+    const adapter = live ? makeLiveAdapter() : new MockModelAdapter("mock-arm-smoke", scriptedOutcomes(testCase));
+    if (live) adapter.requests = [];
+    const originalGenerate = adapter.generate.bind(adapter);
+    if (live) adapter.generate = async (req, opts) => { adapter.requests.push(structuredClone(req)); const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); lastCall = Date.now(); return await originalGenerate(req, opts); };
     let built, port, session, auditFile, approvalLog = [], dbPath;
     if (arm === "baseline") {
       port = baselinePort; dbPath = baselineDb;
       const reset = await fetch(`http://127.0.0.1:${port}/v1/episodes/${episodeId}/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixture_id: testCase.fixture_id, max_tool_calls: 12 }) });
       if (!reset.ok) throw new Error(`reset failed ${reset.status}`);
-      built = await buildArm({ arm, fixture, episodeId, runId: `run-${testCase.case_id}`, taskId, baseUrl: `http://127.0.0.1:${port}` });
+      built = await buildArm({ arm, fixture, episodeId, runId: `run-${testCase.case_id}`, taskId, baseUrl: `http://127.0.0.1:${port}`, ...liveOptions });
     } else {
       port = await freePort(); dbPath = defendedDb;
       const sessionFile = path.join(work, `session-${testCase.case_id}.json`);
@@ -89,7 +106,7 @@ for (const testCase of suite.cases) {
       launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile], defendedEnv);
       await waitFor(port);
       session = JSON.parse(await readFile(sessionFile, "utf8"));
-      built = await buildArm({ arm, fixture, episodeId, runId: `run-${testCase.case_id}`, taskId, baseUrl: `http://127.0.0.1:${port}`,
+      built = await buildArm({ arm, fixture, episodeId, runId: `run-${testCase.case_id}`, taskId, baseUrl: `http://127.0.0.1:${port}`, ...liveOptions,
         gateway: { sessionToken: session.sessionToken, sessionFile, fixtureId: testCase.fixture_id, checkpointDb: path.join(work, `checkpoints-${testCase.case_id}.sqlite`), env: defendedEnv, approvalLog } });
     }
     const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget });
@@ -105,7 +122,7 @@ stopAll();
 // ---- parity analysis ----
 const canon = (v) => JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : x));
 const parseResults = (requests) => requests.map((r) => r.messages.filter((m) => m.content.startsWith('{"call_id"') || m.content.includes('"type":"tool_result"')).map((m) => JSON.parse(m.content)));
-const report = { schema_version: "1.0.0", task_id: "TB-024", checked_at: new Date().toISOString(), model: "scripted local mock (no provider calls)", cases: [] };
+const report = { schema_version: "1.0.0", task_id: live ? "TB-024-local-model" : "TB-024", checked_at: new Date().toISOString(), model: live ? modelArg : "scripted local mock (no provider calls)", mode: live ? "live_local_model" : "scripted", cases: [] };
 const baselineArm = await loadArm("baseline"), defendedArm = await loadArm("defended");
 report.config_differences = configDifferences(baselineArm, defendedArm);
 
@@ -140,13 +157,14 @@ for (const { testCase, arms } of cases) {
   report.cases.push(entry);
 }
 await mkdir(path.join(root, "reports"), { recursive: true });
-await writeFile(path.join(root, "reports/tb024-policy-decision-traces.jsonl"), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
-await writeFile(path.join(root, "evidence/tb024-defended-arm-report.json"), JSON.stringify(report, null, 2) + "\n");
+await writeFile(path.join(root, live ? `reports/tb024-${modelArg.replace(/[^A-Za-z0-9.]+/g, "-")}-policy-traces.jsonl` : "reports/tb024-policy-decision-traces.jsonl"), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
+await writeFile(path.join(root, live ? `evidence/tb024-${modelArg.replace(/[^A-Za-z0-9.]+/g, "-")}-report.json` : "evidence/tb024-defended-arm-report.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ config_differences: report.config_differences, cases: report.cases.map((c) => ({ id: c.case_id, base: c.baseline.outcome, def: c.defended.outcome, run_cfg: c.run_config_identical, req0: c.first_request_identical, diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical, b_eval: [c.baseline.evaluation.utility_pass, c.baseline.evaluation.security_pass], d_eval: [c.defended.evaluation.utility_pass, c.defended.evaluation.security_pass] })) }, null, 1));
-const failed = report.cases.flatMap((c) => [
+const checks = (c) => [
   ["run_config_identical", c.run_config_identical], ["first_request_identical", c.first_request_identical], ["settings_identical", c.settings_identical],
-  ["non_tool_messages_identical", c.non_tool_messages_identical], ["same_tool_call_sequence", c.same_tool_call_sequence],
-  ["final_state_identical", c.final_state_identical], ["differences_attributable_to_gateway", c.differences_attributable_to_gateway],
-].filter(([, ok]) => !ok).map(([name]) => `${c.case_id}:${name}`));
+  ...(live ? [] : [["non_tool_messages_identical", c.non_tool_messages_identical], ["same_tool_call_sequence", c.same_tool_call_sequence],
+  ["final_state_identical", c.final_state_identical], ["differences_attributable_to_gateway", c.differences_attributable_to_gateway]]),
+];
+const failed = report.cases.flatMap((c) => checks(c).filter(([, ok]) => !ok).map(([name]) => `${c.case_id}:${name}`));
 if (failed.length) { console.error("ARM PARITY FAILURES", failed); process.exit(1); }
 process.exit(0);

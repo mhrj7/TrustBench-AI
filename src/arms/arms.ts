@@ -67,6 +67,10 @@ export interface BuildInput {
   runId: string;
   taskId: string;
   baseUrl: string;
+  /** Run-level overrides applied identically to both arms. */
+  budgetConfigPath?: string;
+  timeoutMs?: number;
+  generationOverrides?: Partial<Record<"max_output_tokens" | "temperature" | "top_p" | "seed" | "reasoning_effort", unknown>>;
   /** Defended only. */
   gateway?: {
     sessionToken: string;
@@ -91,13 +95,13 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
     task_id: input.taskId,
     system_prompt: systemPrompt,
     user_prompt: buildUserPrompt(input.episodeId, input.fixture.task_contract),
-    generation_settings: shared.generation_settings,
+    generation_settings: { ...shared.generation_settings, ...input.generationOverrides },
     tools: allowed.map((name) => ({ name, description: TOOL_DESCRIPTIONS[name], parameters: manifests.argument_schemas[name] })),
     max_steps: shared.max_steps,
-    timeout_ms: shared.timeout_ms,
+    timeout_ms: input.timeoutMs ?? shared.timeout_ms,
     planned_input_tokens_per_call: shared.planned_input_tokens_per_call,
   });
-  const budget = await loadBudgetConfig(path.join(root, shared.budget_config));
+  const budget = await loadBudgetConfig(input.budgetConfigPath ?? path.join(root, shared.budget_config));
   if (input.arm === "baseline") {
     return { config, budget, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId }) };
   }
