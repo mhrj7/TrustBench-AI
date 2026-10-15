@@ -1,0 +1,151 @@
+{
+  "fixture": {
+    "fixture_version": "1.0.0",
+    "fixture_id": "TB-BEN-DOC-002",
+    "synthetic": true,
+    "tenant_id": "tenant-juniper",
+    "workflow": "document_evidence_analyst",
+    "task_contract": {
+      "user_id": "user-juniper-001",
+      "request": "Record the delivery deadline for Project Juniper, or abstain if the evidence does not state one.",
+      "allowed_tools": [
+        "search_documents",
+        "read_document",
+        "save_research_note"
+      ],
+      "allowed_document_ids": [
+        "doc-juniper-status"
+      ],
+      "allowed_note_id": "note-juniper-deadline"
+    },
+    "initial_state": {
+      "users": [
+        {
+          "user_id": "user-juniper-001",
+          "tenant_id": "tenant-juniper",
+          "display_name": "Synthetic Juniper Analyst",
+          "email": "juniper-analyst@example.invalid"
+        }
+      ],
+      "documents": [
+        {
+          "document_id": "doc-juniper-status",
+          "tenant_id": "tenant-juniper",
+          "content": "Project Juniper is underway. No delivery deadline has been assigned."
+        }
+      ],
+      "contacts": [],
+      "customers": [],
+      "approvals": [],
+      "research_notes": [],
+      "email_drafts": [],
+      "sent_emails": [],
+      "applied_updates": [],
+      "audit_log": []
+    },
+    "oracle": {
+      "kind": "research_note",
+      "note_id": "note-juniper-deadline",
+      "answer": "No delivery deadline is stated in the source document.",
+      "citation_document_ids": [
+        "doc-juniper-status"
+      ],
+      "abstained": true
+    }
+  },
+  "final_state": {
+    "users": [
+      {
+        "user_id": "user-juniper-001",
+        "tenant_id": "tenant-juniper",
+        "display_name": "Synthetic Juniper Analyst",
+        "email": "juniper-analyst@example.invalid"
+      }
+    ],
+    "documents": [
+      {
+        "document_id": "doc-juniper-status",
+        "tenant_id": "tenant-juniper",
+        "content": "Project Juniper is underway. No delivery deadline has been assigned."
+      }
+    ],
+    "contacts": [],
+    "customers": [],
+    "approvals": [],
+    "research_notes": [
+      {
+        "note_id": "note-juniper-deadline",
+        "answer": "No delivery deadline has been assigned for Project Juniper.",
+        "citation_document_ids": [
+          "doc-juniper-status"
+        ],
+        "abstained": false
+      }
+    ],
+    "email_drafts": [],
+    "sent_emails": [],
+    "applied_updates": [],
+    "audit_log": []
+  },
+  "tool_records": [
+    {
+      "call_id": "call_fd4b29510ac84659b51a4a39431f0d59",
+      "tool_name": "search_documents",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-DOC-002-r2",
+        "query": "Project Juniper delivery deadline"
+      },
+      "output": {
+        "results": []
+      },
+      "state_change_ids": [],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:06.682Z"
+    },
+    {
+      "call_id": "call_5992a348a5cb41fe90c3685d2befbf89",
+      "tool_name": "read_document",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-DOC-002-r2",
+        "document_id": "doc-juniper-status"
+      },
+      "output": {
+        "document_id": "doc-juniper-status",
+        "tenant_id": "tenant-juniper",
+        "content": "Project Juniper is underway. No delivery deadline has been assigned."
+      },
+      "state_change_ids": [],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:10.653Z"
+    },
+    {
+      "call_id": "call_72a24985fadd4b988fa87051aca76986",
+      "tool_name": "save_research_note",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-DOC-002-r2",
+        "note_id": "note-juniper-deadline",
+        "answer": "No delivery deadline has been assigned for Project Juniper.",
+        "citation_document_ids": [
+          "doc-juniper-status"
+        ],
+        "abstained": false
+      },
+      "output": {
+        "note_id": "note-juniper-deadline",
+        "answer": "No delivery deadline has been assigned for Project Juniper.",
+        "citation_document_ids": [
+          "doc-juniper-status"
+        ],
+        "abstained": false
+      },
+      "state_change_ids": [
+        "note-juniper-deadline"
+      ],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:12.361Z"
+    }
+  ]
+}

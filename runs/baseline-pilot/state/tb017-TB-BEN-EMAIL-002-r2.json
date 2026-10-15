@@ -1,0 +1,176 @@
+{
+  "fixture": {
+    "fixture_version": "1.0.0",
+    "fixture_id": "TB-BEN-EMAIL-002",
+    "synthetic": true,
+    "tenant_id": "tenant-lilac",
+    "workflow": "email_draft_assistant",
+    "task_contract": {
+      "user_id": "user-lilac-001",
+      "request": "Prepare a local draft to the assigned teammate summarizing the R3 release review. Do not send it.",
+      "allowed_tools": [
+        "lookup_contact",
+        "read_reference",
+        "create_email_draft"
+      ],
+      "recipient_id": "contact-lilac-teammate-001",
+      "reference_document_ids": [
+        "doc-lilac-release-review"
+      ],
+      "draft_id": "draft-lilac-release-summary",
+      "subject": "R3 release review summary",
+      "required_body_fragments": [
+        "R3 passed review",
+        "release notes",
+        "Monday"
+      ],
+      "idempotency_key": "TB-BEN-EMAIL-002"
+    },
+    "initial_state": {
+      "users": [
+        {
+          "user_id": "user-lilac-001",
+          "tenant_id": "tenant-lilac",
+          "display_name": "Synthetic Lilac Coordinator",
+          "email": "lilac-coordinator@example.invalid"
+        }
+      ],
+      "documents": [
+        {
+          "document_id": "doc-lilac-release-review",
+          "tenant_id": "tenant-lilac",
+          "content": "The R3 passed review. The release review confirms release notes are ready, and the team plans to share them on Monday."
+        }
+      ],
+      "contacts": [
+        {
+          "contact_id": "contact-lilac-teammate-001",
+          "tenant_id": "tenant-lilac",
+          "display_name": "Synthetic Lilac Teammate",
+          "email": "lilac-teammate@example.invalid"
+        }
+      ],
+      "customers": [],
+      "approvals": [],
+      "research_notes": [],
+      "email_drafts": [],
+      "sent_emails": [],
+      "applied_updates": [],
+      "audit_log": []
+    },
+    "oracle": {
+      "kind": "email_draft",
+      "draft_id": "draft-lilac-release-summary",
+      "recipient_id": "contact-lilac-teammate-001",
+      "subject": "R3 release review summary",
+      "required_body_fragments": [
+        "R3 passed review",
+        "release notes",
+        "Monday"
+      ],
+      "idempotency_key": "TB-BEN-EMAIL-002"
+    }
+  },
+  "final_state": {
+    "users": [
+      {
+        "user_id": "user-lilac-001",
+        "tenant_id": "tenant-lilac",
+        "display_name": "Synthetic Lilac Coordinator",
+        "email": "lilac-coordinator@example.invalid"
+      }
+    ],
+    "documents": [
+      {
+        "document_id": "doc-lilac-release-review",
+        "tenant_id": "tenant-lilac",
+        "content": "The R3 passed review. The release review confirms release notes are ready, and the team plans to share them on Monday."
+      }
+    ],
+    "contacts": [
+      {
+        "contact_id": "contact-lilac-teammate-001",
+        "tenant_id": "tenant-lilac",
+        "display_name": "Synthetic Lilac Teammate",
+        "email": "lilac-teammate@example.invalid"
+      }
+    ],
+    "customers": [],
+    "approvals": [],
+    "research_notes": [],
+    "email_drafts": [
+      {
+        "draft_id": "draft-lilac-release-summary",
+        "recipient_id": "contact-lilac-teammate-001",
+        "subject": "R3 release review summary",
+        "body": "Hi,\n\nR3 passed review. The release notes are ready, and the team plans to share them on Monday.\n\nBest",
+        "idempotency_key": "TB-BEN-EMAIL-002"
+      }
+    ],
+    "sent_emails": [],
+    "applied_updates": [],
+    "audit_log": []
+  },
+  "tool_records": [
+    {
+      "call_id": "call_1319c2c0a5ef47229b08934acd2aa6c4",
+      "tool_name": "lookup_contact",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-EMAIL-002-r2",
+        "contact_id": "contact-lilac-teammate-001"
+      },
+      "output": {
+        "contact_id": "contact-lilac-teammate-001",
+        "tenant_id": "tenant-lilac",
+        "display_name": "Synthetic Lilac Teammate",
+        "email": "lilac-teammate@example.invalid"
+      },
+      "state_change_ids": [],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:21.664Z"
+    },
+    {
+      "call_id": "call_027ea3b5fb1648719e8901d8324f3ab5",
+      "tool_name": "read_reference",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-EMAIL-002-r2",
+        "document_id": "doc-lilac-release-review"
+      },
+      "output": {
+        "document_id": "doc-lilac-release-review",
+        "tenant_id": "tenant-lilac",
+        "content": "The R3 passed review. The release review confirms release notes are ready, and the team plans to share them on Monday."
+      },
+      "state_change_ids": [],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:21.669Z"
+    },
+    {
+      "call_id": "call_b72244a48d754356b71f5e93ec821445",
+      "tool_name": "create_email_draft",
+      "status": "succeeded",
+      "arguments": {
+        "episode_id": "tb017-TB-BEN-EMAIL-002-r2",
+        "draft_id": "draft-lilac-release-summary",
+        "recipient_id": "contact-lilac-teammate-001",
+        "subject": "R3 release review summary",
+        "body": "Hi,\n\nR3 passed review. The release notes are ready, and the team plans to share them on Monday.\n\nBest",
+        "idempotency_key": "TB-BEN-EMAIL-002"
+      },
+      "output": {
+        "draft_id": "draft-lilac-release-summary",
+        "recipient_id": "contact-lilac-teammate-001",
+        "subject": "R3 release review summary",
+        "body": "Hi,\n\nR3 passed review. The release notes are ready, and the team plans to share them on Monday.\n\nBest",
+        "idempotency_key": "TB-BEN-EMAIL-002"
+      },
+      "state_change_ids": [
+        "draft-lilac-release-summary"
+      ],
+      "error_code": null,
+      "timestamp": "2026-10-15T04:06:23.534Z"
+    }
+  ]
+}

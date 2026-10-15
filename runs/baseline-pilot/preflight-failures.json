@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-017",
+  "classification": "implementation_preflight_excluded_from_pilot_metrics",
+  "failures": [
+    {
+      "episode_id": "tb017-TB-BEN-EMAIL-001-r1",
+      "run_id": "wrun_01M4YVMX0ZT9Z0KRXJV9Y3NJ85",
+      "started_at": "2026-10-15T04:03:12.046Z",
+      "input_tokens": 5069,
+      "output_tokens": 303,
+      "error_code": "pilot_state_atomic_rename_collision",
+      "disposition": "excluded_and_rerun_after_per_episode_serialization_fix"
+    },
+    {
+      "episode_id": "tb017-TB-BEN-EMAIL-001-r2",
+      "run_id": "wrun_01M4YVN7C9HDSRTWP0YDDTGD3E",
+      "started_at": "2026-10-15T04:03:22.639Z",
+      "input_tokens": 993,
+      "output_tokens": 90,
+      "error_code": "pilot_run_cancelled_after_storage_defect",
+      "disposition": "excluded_and_rerun_after_per_episode_serialization_fix"
+    }
+  ],
+  "root_cause": "Parallel tool calls in one episode reused a process-scoped temporary filename and raced while replacing the state file.",
+  "repair": "Serialize read-modify-write operations per episode and verify parallel calls retain both records and state changes.",
+  "metric_policy": "These attempts are retained as operational failures and usage, but are excluded from the frozen 16-run pilot denominators because their evidence store was invalid."
+}
