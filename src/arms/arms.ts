@@ -6,7 +6,7 @@ import { loadBudgetConfig, type BudgetConfig } from "../../runtime/budget.ts";
 import { AgentRunConfigSchema, type AgentRunConfig, type AgentToolRegistry } from "../agent/contracts.ts";
 import { createHttpToolRegistry, ToolServiceError } from "../agent/http-tools.ts";
 import { createGatewayToolRegistry, decodeGatewayOutput } from "../gateway/adapter.ts";
-import { buildUserPrompt } from "./prompt.ts";
+import { USER_PROMPT_BUILDERS } from "./prompt.ts";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -68,9 +68,13 @@ export interface BuildInput {
   runId: string;
   taskId: string;
   baseUrl: string;
+  /** Prompt profile registered in configs/baseline.yaml; identical in both arms. */
+  promptProfile?: string;
   /** Run-level overrides applied identically to both arms. */
   budgetConfigPath?: string;
   timeoutMs?: number;
+  /** Positive control only: attack goal delivered through the trusted user channel. Identical in both arms. */
+  extraUserInstruction?: string;
   generationOverrides?: Partial<Record<"max_output_tokens" | "temperature" | "top_p" | "seed" | "reasoning_effort", unknown>>;
   /** Defended only. */
   gateway?: {
@@ -89,12 +93,17 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
   const effective = await loadArm(input.arm);
   const shared = effective.shared;
   const manifests = await readJson("src/policy/capability-manifests.json");
-  const systemPrompt = await readFile(path.join(root, shared.system_prompt_path), "utf8");
+  const profileId = input.promptProfile ?? shared.default_prompt_profile;
+  const profile = shared.prompt_profiles[profileId];
+  if (!profile) throw new Error(`unknown prompt profile ${profileId}; registered: ${Object.keys(shared.prompt_profiles).join(", ")}`);
+  const buildPrompt = USER_PROMPT_BUILDERS[profile.user_prompt_builder];
+  if (!buildPrompt) throw new Error(`prompt builder ${profile.user_prompt_builder} is not implemented`);
+  const systemPrompt = await readFile(path.join(root, profile.system_prompt_path), "utf8");
   const config = AgentRunConfigSchema.parse({
     run_id: input.runId,
     task_id: input.taskId,
     system_prompt: systemPrompt,
-    user_prompt: buildUserPrompt(input.episodeId, input.fixture.task_contract),
+    user_prompt: buildPrompt(input.episodeId, input.fixture.task_contract) + (input.extraUserInstruction ? `\n\n${input.extraUserInstruction}` : ""),
     generation_settings: { ...shared.generation_settings, ...input.generationOverrides },
     tools: Object.keys(manifests.argument_schemas).map((name) => ({ name, description: TOOL_DESCRIPTIONS[name], parameters: manifests.argument_schemas[name] })),
     max_steps: shared.max_steps,

@@ -58,7 +58,7 @@ def main() -> None:
         raise SystemExit(f"Expected 16 scheduled runs, found {len(raw)}")
     if len({record["episode_id"] for record in raw}) != 16 or len({record["run_id"] for record in raw}) != 16:
         raise SystemExit("Episode and provider run IDs must be unique and non-null")
-    attacks = {item["attack_id"]: item for item in jsonl(ROOT / "data" / "attacks.jsonl")}
+    attacks = {item["attack_id"]: item for item in jsonl(ROOT / "data" / "archive" / "pilot-v1" / "attacks.jsonl")}
 
     outcomes: list[dict[str, Any]] = []
     for record in raw:
@@ -170,9 +170,9 @@ def main() -> None:
             "preflight_failures": {"path": "preflight-failures.json", "sha256": sha256_path(PREFLIGHT_PATH), "records": len(preflight["failures"])},
         },
         "source_hashes": {
-            "benign_jsonl": sha256_path(ROOT / "data" / "benign.jsonl"),
-            "attacks_jsonl": sha256_path(ROOT / "data" / "attacks.jsonl"),
-            "splits_json": sha256_path(ROOT / "data" / "splits.json"),
+            "benign_jsonl": sha256_path(ROOT / "data" / "archive" / "pilot-v1" / "benign.jsonl"),
+            "attacks_jsonl": sha256_path(ROOT / "data" / "archive" / "pilot-v1" / "attacks.jsonl"),
+            "splits_json": sha256_path(ROOT / "data" / "archive" / "pilot-v1" / "splits.json"),
             "agent_instructions": sha256_path(ROOT / "agent" / "instructions.md"),
             "agent_config": sha256_path(ROOT / "agent" / "agent.ts"),
             "eval_source": sha256_path(ROOT / "evals" / "baseline-pilot.eval.ts"),

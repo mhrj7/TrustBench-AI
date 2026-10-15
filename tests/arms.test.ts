@@ -35,6 +35,29 @@ test("both arms build identical model-facing run configs for every fixture", asy
   }
 });
 
+test("prompt profiles: identical across arms, plain carries no security guidance or tool allowlist", async () => {
+  const rows = (await readFile(path.join(root, "data/benign.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+  const gateway = (fixtureId: string) => ({ sessionToken: "secret-token-value", sessionFile: "/x", fixtureId, checkpointDb: "/y", env: {} });
+  for (const profile of ["plain", "hardened"]) {
+    for (const fixture of rows) {
+      const base = { fixture, episodeId: "ep", runId: "r", taskId: fixture.fixture_id, baseUrl: "http://127.0.0.1:1", promptProfile: profile };
+      const a = await buildArm({ ...base, arm: "baseline" });
+      const b = await buildArm({ ...base, arm: "defended", gateway: gateway(fixture.fixture_id) });
+      assert.deepEqual(a.config, b.config, `${profile}/${fixture.fixture_id}`);
+      const prompt = a.config.system_prompt + a.config.user_prompt;
+      if (profile === "plain") {
+        assert.ok(!/allowed_tools|untrusted|authoriz|gateway/i.test(prompt), "plain profile must carry no security guidance");
+        for (const tool of fixture.task_contract.allowed_tools) assert.ok(!a.config.user_prompt.includes(`"${tool}"`), "plain profile must not list allowed tools");
+        assert.ok(a.config.user_prompt.includes(fixture.task_contract.request));
+      } else {
+        assert.ok(/allowed_tools/.test(a.config.user_prompt) && /untrusted/i.test(prompt));
+      }
+    }
+  }
+  const fixture = rows[0];
+  await assert.rejects(buildArm({ arm: "baseline", fixture, episodeId: "e", runId: "r", taskId: "t", baseUrl: "http://127.0.0.1:1", promptProfile: "nope" }), /unknown prompt profile/);
+});
+
 test("defended arm refuses to run without a gateway session", async () => {
   const fixture = JSON.parse((await readFile(path.join(root, "data/benign.jsonl"), "utf8")).split("\n")[0]);
   await assert.rejects(buildArm({ arm: "defended", fixture, episodeId: "e", runId: "r", taskId: "t", baseUrl: "http://127.0.0.1:1" }), /gateway session/);
@@ -70,19 +93,28 @@ function assertSmoke(report: any, expectedCases: number, expectedAttacks: number
 test("smoke cases (development split): identical prompts, uncontrolled baseline compromised, gateway blocks, utility preserved", async () => {
   await run("node", ["scripts/run-arm-smoke.mjs"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
   const report: any = JSON.parse(await readFile(path.join(root, "evidence/tb024-defended-arm-report.json"), "utf8"));
-  assertSmoke(report, 5, 3);
-  assert.deepEqual(report.holdout_excluded_cases.sort(), ["update-attack", "update-benign"], "locked holdout fixtures must not run");
-});
-
-test("approval path mechanics on the update workflow (scripted, no model, holdout fixtures not used for results)", async () => {
-  await run("node", ["scripts/run-arm-smoke.mjs", "--include-holdout-mechanics"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
-  const report: any = JSON.parse(await readFile(path.join(root, "evidence/tb024-defended-arm-holdout-mechanics-report.json"), "utf8"));
   assertSmoke(report, 7, 4);
+  assert.deepEqual(report.holdout_excluded_cases, []);
   const update = report.cases.find((c: any) => c.case_id === "update-benign");
   assert.equal(update.defended.approvals.length, 1);
   assert.equal(update.defended.approvals[0].matched_synthetic_event, true);
+  assert.equal(report.summary.validity.invalid_pairs, 0);
+  assert.equal(report.summary.injection_exposure.baseline.numerator, report.summary.injection_exposure.baseline.denominator, "scripted trajectories read the injected content");
 });
 
-test("live models can never be pointed at holdout fixtures", async () => {
-  await assert.rejects(run("node", ["scripts/run-arm-smoke.mjs", "--model", "ollama:x", "--include-holdout-mechanics"], { cwd: root }), /holdout fixtures may never be used with a live model/);
+test("locked holdout fixtures can never run: smoke suite is disjoint from the holdout and the guard drops them", async () => {
+  const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
+  const holdout: string[] = splits.holdout_manifest.fixture_ids;
+  const suite = JSON.parse(await readFile(path.join(root, "tests/arms/smoke-cases.json"), "utf8"));
+  for (const c of suite.cases) assert.ok(!holdout.includes(c.fixture_id.split("--")[0]) && !holdout.includes(c.attack_id), `${c.case_id} is holdout`);
+  const temp = path.join(root, ".tool-state/holdout-guard-suite.json");
+  const { writeFile: write, mkdir: mk } = await import("node:fs/promises");
+  await mk(path.dirname(temp), { recursive: true });
+  const trap = { case_id: "holdout-trap", kind: "benign", fixture_id: "TB-BEN-UPDATE-002", attack_id: null, steps: [], final_text: "x" };
+  await write(temp, JSON.stringify({ cases: [suite.cases[0], trap] }));
+  await run("node", ["scripts/run-arm-smoke.mjs", "--suite", ".tool-state/holdout-guard-suite.json"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
+  const report: any = JSON.parse(await readFile(path.join(root, "evidence/tb024-defended-arm-report.json"), "utf8"));
+  assert.deepEqual(report.holdout_excluded_cases, ["holdout-trap"]);
+  assert.ok(!report.cases.some((c: any) => c.fixture_id.includes("UPDATE-002")));
+  await run("node", ["scripts/run-arm-smoke.mjs"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 }); // restore canonical evidence
 });

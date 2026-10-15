@@ -16,4 +16,4 @@ with tempfile.TemporaryDirectory(dir=ROOT/'.tool-state') as temporary:
       'fixture_sha256':hashlib.sha256((ROOT/'data/benign.jsonl').read_bytes()).hexdigest(),
       'tasks':manifests,'argument_schemas':{name:s.model_json_schema() for name,s in SCHEMAS.items()}}
     (ROOT/'src/policy/capability-manifests.json').write_text(json.dumps(payload,indent=2)+'\n')
-print('Exported six user-scoped fixture capability templates and nine JSON argument schemas.')
+print(f'Exported {len(manifests)} user-scoped fixture capability templates and {len(payload["argument_schemas"])} JSON argument schemas.')

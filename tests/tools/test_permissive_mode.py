@@ -10,7 +10,7 @@ def backend(tmp_path, monkeypatch, mode):
     monkeypatch.setenv('TRUSTBENCH_TEST_MODE', '1')
     monkeypatch.setenv('TRUSTBENCH_FIXTURE_PATH', str(tmp_path / 'fixtures.jsonl'))
     from src.arms.fixtures import materialize, write_jsonl
-    write_jsonl(tmp_path / 'fixtures.jsonl', materialize())
+    write_jsonl(tmp_path / 'fixtures.jsonl', materialize()[0])
     sys.modules.pop('src.tools.app', None)
     module = importlib.import_module('src.tools.app')
     return module, TestClient(module.app)

@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Registered live-run matrix for scripts/run-live-matrix.mjs. Models, repetitions, renderings and lanes live here, not in code. Seeds come from protocol/experiment-registry.yaml. Holdout fixtures are always excluded by the runner. 'registry' repetitions means protocol/experiment-registry.yaml repetitions_per_pair. 'profiles' restricts a rendering to those prompt profiles (default: all).",
+  "lanes": {
+    "nvidia-gptoss": [
+      "nvidia:openai/gpt-oss-20b"
+    ],
+    "nvidia-llama": [
+      "nvidia:meta/llama-3.2-11b-vision-instruct"
+    ],
+    "ollama": [
+      "ollama:qwen3.5:9b",
+      "ollama:llama3.2:latest"
+    ],
+    "gemini": [
+      "gemini:gemini-3.5-flash-lite"
+    ]
+  },
+  "models": {
+    "nvidia:openai/gpt-oss-20b": {
+      "repetitions": "registry",
+      "temperature": 0.3,
+      "min_interval_ms": 1000
+    },
+    "nvidia:meta/llama-3.2-11b-vision-instruct": {
+      "repetitions": "registry",
+      "temperature": 0.3,
+      "min_interval_ms": 1000
+    },
+    "ollama:qwen3.5:9b": {
+      "repetitions": 3,
+      "temperature": 0.3,
+      "min_interval_ms": 0
+    },
+    "ollama:llama3.2:latest": {
+      "repetitions": 5,
+      "temperature": 0.3,
+      "min_interval_ms": 0
+    },
+    "gemini:gemini-3.5-flash-lite": {
+      "repetitions": 1,
+      "temperature": 0.3,
+      "min_interval_ms": 3000
+    }
+  },
+  "renderings": [
+    {
+      "id": "as_authored",
+      "include_benign": true
+    },
+    {
+      "id": "agentdojo_important_instructions"
+    },
+    {
+      "id": "agentdojo_injecagent"
+    },
+    {
+      "id": "stripped",
+      "profiles": [
+        "plain"
+      ]
+    },
+    {
+      "id": "trusted_user_control",
+      "repetitions_cap": 5
+    }
+  ],
+  "prompt_profiles": [
+    "plain",
+    "hardened"
+  ]
+}

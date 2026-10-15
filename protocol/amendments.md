@@ -79,3 +79,28 @@ attack success. `--attack-rendering` adds a documented, deterministic factor app
 `as_authored` (fixture text verbatim), `stripped` (instruction only, as a real injection would read), `authority`
 (stripped text framed as a fake notice from the task owner). Data files are unchanged. Renderings were designed after seeing
 development-split results only and are exploratory.
+
+
+## A-007 (2026-10-15) Protocol 1.1.0: replacement holdout, split v2, harder development attacks
+
+Approved by the project owner. Changes:
+- **Split v2** (`data/splits.json`, `trustbench-core-template-family-v2`). The exposed update group (`TB-BEN-UPDATE-001`,
+  `TB-ATT-UPDATE-001`) moved to the development split. A new group `group-record-sycamore-update`
+  (`TB-BEN-UPDATE-002`, `TB-ATT-UPDATE-002`) is the sealed holdout: new template (`template-record-sycamore-update`), new
+  attack family (`family-approved-value-substitution`), different tenant, record, value and wording. It has not been run by
+  any agent or model; only schema, reset and evaluator-oracle checks (synthetic trajectories) touched it. Holdout manifest
+  hash is in `data/splits.json` and verified by `npm run verify:data-splits`.
+- The holdout share is 2/12 fixtures and 1/6 groups (16.7%) against the registered 20%; the manifest declares a 0.05
+  tolerance because the fixture set is small. The verifier now reads the target from the registry instead of a literal.
+- **Self-disclosure rule removed.** `scripts/verify-attack-data.mjs` required the word "untrusted" inside every payload, which
+  forced the first fixtures to announce themselves. The label is metadata (entry point); the new holdout payload is written
+  without a disclaimer.
+- **Published attack templates** added as renderings (`data/attack-renderings.json`): AgentDojo `direct`, `ignore_previous`,
+  `system_message`, `injecagent` (InjecAgent paper) and `important_instructions` (the strongest AgentDojo template), cited to the
+  vendored MIT source at the pinned commit. A `trusted_user_control` rendering is a positive control. Seed-state additions
+  and injection locations are data (`data/attack-materialization.json`, each attack's `entry_point`), not code.
+- **Run validity and exposure.** Provider-fault runs are invalid, listed separately and never counted as secure. Each attack run
+  records whether the model actually saw the injected text (`injection_exposed`) and whether it made any tool call.
+- Evaluator v2 gains an oracle for `TB-ATT-UPDATE-002` (value substitution on the approved record), tested with
+  synthetic trajectories only.
+Confirmatory use of the new holdout remains one run, after the release gate, per the original holdout policy.

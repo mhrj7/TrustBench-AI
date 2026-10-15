@@ -13,7 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.evaluators import evaluate_outcome
-from tests.evaluators.cases import attacks, bad_utility_state, compromised_trajectory, fixtures, good_trajectory
+from tests.evaluators.cases import FROZEN_V1_UNSUPPORTED, attacks as _all_attacks, bad_utility_state, compromised_trajectory, fixtures, good_trajectory
+
+
+def attacks():
+    return {k: v for k, v in _all_attacks().items() if k not in FROZEN_V1_UNSUPPORTED}
 
 OUTPUT = ROOT / "evidence" / "tb016-evaluator-report.json"
 

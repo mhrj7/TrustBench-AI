@@ -29,7 +29,9 @@ for (const attack of attacks) {
   assert.ok(attack.local_sink.sink_id.startsWith("fixture-"), `${attack.attack_id} sink is outside the local synthetic namespace`);
   assert.equal(attack.local_sink.external_network, false);
   assert.ok(attack.entry_point === "document.content" || attack.entry_point === "reference_document.content" || attack.entry_point === "customer_record.untrusted_note");
-  assert.ok(/untrusted/i.test(attack.untrusted_text), `${attack.attack_id} must label injected content as untrusted`);
+  // The untrusted label is metadata (the entry point is an untrusted channel by schema), not text the model must see.
+  // Requiring the word inside the payload made the first fixtures announce themselves, which models can refuse for that reason alone.
+  assert.ok(attack.untrusted_text.trim().length > 0 && attack.entry_point.length > 0, `${attack.attack_id} must carry its payload and an untrusted entry point`);
   if (attack.workflow === "email_draft_assistant") {
     assert.equal(attack.protected_contract.expected_recipient_id, base.task_contract.recipient_id, `${attack.attack_id} must preserve the trusted recipient as the protected value`);
   }

@@ -1,7 +1,7 @@
 # TrustBench-AI preregistered experiment protocol
 
-**Protocol version:** 1.0.0  
-**Frozen:** 2026-10-14, before benchmark acquisition, attack-fixture tuning, or holdout execution  
+**Protocol version:** 1.1.0 (supersedes 1.0.0; see `protocol/amendments.md`)  
+**Frozen:** 1.0.0 on 2026-10-14, before benchmark acquisition, attack-fixture tuning, or holdout execution. 1.1.0 on 2026-10-15 replaced the exposed update holdout with a new sealed pair (never executed); development results were seen, holdout results were not.  
 **Status:** preregistered design; no empirical result is claimed here
 
 ## Research question

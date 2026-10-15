@@ -4,8 +4,6 @@
   "note": "JSON content (valid YAML), matching protocol/experiment-registry.yaml. Shared settings are inherited unchanged by configs/defended.yaml.",
   "shared": {
     "agent_runner": "src/agent/runner.ts#runBaselineAgent",
-    "system_prompt_path": "agent/instructions.md",
-    "user_prompt_template": "src/arms/prompt.ts#buildUserPrompt@v3",
     "generation_settings": {
       "max_output_tokens": 512,
       "temperature": null,
@@ -24,7 +22,20 @@
     "episode_reset": "fresh episode per run, identical fixture, max_tool_calls 12",
     "model_adapter": "injected by the caller; identical adapter, scripted outcomes or provider settings for both arms",
     "on_tool_error": "continue",
-    "tool_backend_mode": "permissive (TRUSTBENCH_TOOL_MODE): schema validity, tenant scoping and referential integrity only; --tool-mode contract runs the TB-014 contract-checked backend as an ablation"
+    "tool_backend_mode": "permissive (TRUSTBENCH_TOOL_MODE): schema validity, tenant scoping and referential integrity only; --tool-mode contract runs the TB-014 contract-checked backend as an ablation",
+    "default_prompt_profile": "hardened",
+    "prompt_profiles": {
+      "hardened": {
+        "system_prompt_path": "agent/instructions.md",
+        "user_prompt_builder": "hardened_v3",
+        "description": "TrustBench agent instructions with explicit trust/authorization rules and an injection warning in the user prompt (a prompt-level defense shared by both arms)."
+      },
+      "plain": {
+        "system_prompt_path": "configs/prompts/plain-system.md",
+        "user_prompt_builder": "plain_v1",
+        "description": "Neutral task prompt in the style of the AgentDojo default system message (data/vendor/agentdojo/src/agentdojo/data/system_messages.yaml, MIT; persona and date lines removed). The user prompt carries the task request and task parameters only: no allowed-tools list and no security guidance."
+      }
+    }
   },
   "tool_path": {
     "transport": "http_loopback",

@@ -67,13 +67,22 @@ const fixtureCount = fixtureById.size;
 const holdoutCount = holdoutFixtureIds.length;
 const holdoutFractionByRows = holdoutCount / fixtureCount;
 const holdoutFractionByGroups = split.groups.filter((group) => group.split === "holdout").length / split.groups.length;
-assert.ok(Math.abs(holdoutFractionByRows - 0.2) < 1e-9, "Holdout row share must equal the preregistered 20% for this fixture set");
-assert.ok(Math.abs(holdoutFractionByGroups - 0.2) < 1e-9, "Holdout group share must equal 20% for this fixture set");
+// The target fraction comes from the registered protocol; the tolerance is declared in the split manifest because the
+// fixture count is small and cannot hit the target exactly.
+const registry = JSON.parse(await readFile(new URL("protocol/experiment-registry.yaml", root), "utf8"));
+const target = registry.holdout.holdout_fraction;
+const tolerance = split.holdout_fraction_tolerance;
+assert.ok(typeof tolerance === "number" && tolerance >= 0 && tolerance <= 0.1, "Split manifest must declare a holdout_fraction_tolerance of at most 0.1");
+assert.ok(Math.abs(holdoutFractionByRows - target) <= tolerance + 1e-9, `Holdout row share ${holdoutFractionByRows} must be within ${tolerance} of the registered ${target}`);
+assert.ok(Math.abs(holdoutFractionByGroups - target) <= tolerance + 1e-9, `Holdout group share ${holdoutFractionByGroups} must be within ${tolerance} of the registered ${target}`);
 
 const report = {
   schema_version: "1.0.0",
   task_id: "TB-010",
-  checked_at: "2026-10-14",
+  split_id: split.split_id,
+  checked_at: new Date().toISOString().slice(0, 10),
+  registered_holdout_fraction: target,
+  holdout_fraction_tolerance: tolerance,
   ok: true,
   fixture_count: fixtureCount,
   group_count: split.groups.length,

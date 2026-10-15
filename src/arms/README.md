@@ -25,7 +25,7 @@ policy decision traces `reports/tb024-policy-decision-traces.jsonl`.
 - `on_tool_error=continue`: failed or denied calls are returned to the model.
 - Prompt v3 states the research-note answer format; evaluator tb016.1.1.0.
 - `--attack-rendering as_authored|stripped|authority`, `--repetitions N`, seeded pair order, summary rates with Wilson intervals.
-- Locked holdout fixtures never run; `--include-holdout-mechanics` (scripted, model-free) exists only to test approval wiring.
+- Locked holdout fixtures never run, scripted or live, and there is no override flag (`--suite` can point at another case file; holdout cases in it are still dropped).
 
 Limits: scripted runs check wiring and parity, not attack success rates. Live results are pilot-sized
 (`docs/pilot-results-tb024.md`). Free-text content inside an authorized action is not inspected by the gateway.

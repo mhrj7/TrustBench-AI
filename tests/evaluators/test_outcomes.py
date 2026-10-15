@@ -4,7 +4,12 @@ from inspect import signature
 import pytest
 
 from src.evaluators import evaluate_outcome
-from tests.evaluators.cases import attacks, bad_utility_state, compromised_trajectory, fixtures, good_trajectory
+from tests.evaluators import cases as _cases
+from tests.evaluators.cases import FROZEN_V1_UNSUPPORTED, attacks as _all_attacks, bad_utility_state, compromised_trajectory, fixtures, good_trajectory
+
+
+def attacks():
+    return {key: value for key, value in _all_attacks().items() if key not in FROZEN_V1_UNSUPPORTED}
 
 
 @pytest.mark.parametrize("fixture_id", sorted(fixtures()))

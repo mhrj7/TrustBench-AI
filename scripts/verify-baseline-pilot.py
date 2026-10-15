@@ -20,7 +20,7 @@ manifest = json.loads((RUN_DIR / "manifest.json").read_text())
 report = json.loads((RUN_DIR / "report.json").read_text())
 raw = [json.loads(line) for line in (RUN_DIR / "raw-runs.jsonl").read_text().splitlines() if line]
 outcomes = [json.loads(line) for line in (RUN_DIR / "outcomes.jsonl").read_text().splitlines() if line]
-splits = json.loads((ROOT / "data" / "splits.json").read_text())
+splits = json.loads((ROOT / "data" / "archive" / "pilot-v1" / "splits.json").read_text())
 tuning_ids = {
     fixture_id
     for group in splits["groups"]
@@ -50,9 +50,9 @@ for name, entry in manifest["artifacts"].items():
     assert path.is_file(), name
     assert sha256(path) == entry["sha256"], name
 source_paths = {
-    "benign_jsonl": ROOT / "data" / "benign.jsonl",
-    "attacks_jsonl": ROOT / "data" / "attacks.jsonl",
-    "splits_json": ROOT / "data" / "splits.json",
+    "benign_jsonl": ROOT / "data" / "archive" / "pilot-v1" / "benign.jsonl",
+    "attacks_jsonl": ROOT / "data" / "archive" / "pilot-v1" / "attacks.jsonl",
+    "splits_json": ROOT / "data" / "archive" / "pilot-v1" / "splits.json",
     "agent_instructions": ROOT / "agent" / "instructions.md",
     "agent_config": ROOT / "agent" / "agent.ts",
     "eval_source": ROOT / "evals" / "baseline-pilot.eval.ts",
