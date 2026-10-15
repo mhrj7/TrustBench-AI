@@ -37,9 +37,12 @@
     "test:trace": "node --test tests/trace-contract.test.ts",
     "verify:protocol": "node scripts/verify-protocol.mjs",
     "verify:data": "node scripts/verify-data-manifest.mjs",
-    "verify": "npm run typecheck && npm run smoke && npm run test:smoke-e2e && npm run verify:smoke-suite && npm run test:model-adapter && npm run verify:model-adapter && npm run test:tool-service && npm run verify:tool-service && npm run test:baseline-agent && npm run verify:baseline-agent && npm run test:evaluators && npm run verify:evaluators && npm run test:pilot-store && npm run verify:baseline-pilot && npm run test:trace && npm run test:budget && npm run test:dataset && npm run verify:budget-pilot && npm run verify:benign-data && npm run verify:attack-data && npm run verify:data-splits && npm run verify:dataset-reset && npm run verify:protocol && npm run verify:data",
+    "verify": "npm run typecheck && npm run smoke && npm run test:smoke-e2e && npm run verify:smoke-suite && npm run test:model-adapter && npm run verify:model-adapter && npm run test:tool-service && npm run verify:tool-service && npm run test:baseline-agent && npm run verify:baseline-agent && npm run test:evaluators && npm run verify:evaluators && npm run test:pilot-store && npm run verify:baseline-pilot && npm run test:trace && npm run test:budget && npm run test:dataset && npm run verify:budget-pilot && npm run verify:benign-data && npm run verify:attack-data && npm run verify:data-splits && npm run verify:dataset-reset && npm run verify:protocol && npm run verify:data && npm run test:gateway && npm run test:provenance && npm run verify:failure-taxonomy",
     "start": "eve start",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test:gateway": "mkdir -p .tool-state && .venv-tools/bin/python -m pytest -q tests/gateway --basetemp=.tool-state/pytest-gateway --junitxml=reports/tb019-gateway-tests.xml && node --test tests/gateway-adapter.test.ts",
+    "test:provenance": "mkdir -p .tool-state && .venv-tools/bin/python -m pytest -q tests/provenance --basetemp=.tool-state/pytest-provenance --junitxml=reports/tb020-provenance-tests.xml",
+    "verify:failure-taxonomy": ".venv-tools/bin/python scripts/verify-failure-taxonomy.py"
   },
   "dependencies": {
     "@vercel/connect": "2.2.0",
@@ -56,5 +59,4 @@
     "npm": "12.0.0"
   },
   "packageManager": "npm@12.0.0"
-
 }
