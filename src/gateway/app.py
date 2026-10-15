@@ -22,8 +22,12 @@ class Binding:
     signing_key: bytes = b''
 
 class Gateway:
-    def __init__(self, backend, audit_path=None, flow_check=False):
+    def __init__(self, backend, audit_path=None, flow_check=False, session_db=None, session_ttl_s=None):
         self.flow_check = flow_check
+        self._session_db = session_db
+        self._session_ttl_s = session_ttl_s
+        if session_db is not None:
+            self._init_session_db()
         self.app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
         self._audit_path = audit_path
         self._flushed = 0
@@ -49,7 +53,7 @@ class Gateway:
         async def dispatch(episode_id: str, tool_name: str, request: Request):
             # A model supplies only arguments. Host-issued capability is never in prompt/tool schema.
             token = request.headers.get('authorization', '').removeprefix('Bearer ')
-            binding = self._bindings.get(token)
+            binding = self._bindings.get(token) or self._load_session(token)
             reason = ('missing_or_invalid_session' if binding is None else
                       'episode_mismatch' if binding.episode_id != episode_id else
                       'tool_not_allowed' if tool_name not in binding.allowed_tools else None)
@@ -138,8 +142,54 @@ class Gateway:
         token = secrets.token_urlsafe(32)
         capability = Capability.issue(self.store, episode_id, allowed_tools, user_id)
         flow = FlowGuard(POLICY, capability.contract_json) if self.flow_check else None
-        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability, flow, secrets.token_bytes(32))
+        binding = Binding(episode_id, frozenset(allowed_tools), capability, flow, secrets.token_bytes(32))
+        self._bindings[token] = binding
+        self._persist_session(token, binding)
         return token
+
+    # ---- durable sessions (TB-026) ----
+    def _connect_sessions(self):
+        import sqlite3
+        return sqlite3.connect(self._session_db, timeout=10)
+
+    def _init_session_db(self):
+        import os, time
+        new = not os.path.exists(self._session_db)
+        with self._connect_sessions() as db:
+            db.execute('''CREATE TABLE IF NOT EXISTS gateway_sessions (token_sha256 TEXT PRIMARY KEY, episode_id TEXT NOT NULL,
+                allowed_tools_json TEXT NOT NULL, capability_json TEXT NOT NULL, signing_key_hex TEXT NOT NULL, flow INTEGER NOT NULL,
+                expires_at REAL NOT NULL)''')
+            db.execute('DELETE FROM gateway_sessions WHERE expires_at < ?', (time.time(),))  # retention: expired sessions are purged
+        if new:
+            os.chmod(self._session_db, 0o600)  # owner-only: the file holds signing keys
+
+    def _persist_session(self, token, binding):
+        if self._session_db is None:
+            return
+        import hashlib, time
+        cap = binding.capability
+        capability = json.dumps({'episode_id': cap.episode_id, 'generation': cap.generation, 'user_id': cap.user_id, 'tenant_id': cap.tenant_id,
+                                 'allowed_tools': sorted(cap.allowed_tools), 'contract_json': cap.contract_json})
+        with self._connect_sessions() as db:
+            db.execute('INSERT OR REPLACE INTO gateway_sessions VALUES (?,?,?,?,?,?,?)',
+                       (hashlib.sha256(token.encode()).hexdigest(), binding.episode_id, json.dumps(sorted(binding.allowed_tools)), capability,
+                        binding.signing_key.hex(), 1 if binding.flow is not None else 0, time.time() + self._session_ttl_s))
+
+    def _load_session(self, token):
+        """Restores a session after a gateway restart. Only a hash of the bearer token is stored."""
+        if self._session_db is None or not token:
+            return None
+        import hashlib, time
+        with self._connect_sessions() as db:
+            row = db.execute('SELECT episode_id, allowed_tools_json, capability_json, signing_key_hex, flow FROM gateway_sessions WHERE token_sha256 = ? AND expires_at >= ?',
+                             (hashlib.sha256(token.encode()).hexdigest(), time.time())).fetchone()
+        if row is None:
+            return None
+        c = json.loads(row[2])
+        capability = Capability(c['episode_id'], c['generation'], c['user_id'], c['tenant_id'], frozenset(c['allowed_tools']), c['contract_json'])
+        binding = Binding(row[0], frozenset(json.loads(row[1])), capability, FlowGuard(POLICY, capability.contract_json) if row[4] else None, bytes.fromhex(row[3]))
+        self._bindings[token] = binding
+        return binding
 
     def signing_key(self, token: str) -> str:
         """Trusted host only: the per-session envelope key handed to the agent adapter with the session token."""
@@ -147,3 +197,7 @@ class Gateway:
 
     def revoke(self, token: str):
         self._bindings.pop(token, None)
+        if self._session_db is not None:
+            import hashlib
+            with self._connect_sessions() as db:
+                db.execute('DELETE FROM gateway_sessions WHERE token_sha256 = ?', (hashlib.sha256(token.encode()).hexdigest(),))

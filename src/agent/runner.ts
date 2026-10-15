@@ -2,6 +2,7 @@ import { BudgetController, BudgetExhaustedError, type BudgetConfig } from "../..
 import { canonicalJson } from "../../schemas/trace.ts";
 import { RecoveryManager, type RecoveryPolicy, type Sleep } from "./recovery.ts";
 import type { AgentDefenses } from "./defenses.ts";
+import type { RunStore, RunCheckpoint } from "./run-store.ts";
 import type { ModelAdapter, ModelRequest } from "../models/contracts.ts";
 import {
   AgentRunConfigSchema, type AgentFailure, type AgentNode, type AgentRunConfig, type AgentToolRegistry,
@@ -46,9 +47,15 @@ export async function runBaselineAgent(input: {
   recovery?: { policy: RecoveryPolicy; seed: number; sleep?: Sleep };
   /** Agent-side defenses for defended systems (configs/defenses.yaml); omitted for the baseline. */
   defenses?: AgentDefenses;
+  /** Durable runs (TB-026): checkpoints, intent log, cancellation and a single final outcome. */
+  durability?: { store: RunStore; writeTools: string[]; replaySafeTools: string[]; interruptedWriteCode: string };
 }): Promise<BaselineAgentResult> {
   const config = AgentRunConfigSchema.parse(input.config);
-  const budget = new BudgetController(input.budgetConfig);
+  const durable = input.durability ?? null;
+  const prior = durable ? durable.store.load(config.run_id) : { final: null, checkpoint: null };
+  if (prior.final) return prior.final; // the run already ended: never produce a second outcome
+  const restored: RunCheckpoint | null = prior.checkpoint;
+  const budget = restored ? BudgetController.restore(input.budgetConfig, restored.budget as any) : new BudgetController(input.budgetConfig);
   const controller = new AbortController();
   const runController = new AbortController();
   const forwardBudgetAbort = () => runController.abort(budget.signal.reason);
@@ -57,20 +64,22 @@ export async function runBaselineAgent(input: {
     ? new RecoveryManager({ policy: input.recovery.policy, budget, signal: runController.signal, runId: config.run_id, seed: input.recovery.seed, sleep: input.recovery.sleep })
     : null;
   const defenses = input.defenses ?? null;
-  const messages: ModelMessage[] = [
+  const messages: ModelMessage[] = restored ? structuredClone(restored.messages) : [
     { role: "system", content: defenses ? defenses.systemPrompt(config.system_prompt) : config.system_prompt },
     { role: "user", content: config.user_prompt },
   ];
-  const transitions: AgentTransition[] = [];
-  const toolRecords: AgentToolRecord[] = [];
-  const failures: AgentFailure[] = [];
-  let finalText = "";
-  let steps = 0;
+  const transitions: AgentTransition[] = restored ? structuredClone(restored.transitions) : [];
+  const toolRecords: AgentToolRecord[] = restored ? structuredClone(restored.tool_records) : [];
+  const failures: AgentFailure[] = restored ? structuredClone(restored.failures) : [];
+  let finalText = restored?.final_text ?? "";
+  let steps = restored?.steps ?? 0;
 
+  let finished: BaselineAgentResult | null = null;
   const terminate = (outcome: BaselineAgentResult["outcome"]): BaselineAgentResult => {
+    if (finished) return finished;
     transitions.push({ step: steps, node: "termination", detail: outcome });
     const snapshot = budget.snapshot();
-    return {
+    const result: BaselineAgentResult = {
       run_id: config.run_id,
       task_id: config.task_id,
       outcome,
@@ -90,8 +99,16 @@ export async function runBaselineAgent(input: {
         cost_microusd: snapshot.cost_microusd, pending_work_cancelled: snapshot.pending_work_cancelled,
         exhausted_dimension: snapshot.exhausted_dimension,
       },
+      ...(restored ? { resumed: true } : {}),
     };
+    finished = durable ? durable.store.finish(config.run_id, result) : result;
+    return finished;
   };
+  const checkpoint = (pending: RunCheckpoint["pending_calls"], responseText: string) => {
+    if (!durable) return;
+    durable.store.checkpoint(config.run_id, { steps, messages, transitions, tool_records: toolRecords, failures, final_text: finalText, budget: budget.snapshot() as unknown as Record<string, unknown>, pending_calls: pending, response_text: responseText, allowed_by_filter: allowedByFilter ? [...allowedByFilter] : null });
+  };
+  const cancelled = () => (durable ? durable.store.cancelRequested(config.run_id) : null);
 
   const visit = (node: Exclude<AgentNode, "termination">, detail: string): void => {
     if (steps + 1 > config.max_steps) throw Object.assign(new Error("Maximum graph steps reached"), { code: "step_limit_exceeded" });
@@ -99,14 +116,23 @@ export async function runBaselineAgent(input: {
     transitions.push({ step: steps, node, detail });
   };
 
-  let allowedByFilter: Set<string> | null = null;
+  let allowedByFilter: Set<string> | null = restored?.allowed_by_filter ? new Set(restored.allowed_by_filter) : null;
+  if (allowedByFilter) config.tools = config.tools.filter((t) => allowedByFilter!.has(t.name));
+  let pendingCalls: RunCheckpoint["pending_calls"] = restored ? structuredClone(restored.pending_calls) : [];
+  let pendingText = restored?.response_text ?? "";
   const execute = async (): Promise<BaselineAgentResult> => {
     try {
-      if (defenses) {
+      if (defenses && !restored) {
         const chosen = await defenses.filterTools(config, runController.signal);
         if (chosen) { allowedByFilter = new Set(chosen); config.tools = config.tools.filter((t) => allowedByFilter!.has(t.name)); }
       }
       while (true) {
+        const cancelReason = cancelled();
+        if (cancelReason) { failures.push({ node: transitions.at(-1)?.node ?? "termination", code: "cancelled", message: cancelReason.slice(0, 1000), call_id: null }); return terminate("cancelled"); }
+        let calls: RunCheckpoint["pending_calls"];
+        let responseText: string;
+        if (pendingCalls.length) { calls = pendingCalls; responseText = pendingText; pendingCalls = []; }
+        else {
         visit("model", `model_call_${budget.snapshot().model_calls + 1}`);
         budget.beginModelCall(config.planned_input_tokens_per_call, config.generation_settings.max_output_tokens);
         const modelRequest = {
@@ -132,7 +158,13 @@ export async function runBaselineAgent(input: {
         }
 
         visit("tool", `${response.tool_calls.length}_call(s)`);
-        for (const call of response.tool_calls) {
+        calls = response.tool_calls; responseText = response.output_text;
+        checkpoint(calls, responseText);
+        }
+        for (let index = 0; index < calls.length; index++) {
+          const call = calls[index]!;
+          const stopReason = cancelled();
+          if (stopReason) { failures.push({ node: "tool", code: "cancelled", message: stopReason.slice(0, 1000), call_id: call.call_id }); checkpoint(calls.slice(index), responseText); return terminate("cancelled"); }
           try {
             budget.recordToolCall();
             const tool = input.tools[call.tool_name];
@@ -140,6 +172,11 @@ export async function runBaselineAgent(input: {
             if (allowedByFilter && !allowedByFilter.has(call.tool_name)) throw Object.assign(new Error(`Tool removed by the tool filter: ${call.tool_name}`), { code: "tool_filtered" });
             const veto = defenses ? await defenses.veto(call, messages, config, runController.signal) : null;
             if (veto) throw Object.assign(new Error(`Blocked by ${veto.defense}: the call recurs when the user task is masked`), { code: veto.code });
+            if (durable && durable.store.interrupted(config.run_id, call.call_id) && durable.writeTools.includes(call.tool_name) && !durable.replaySafeTools.includes(call.tool_name)) {
+              // A previous process started this write and died before recording its end: its effect may have committed.
+              throw Object.assign(new Error("This write was interrupted by a restart; it may have been applied and is not repeated."), { code: durable.interruptedWriteCode, outcome_unknown: true });
+            }
+            durable?.store.beginIntent(config.run_id, call.call_id, call.tool_name);
             const context = { runId: config.run_id, taskId: config.task_id, callId: call.call_id };
             const attemptResult = manager
               ? await manager.callTool(call.tool_name, call.arguments, call.call_id, (signal, attempt) => tool.execute(call.arguments, { ...context, signal, attempt }))
@@ -153,6 +190,8 @@ export async function runBaselineAgent(input: {
             };
             toolRecords.push(record);
             messages.push(toolResultMessage(record, defenses ? (t) => defenses.wrapToolResult(t) : undefined));
+            durable?.store.finishIntent(config.run_id, call.call_id);
+            checkpoint(calls.slice(index + 1), responseText);
           } catch (error) {
             if (error instanceof BudgetExhaustedError || error instanceof AgentTimeoutError) throw error;
             const captured = failure("tool", error, call.call_id);
@@ -165,12 +204,14 @@ export async function runBaselineAgent(input: {
             };
             toolRecords.push(record);
             messages.push(toolResultMessage(record, defenses ? (t) => defenses.wrapToolResult(t) : undefined));
+            durable?.store.finishIntent(config.run_id, call.call_id);
+            checkpoint(calls.slice(index + 1), responseText);
           }
         }
         const reminder = defenses?.reminder(config.user_prompt);
         if (reminder) messages.push(reminder);
-        if (config.on_tool_error === "stop" && toolRecords.slice(-response.tool_calls.length).some((record) => record.status === "failed")) {
-          finalText = response.output_text;
+        if (config.on_tool_error === "stop" && toolRecords.slice(-calls.length).some((record) => record.status === "failed")) {
+          finalText = responseText;
           return terminate("failure");
         }
       }

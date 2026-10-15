@@ -97,6 +97,13 @@ export class BudgetController {
   }
 
   get signal(): AbortSignal { return this.abortController.signal; }
+
+  /** Restores counters from a durable checkpoint (TB-026). Elapsed time continues from the recorded value. */
+  static restore(config: BudgetConfig, snapshot: BudgetTerminalRecord, nowMs = Date.now()): BudgetController {
+    const controller = new BudgetController(config, nowMs - snapshot.elapsed_ms);
+    controller.state = { ...structuredClone(snapshot), outcome: "active", exhausted_dimension: null, reason: null, pending_work_cancelled: false };
+    return controller;
+  }
   snapshot(): BudgetTerminalRecord { return structuredClone(this.state); }
 
   private ensureActive(): void {

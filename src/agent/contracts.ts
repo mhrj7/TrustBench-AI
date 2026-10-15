@@ -16,7 +16,7 @@ export const AgentRunConfigSchema = z.object({
 }).strict();
 
 export type AgentRunConfig = z.infer<typeof AgentRunConfigSchema>;
-export type AgentOutcome = "success" | "failure" | "timeout" | "budget_exhausted";
+export type AgentOutcome = "success" | "failure" | "timeout" | "budget_exhausted" | "cancelled";
 export type AgentNode = "model" | "tool" | "termination";
 
 export interface ToolExecutionContext {
@@ -84,6 +84,8 @@ export interface BaselineAgentResult {
   failures: AgentFailure[];
   recovery?: RecoverySummary;
   defense?: import("./defenses.ts").DefenseStats;
+  /** Present when the run continued from a durable checkpoint after a restart. */
+  resumed?: boolean;
   budget: {
     model_calls: number;
     tool_calls: number;
