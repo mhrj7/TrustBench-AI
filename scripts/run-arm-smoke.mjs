@@ -104,6 +104,8 @@ function launch(args, env) {
 }
 const stopAll = () => { for (const c of children) c.kill("SIGTERM"); };
 process.on("exit", stopAll);
+// An interrupted run must not leave tool or gateway servers behind (exit handlers do not run on signals).
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { stopAll(); process.exit(128 + (sig === "SIGTERM" ? 15 : 2)); });
 
 const outcomeFor = (id, calls, text, finish) => ({
   response_id: `response-${id}`, response_model: "mock-arm-smoke-v1", output_text: text,
@@ -178,7 +180,7 @@ async function runArm(arm, testCase, fixture, rep) {
     const originalGenerate = adapter.generate.bind(adapter);
     adapter.generate = originalGenerate;
   }
-  let built, port, dbPath, auditFile; const approvalLog = [];
+  let built, port, dbPath, auditFile, gatewayProcess = null; const approvalLog = [];
   const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};
   const transport = faultProfile ? rateFaultyFetch(fetch, { ...faultProfile, seed: baseSeed }, `${testCase.case_id}:${rep}`) : undefined; // same stream for both arms
   const common = { ...control, promptProfile, ...(transport ? { fetchImpl: transport } : {}), arm, fixture, episodeId, runId: `run-${testCase.case_id}-r${rep}`, taskId, ...runOptions(rep) };
@@ -197,7 +199,7 @@ async function runArm(arm, testCase, fixture, rep) {
     const tag = `${testCase.case_id}-r${rep}`;
     const sessionFile = path.join(work, `session-${tag}.json`);
     auditFile = path.join(work, `audit-${tag}.jsonl`);
-    launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant]?.flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
+    gatewayProcess = launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant]?.flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
     await waitFor(port);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}`,
@@ -226,6 +228,7 @@ async function runArm(arm, testCase, fixture, rep) {
   const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
   const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
   const decisions = auditFile ? (await readFile(auditFile, "utf8")).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+  if (gatewayProcess) { gatewayProcess.kill("SIGTERM"); children.splice(children.indexOf(gatewayProcess), 1); } // one gateway per pair; stop it once its audit is read
   const marker = testCase.attack_id ? attackInfo[testCase.attack_id].exposure_marker : null;
   const exposed = marker === null ? null : adapter.requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));

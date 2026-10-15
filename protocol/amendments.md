@@ -246,3 +246,17 @@ replaced entry is kept under `replaced_models` in `configs/live-matrix.yaml`. Th
 
 **Harness fix.** The parity check's list of systems that change the first model request is now the `changes_first_request`
 flag in `configs/defenses.yaml` instead of names in `scripts/run-arm-smoke.mjs`.
+
+
+## A-015 (2026-10-16) Completable repetitions for the remaining live-matrix cells
+
+Measured throughput on 2026-10-16 with the comparison lanes running in parallel was about 2 minutes per pair for every remaining
+matrix model (hosted Llama-3.2-11B and Gemma 4, local llama3.2 next to qwen3.5 on one GPU). At the registered repetitions the
+unfinished cells needed roughly 395 (Llama-11B), 475 (llama3.2) and 285 (Gemma 4) pairs, about 6 to 16 hours per job. Their
+repetitions are lowered to 2, the same as the registered defense comparison; qwen3.5:9b keeps 3 for its two remaining cells.
+No result of the affected cells had been produced: the partial runs were stopped before writing a report and are not used.
+Finished cells keep their original repetitions; the generated tables show each report's repetitions.
+
+Harness fix found while doing this: in gateway mode `scripts/run-arm-smoke.mjs` started one gateway process per pair and kept
+all of them until the run ended, and a signal left tool servers running. Each pair's gateway is now stopped once its audit is
+read, and SIGTERM/SIGINT stop every child server. Measurement logic is unchanged.

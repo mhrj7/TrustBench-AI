@@ -1,13 +1,105 @@
 {
   "schema_version": "1.0.0",
-  "note": "Registered live comparison of defended systems (configs/defenses.yaml) against the same baseline. Development split only; the sealed holdout is reserved for one confirmatory run. Prompt profile: the registry's primary profile.",
+  "note": "Registered live comparison of defended systems (configs/defenses.yaml) against the same baseline. Development split only; the sealed holdout is reserved for one confirmatory run. Prompt profile: the registry's primary profile. Lanes nvidia-5, ollama-2, nvidia-llama and gemma, and the pooled analysis, were added by A-014 before their runs.",
   "attack_rendering": "agentdojo_important_instructions",
   "temperature": 0.3,
   "lanes": {
-    "nvidia-1": {"model": "nvidia:openai/gpt-oss-20b", "repetitions": 2, "min_interval_ms": 1000, "systems": ["gateway_directive_flow", "gateway_capability"]},
-    "nvidia-2": {"model": "nvidia:openai/gpt-oss-20b", "repetitions": 2, "min_interval_ms": 1000, "systems": ["melon", "gateway_counterfactual_writes"]},
-    "nvidia-3": {"model": "nvidia:openai/gpt-oss-20b", "repetitions": 2, "min_interval_ms": 1000, "systems": ["spotlighting", "gateway_flow_block"]},
-    "nvidia-4": {"model": "nvidia:openai/gpt-oss-20b", "repetitions": 2, "min_interval_ms": 1000, "systems": ["tool_filter", "sandwich"]},
-    "ollama": {"model": "ollama:qwen3.5:9b", "repetitions": 2, "min_interval_ms": 0, "systems": ["gateway_directive_flow", "gateway_capability", "melon"]}
+    "nvidia-1": {
+      "model": "nvidia:openai/gpt-oss-20b",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "gateway_directive_flow",
+        "gateway_capability"
+      ]
+    },
+    "nvidia-2": {
+      "model": "nvidia:openai/gpt-oss-20b",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "melon",
+        "gateway_counterfactual_writes"
+      ]
+    },
+    "nvidia-3": {
+      "model": "nvidia:openai/gpt-oss-20b",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "spotlighting",
+        "gateway_flow_block"
+      ]
+    },
+    "nvidia-4": {
+      "model": "nvidia:openai/gpt-oss-20b",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "tool_filter",
+        "sandwich"
+      ]
+    },
+    "ollama": {
+      "model": "ollama:qwen3.5:9b",
+      "repetitions": 2,
+      "min_interval_ms": 0,
+      "systems": [
+        "gateway_directive_flow",
+        "gateway_capability",
+        "melon"
+      ]
+    },
+    "nvidia-5": {
+      "model": "nvidia:openai/gpt-oss-20b",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "camel",
+        "gateway_directive_flow_v2"
+      ]
+    },
+    "ollama-2": {
+      "model": "ollama:qwen3.5:9b",
+      "repetitions": 2,
+      "min_interval_ms": 0,
+      "systems": [
+        "camel",
+        "gateway_directive_flow_v2"
+      ]
+    },
+    "nvidia-llama": {
+      "model": "nvidia:meta/llama-3.2-11b-vision-instruct",
+      "repetitions": 2,
+      "min_interval_ms": 1000,
+      "systems": [
+        "gateway_capability",
+        "gateway_directive_flow",
+        "gateway_directive_flow_v2",
+        "camel"
+      ]
+    },
+    "gemma": {
+      "model": "gemini:gemma-4-26b-a4b-it",
+      "repetitions": 2,
+      "min_interval_ms": 2500,
+      "systems": [
+        "gateway_capability",
+        "gateway_directive_flow",
+        "gateway_directive_flow_v2",
+        "camel"
+      ]
+    }
+  },
+  "preregistered_pooled": {
+    "amendment": "A-014",
+    "models": [
+      "nvidia:meta/llama-3.2-11b-vision-instruct",
+      "gemini:gemma-4-26b-a4b-it"
+    ],
+    "system": "gateway_directive_flow",
+    "versus": "gateway_capability",
+    "metric": "attacker_goal",
+    "interval": "newcombe_95"
   }
 }
