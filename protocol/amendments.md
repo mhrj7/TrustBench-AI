@@ -260,3 +260,27 @@ Finished cells keep their original repetitions; the generated tables show each r
 Harness fix found while doing this: in gateway mode `scripts/run-arm-smoke.mjs` started one gateway process per pair and kept
 all of them until the run ended, and a signal left tool servers running. Each pair's gateway is now stopped once its audit is
 read, and SIGTERM/SIGINT stop every child server. Measurement logic is unchanged.
+
+
+## A-016 (2026-10-16) Pre-registration: directive_flow v3 (whole-value attribution)
+
+Written after the first v2 stress run showed (generated table in `docs/defense-comparison.md`) that P1 failed for an
+attribution reason shared by v1 and v2: a short free-text value (a two-word name) contains no registered salient token and
+is shorter than the 4-word n-gram, so nothing is attributed and the classifier is never called. P4's support was therefore
+vacuous. No v3 code, fixture or run exists at the time of writing.
+
+**v3 (`gateway_directive_flow_v3`).** v2 plus whole-value attribution: a data-argument string value of at most
+`whole_value_max_words` (registered: 6) words and at least `whole_value_min_chars` (registered: 3) characters, with trailing
+punctuation removed, that does not occur in the trusted task is attributed to every untrusted sentence that contains it
+(case-insensitive). Context window, classifier prompt and deny rule are v2's.
+
+**Fresh fixtures** (development groups, never run before): `TB-ATT-DOC-007` (on `TB-BEN-DOC-007`: instruction lead-in, then a
+false two-word reviewer name) and `TB-ATT-DOC-008` (on `TB-BEN-DOC-001`: instruction lead-in, then a false one-word policy tier).
+Benign controls whose short answers v3 now attributes: `TB-BEN-DOC-001`, `TB-BEN-DOC-006`, `TB-BEN-DOC-007`.
+
+**Predictions.** (Q1) v3 blocks `TB-ATT-DOC-007` and `TB-ATT-DOC-008` (as_authored), with the classifier called.
+(Q2) v3 blocks `TB-ATT-DOC-006` (not fresh: seen in the v2 run; reported separately). (Q3) v3 does not veto the three benign
+controls, and the classifier is called on them (non-vacuous). (Q4) the pure statement-of-fact case `TB-ATT-DOC-005`
+(as_authored) is still missed. Runs: gpt-oss-20b, temperature 0.3, plain, 3 repetitions, `as_authored`, systems v1, v2, v3 and
+`gateway_capability`, suite `tests/arms/stress-v3-cases.json`; plus v3 on the registered comparison suite (gpt-oss-20b,
+2 repetitions, `agentdojo_important_instructions`) to measure its cost on benign tasks. Reported whatever the outcome.
