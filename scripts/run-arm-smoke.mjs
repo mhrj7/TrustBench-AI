@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
 import { AgentDefenses } from "../src/agent/defenses.ts";
+import { runCamelAgent } from "../src/agent/camel.ts";
 import { rateFaultyFetch } from "../src/reliability/faults.ts";
 import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
@@ -134,7 +135,7 @@ const serviceEnv = (db) => ({ TRUSTBENCH_FIXTURE_PATH: fixturesPath, TRUSTBENCH_
 launch(["-m", "uvicorn", "src.tools.app:app", "--host", "127.0.0.1", "--port", String(baselinePort), "--log-level", "warning"], serviceEnv(baselineDb));
 await waitFor(baselinePort);
 
-if (!live && defendedSystem.agent_defenses.length) throw new Error(`${defendedSystemName} uses agent-side defenses, which only a live --model can exercise (a scripted trajectory ignores prompts)`);
+if (!live && (defendedSystem.agent_defenses.length || defendedSystem.architecture)) throw new Error(`${defendedSystemName} uses agent-side defenses or its own agent architecture, which only a live --model can exercise (a scripted trajectory ignores prompts)`);
 let defendedDirectPort = null;
 if (defendedSystem.transport === "direct") {
   defendedDirectPort = await freePort();
@@ -216,7 +217,11 @@ async function runArm(arm, testCase, fixture, rep) {
     }
     defenses = new AgentDefenses({ names: defendedSystem.agent_defenses, registry: defensesRegistry, writeTools: built.recovery.tool_classes.write, adapter: defenseAdapter });
   }
-  const result = await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
+  const architecture = arm === "defended" && defendedSystem.architecture ? defensesRegistry.architectures[defendedSystem.architecture] : null;
+  if (arm === "defended" && defendedSystem.architecture && defendedSystem.architecture !== "camel") throw new Error(`unknown architecture ${defendedSystem.architecture}`);
+  const result = architecture
+    ? await runCamelAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, architecture, recovery: { policy: built.recovery, seed: baseSeed } })
+    : await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
   const elapsedMs = Date.now() - started;
   const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
   const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
@@ -284,7 +289,7 @@ for (const { testCase, rep, order, arms } of runs) {
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
   entry.final_state_identical = canon(baseline.snapshot.state) === canon(defended.snapshot.state);
   entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
-  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
+  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null, camel: a.result.defense.camel ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
   entry.baseline = side(baseline);
   entry.defended = { ...side(defended), policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   for (const decision of defended.decisions) traces.push({ case_id: testCase.case_id, repetition: rep, arm: "defended", ...decision });
@@ -335,7 +340,7 @@ await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.js
 await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `reports/tests/tb024-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 
-const promptChanging = defendedSystem.agent_defenses.some((d) => ["spotlighting", "tool_filter"].includes(d));
+const promptChanging = defendedSystem.agent_defenses.some((d) => defensesRegistry.defenses[d]?.changes_first_request) || Boolean(defendedSystem.architecture && defensesRegistry.architectures[defendedSystem.architecture]?.changes_first_request);
 const required = (c) => [["run_config_identical", c.run_config_identical], ...(promptChanging ? [] : [["first_request_identical", c.first_request_identical]]), ["settings_identical", c.settings_identical]];
 const scriptedOnly = (c) => [["non_tool_messages_identical", c.non_tool_messages_identical], ["same_tool_call_sequence", c.same_tool_call_sequence],
   ["differences_attributable_to_gateway", c.differences_attributable_to_gateway], ...(c.kind === "benign" ? [["final_state_identical", c.final_state_identical]] : [])];

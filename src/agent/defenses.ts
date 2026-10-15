@@ -107,20 +107,24 @@ export class AgentDefenses {
    * signature-verified envelopes). One isolated classifier call, which never sees the user task, labels those sentences
    * as instruction or information. The write is denied only when its content traces back to an instruction.
    */
-  async directiveFlow(call: ToolCall, messages: Message[], config: AgentRunConfig, signal: AbortSignal): Promise<{ code: string; defense: string } | null> {
-    const cfg = this.registry.defenses.directive_flow!;
+  async directiveFlow(name: string, call: ToolCall, messages: Message[], config: AgentRunConfig, signal: AbortSignal): Promise<{ code: string; defense: string } | null> {
+    const cfg = this.registry.defenses[name]!;
     if (cfg.scope === "write_class_tools" && !this.writeTools.has(call.tool_name)) return null;
     const trusted = (config.user_prompt + "\n" + config.system_prompt).toLowerCase();
-    const sentences: string[] = [];
+    // Sentences grouped by tool output, so v2 can show each attributed sentence with its neighbours from the same output.
+    const outputs: string[][] = [];
     for (const m of messages.slice(2)) {
       if (m.role !== "user" || !m.content.includes('"type":"tool_result"')) continue;
       let parsed: any; try { parsed = JSON.parse(m.content.slice(m.content.indexOf("{"), m.content.lastIndexOf("}") + 1)); } catch { continue; }
       const output = parsed?.output;
       const trust = output?.provenance?.trust;
       if (!output || !cfg.untrusted_trust_levels.includes(trust ?? "unknown")) continue;
-      const walk = (v: unknown) => { if (typeof v === "string") sentences.push(...v.split(new RegExp(cfg.sentence_split)).map((x) => x.trim()).filter(Boolean)); else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+      const own: string[] = [];
+      const walk = (v: unknown) => { if (typeof v === "string") own.push(...v.split(new RegExp(cfg.sentence_split)).map((x) => x.trim()).filter(Boolean)); else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
       walk(output.payload ?? output);
+      outputs.push(own);
     }
+    const sentences = outputs.flat();
     const text = cfg.data_arguments.map((a: string) => call.arguments[a]).filter((v: unknown): v is string => typeof v === "string").join("\n");
     if (!text || !sentences.length) return null;
     const salient = new Set<string>();
@@ -128,24 +132,36 @@ export class AgentDefenses {
     const toks = text.toLowerCase().split(/\s+/).filter(Boolean);
     const grams = new Set<string>();
     for (let i = 0; i + cfg.ngram_size <= toks.length; i++) { const g = toks.slice(i, i + cfg.ngram_size).join(" "); if (!trusted.includes(g)) grams.add(g); }
-    const contributing = [...new Set(sentences.filter((s) => [...salient].some((t) => s.includes(t)) || [...grams].some((g) => s.toLowerCase().replace(/\s+/g, " ").includes(g))))];
+    const attributes = (s: string) => [...salient].some((t) => s.includes(t)) || [...grams].some((g) => s.toLowerCase().replace(/\s+/g, " ").includes(g));
+    const contributing = [...new Set(sentences.filter(attributes))];
     if (!contributing.length) return null;
     this.stats.checks++;
-    const passages = contributing.map((s, i) => `${i + 1}. ${s}`).join("\n");
-    const response = await this.generate({ request_id: `${config.run_id}-directive-${messages.length}`, messages: [{ role: "user", content: fill(template(cfg.classifier_prompt_template), { passages }) }], tools: [], settings: config.generation_settings }, signal);
+    const window = cfg.context_window_sentences ?? 0;
+    const inContext = (s: string) => {
+      if (!window) return s;
+      for (const own of outputs) {
+        const i = own.indexOf(s);
+        if (i < 0) continue;
+        return [...own.slice(Math.max(0, i - window), i), `${cfg.context_marker_open}${s}${cfg.context_marker_close}`, ...own.slice(i + 1, i + 1 + window)].join(" ");
+      }
+      return s;
+    };
+    const passages = contributing.map((s, i) => `${i + 1}. ${inContext(s)}`).join("\n");
+    const response = await this.generate({ request_id: `${config.run_id}-${name}-${messages.length}`, messages: [{ role: "user", content: fill(template(cfg.classifier_prompt_template), { passages }) }], tools: [], settings: config.generation_settings }, signal);
     let labels: Record<string, boolean> | null = null;
     try { const m = response.output_text.match(/\{[\s\S]*\}/); labels = m ? JSON.parse(m[0]) : null; } catch { labels = null; }
     const directive = labels ? contributing.findIndex((_s, i) => labels![String(i + 1)] === true) : (cfg.on_classifier_parse_failure === "deny" ? 0 : -1);
-    this.stats.classifications = [...(this.stats.classifications ?? []), { call_id: call.call_id, passages: contributing.map((x) => x.slice(0, 200)), labels }];
+    this.stats.classifications = [...(this.stats.classifications ?? []), { call_id: call.call_id, passages: contributing.map((x) => inContext(x).slice(0, 300)), labels }];
     if (directive < 0) return null;
-    this.stats.vetoes.push({ call_id: call.call_id, tool: call.tool_name, defense: "directive_flow", matched_on: labels ? contributing[directive]!.slice(0, 160) : "classifier_parse_failure" });
-    return { code: cfg.denied_error_code, defense: "directive_flow" };
+    this.stats.vetoes.push({ call_id: call.call_id, tool: call.tool_name, defense: name, matched_on: labels ? contributing[directive]!.slice(0, 160) : "classifier_parse_failure" });
+    return { code: cfg.denied_error_code, defense: name };
   }
 
   /** Task-masked re-execution (MELON-style) for every call, or only for write-class calls (counterfactual_writes). */
   async veto(call: ToolCall, messages: Message[], config: AgentRunConfig, signal: AbortSignal): Promise<{ code: string; defense: string } | null> {
-    if (this.has("directive_flow")) {
-      const blocked = await this.directiveFlow(call, messages, config, signal);
+    for (const name of this.names) {
+      if (this.registry.defenses[name]!.kind !== "directive_flow") continue;
+      const blocked = await this.directiveFlow(name, call, messages, config, signal);
       if (blocked) return blocked;
     }
     const defense = this.has("melon") ? "melon" : this.has("counterfactual_writes") ? "counterfactual_writes" : null;
