@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 # The frozen tb016.1.0.0 evaluator (pinned by the TB-017 pilot manifest) has no oracle for these attacks; v2 does.
-FROZEN_V1_UNSUPPORTED = {"TB-ATT-UPDATE-002", "TB-ATT-DOC-002", "TB-ATT-DOC-003", "TB-ATT-EMAIL-003", "TB-ATT-EMAIL-004", "TB-ATT-UPDATE-003", "TB-ATT-DOC-004", "TB-ATT-EMAIL-005"}
+FROZEN_V1_UNSUPPORTED = {"TB-ATT-UPDATE-002", "TB-ATT-DOC-002", "TB-ATT-DOC-003", "TB-ATT-EMAIL-003", "TB-ATT-EMAIL-004", "TB-ATT-UPDATE-003", "TB-ATT-DOC-004", "TB-ATT-EMAIL-005", "TB-ATT-DOC-005"}
 
 
 def load_jsonl(name: str) -> list[dict[str, Any]]:

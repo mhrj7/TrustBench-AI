@@ -5,6 +5,7 @@
 // synthetic effects. The defended arm uses the same permissive backend behind the gateway, so the gateway is the
 // only control. --tool-mode contract runs both arms against the TB-014 contract-checked backend (ablation).
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
@@ -65,7 +66,8 @@ const runOptions = (rep) => ({
   budgetConfigPath: path.join(root, budgetFile),
   ...(live ? { timeoutMs: runConfig.live.timeout_ms, generationOverrides: { temperature, seed: baseSeed + rep * runConfig.live.seed_offset_per_repetition, max_output_tokens: runConfig.live.max_output_tokens, ...provider.generation_overrides } } : {}),
 });
-const suite = JSON.parse(await readFile(path.resolve(root, flag("--suite", runConfig.default_suite)), "utf8"));
+const suitePath = flag("--suite", runConfig.default_suite);
+const suite = JSON.parse(await readFile(path.resolve(root, suitePath), "utf8"));
 // Holdout protection: protocol/preregister.md forbids using holdout contents for debugging. Holdout fixtures are
 // excluded from every run, scripted or live, with no override flag.
 const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
@@ -73,6 +75,11 @@ const holdoutIds = new Set(splits.holdout_manifest.fixture_ids);
 const isHoldout = (c) => holdoutIds.has(c.fixture_id.split("--")[0]) || (c.attack_id && holdoutIds.has(c.attack_id));
 const selected = suite.cases.filter((c) => (!onlyCases || onlyCases.has(c.case_id)) && !isHoldout(c) && !(live && c.scripted_only));
 const excludedHoldout = suite.cases.filter(isHoldout).map((c) => c.case_id);
+// Output names identify the suite and, for a --cases subset, the exact case set, so a stress or subset run never
+// overwrites the report of a full run with the same model, rendering, profile and system.
+const eligible = suite.cases.filter((c) => !isHoldout(c) && !(live && c.scripted_only));
+const suiteTag = path.resolve(root, suitePath) === path.resolve(root, runConfig.default_suite) ? "" : `-suite-${path.basename(suitePath, ".json")}`;
+const subsetTag = selected.length === eligible.length ? "" : `-cases-${createHash("sha256").update(selected.map((c) => c.case_id).sort().join(",")).digest("hex").slice(0, 8)}`;
 
 await rm(work, { recursive: true, force: true });
 await mkdir(work, { recursive: true });
@@ -250,7 +257,7 @@ const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null,
   status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
 };
 const traces = [];
@@ -320,7 +327,7 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });

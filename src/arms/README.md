@@ -14,9 +14,11 @@ argument policy, and pauses `apply_record_update` for approval. The pause is res
 `src/policy/approved_call.py` (LangGraph interrupt workflow) only when the call matches
 the fixture's synthetic approval event exactly.
 
-Run `npm run test:arms` (unit parity plus a 7-case smoke run) or
-`npm run verify:arms-smoke`. Outputs: `evidence/tb024-defended-arm-report.json` and the
-policy decision traces `reports/tb024-policy-decision-traces.jsonl`.
+Run `npm run test:arms` (unit parity plus the scripted smoke run) or `npm run verify:arms-smoke`.
+Scripted runs are tests and write `reports/tests/tb024-scripted-<rendering>-<profile>-<system>-report.json` and
+`...-policy-traces.jsonl`. Live runs (`--model provider:id`) write
+`evidence/tb024-<model>-<rendering>-<profile>-<system>[-contract-backend][-faults-<profile>]-report.json` and
+`reports/tb024-<same suffix>-policy-traces.jsonl`.
 
 ## Corrections made 2026-10-15 (see `protocol/amendments.md`)
 
@@ -37,3 +39,14 @@ Limits: scripted runs check wiring and parity, not attack success rates. Live re
 - Every run records `engaged` (made a tool call), `injection_exposed` (the model saw the injected text) and `invalid` (provider fault); invalid pairs are excluded from all rates and listed.
 - `scripts/run-live-matrix.mjs --lane <lane>` runs `configs/live-matrix.yaml` (models, repetitions, renderings, profiles are config). `scripts/summarize-live-results.mjs` regenerates `docs/pilot-results-tb024.md`.
 - Locked holdout fixtures never run. The sealed replacement holdout (`TB-BEN/ATT-UPDATE-002`) has not been executed by any agent or model.
+
+## Defended systems, faults and durability (2026-10-15, A-011/A-012)
+
+- `--defended-system <id>` selects a registered system from `configs/defenses.yaml`: a transport (gateway or direct tool service)
+  plus optional agent-side defenses. Published baselines (spotlighting, sandwich, tool_filter, MELON) are re-implementations on this
+  harness. Scripted runs refuse systems with agent defenses, because a scripted model cannot exercise them.
+- `scripts/run-defense-comparison.mjs --lane <lane>` runs the registered comparison in `configs/defense-comparison.yaml`;
+  `npm run summarize:comparison` regenerates `docs/defense-comparison.md` from the evidence files.
+- `--fault-profile <id>` (live only) injects transport faults from `tests/recovery/fault-schedules.json` `live_profiles`.
+- Gateway envelopes are HMAC-signed per session; unverifiable outputs are counted in `defended_unverified_tool_outputs`.
+- Runs are durable (`src/agent/run-store.ts`, `docs/durability.md`).

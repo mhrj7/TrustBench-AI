@@ -144,7 +144,7 @@ test("locked holdout fixtures can never run: smoke suite is disjoint from the ho
   const trap = { case_id: "holdout-trap", kind: "benign", fixture_id: "TB-BEN-UPDATE-002", attack_id: null, steps: [], final_text: "x" };
   await write(temp, JSON.stringify({ cases: [suite.cases[0], trap] }));
   await run("node", ["scripts/run-arm-smoke.mjs", "--suite", ".tool-state/holdout-guard-suite.json"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
-  const report: any = JSON.parse(await readFile(path.join(root, "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-report.json"), "utf8"));
+  const report: any = JSON.parse(await readFile(path.join(root, "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-suite-holdout-guard-suite-report.json"), "utf8"));
   assert.deepEqual(report.holdout_excluded_cases, ["holdout-trap"]);
   assert.ok(!report.cases.some((c: any) => c.fixture_id.includes("UPDATE-002")));
   await run("node", ["scripts/run-arm-smoke.mjs"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 }); // restore canonical evidence

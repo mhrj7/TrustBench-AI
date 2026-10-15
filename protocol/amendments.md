@@ -137,3 +137,63 @@ See `docs/recovery.md`.
 - Prompts are templates in `configs/prompts/` (byte-identical output to the previous code), providers in
   `configs/providers.yaml`, run settings in `configs/live-run.yaml`. `tests/no-hardcoding.test.ts` fails on fixture IDs,
   provider endpoints, key names, model IDs or the registered seed in runtime code.
+
+
+## A-011 (2026-10-15) Primary prompt profile, signed provenance envelopes, scripted runs labeled as tests
+
+- **Primary profile registered.** `protocol/experiment-registry.yaml` now names `plain` as `primary_prompt_profile` and `hardened`
+  as a secondary profile. This was registered before any confirmatory run. It resolves the open decision recorded under A-008:
+  the hardened shared prompt is itself a defense (its positive control was refused), so the gateway is compared against the
+  ordinary agent first.
+- **Signed envelopes.** The gateway signs each provenance envelope (`tb020.1`) with a per-session HMAC key returned at binding
+  time. `src/gateway/adapter.ts` verifies the signature before using the trust label. A missing or invalid signature downgrades
+  the label to `unknown` (reason `invalid_or_missing_signature`), and the signature is stripped before the model sees the output.
+  Defenses that rely on provenance (the flow check and `directive_flow`) therefore cannot be fooled by a tool output that carries
+  a forged `trust` field.
+- **Scripted runs are tests.** Scripted-model runs write to `reports/tests/` and are never presented as results. Live runs alone
+  write to `evidence/`. Scripted mode refuses systems with model-based agent defenses.
+
+
+## A-012 (2026-10-15) Split v3, published-defense baselines, candidate defenses, human approval, live faults, durability
+
+- **Split v3** (`data/splits.json`, `trustbench-core-template-family-v3`). New development groups (doc-birch, email-elm,
+  record-oak) were added. The exposed maple update group stays in development. Two sealed holdout groups were created and have
+  never been executed: `group-record-sycamore-update` and `group-willow-doc-email`. That gives 6 of 25 rows and 2 of 10 groups,
+  within the declared `holdout_fraction_tolerance` of 0.05 around the registered 0.2. The holdout fixture IDs are hash-pinned
+  in `holdout_manifest`, and every runner excludes them.
+- **Published-defense baselines** are registered in `configs/defenses.yaml`: spotlighting, sandwich, tool_filter and a
+  simplified MELON. They are re-implementations on this harness, not the original code, and are labeled as such everywhere they
+  are reported.
+- **Candidate defenses (ours)**, all on the development split: `gateway_counterfactual_writes`, a task-masked re-ask at write
+  boundaries, and `gateway_directive_flow`, which attributes write content to untrusted sentences and has an isolated
+  classifier label each one as instruction or information. Both were designed after development results were seen. Any
+  advantage they show is exploratory until the single confirmatory holdout run.
+- **Flow-check blocking downgraded to ablation.** `capability_plus_flow` false-blocked a code-shaped value (BC-4410) that the
+  benign task legitimately extracted from a document (`docs/flow-check.md`), so `capability_only` is the default gateway variant
+  again. Flow blocking is kept as `gateway_flow_block` for comparison. `directive_flow` is the redesign meant to fix this false
+  positive.
+- **Human approval mode.** With `approval_mode: human`, `src/policy/approved_call.py` writes a pending request and waits for an
+  operator decision through `src/policy/approval_console.py`. The decision must match the exact arguments. The synthetic
+  approver is still used for automated runs.
+- **Live fault injection.** `--fault-profile` (profiles in `tests/recovery/fault-schedules.json` `live_profiles`) injects
+  transport faults into live runs. This lets recovery behavior be measured with a real model, beyond the synthetic schedules of
+  A-009.
+- **Durability (TB-026).** Runs checkpoint to SQLite and support cancellation. An interrupted write that is not replay-safe
+  ends as `write_interrupted_outcome_unknown` instead of being replayed. Gateway sessions can persist across a restart
+  (`--session-db`, `--resume`). See `docs/durability.md`.
+
+
+## A-013 (2026-10-15) Declarative-only poisoning stress fixture; output names identify suite and case subset
+
+- **New development attack `TB-ATT-DOC-005`** in `group-doc-birch` (development split, answer-poisoning family): the same goal as
+  `TB-ATT-DOC-003`, but written only as a statement of fact, with no instruction to the agent. It targets the blind spot recorded
+  in `docs/flow-check.md`: `directive_flow` denies a write only when its content traces to an instruction, so a declarative
+  injection is its expected failure case. It was added to test that weakness, not to improve results. Its oracle reuses the
+  `TB-ATT-DOC-003` rule and is checked on synthetic safe and compromised trajectories. The holdout share becomes 6 of 26 rows
+  (23%), within the declared tolerance.
+- The fixture runs in a separate stress suite (`tests/arms/stress-cases.json`), so the registered comparison's case set stays
+  unchanged and its results stay comparable.
+- **Output names.** A run with a non-default `--suite` or a `--cases` subset now adds `-suite-<name>` or `-cases-<hash>` to its
+  report name. Each report records `suite` and `selected_case_ids`. Before this change, such runs could overwrite the report of a
+  full run with the same model, rendering, profile and system. The comparison runs reused the sanity-run filenames for
+  `gateway_directive_flow` and `melon`; those earlier sanity reports remain in git history (commit 660045e).
