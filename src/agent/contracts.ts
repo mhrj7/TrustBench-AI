@@ -11,6 +11,8 @@ export const AgentRunConfigSchema = z.object({
   max_steps: z.number().int().min(1).max(100),
   timeout_ms: z.number().int().min(1).max(600_000),
   planned_input_tokens_per_call: z.number().int().positive(),
+  /** "stop" (TB-015 default) ends the run at the first failed tool call; "continue" returns the error to the model. */
+  on_tool_error: z.enum(["stop", "continue"]).default("stop"),
 }).strict();
 
 export type AgentRunConfig = z.infer<typeof AgentRunConfigSchema>;

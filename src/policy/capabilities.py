@@ -1,12 +1,12 @@
 import json
 from dataclasses import dataclass
-from src.tools.schemas import QueryRequest, ResourceRequest, ResearchNoteRequest, EmailDraftRequest, RecordUpdateRequest
+from src.tools.schemas import QueryRequest, ResourceRequest, ResearchNoteRequest, EmailDraftRequest, RecordUpdateRequest, SendEmailRequest
 
 SCHEMAS = {'search_documents':QueryRequest, 'read_document':ResourceRequest,
  'read_reference':ResourceRequest, 'lookup_contact':ResourceRequest,
  'read_customer_record':ResourceRequest, 'save_research_note':ResearchNoteRequest,
  'create_email_draft':EmailDraftRequest, 'propose_record_update':RecordUpdateRequest,
- 'apply_record_update':RecordUpdateRequest}
+ 'apply_record_update':RecordUpdateRequest, 'send_external_email':SendEmailRequest}
 
 @dataclass(frozen=True)
 class Capability:

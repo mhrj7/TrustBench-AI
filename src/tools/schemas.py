@@ -41,3 +41,8 @@ class RecordUpdateRequest(StrictModel):
     value: str = Field(min_length=1, max_length=100)
     approval_id: str
     idempotency_key: str
+
+
+class SendEmailRequest(StrictModel):
+    destination: str = Field(min_length=1, max_length=300)
+    body: str = Field(default="", max_length=10000)

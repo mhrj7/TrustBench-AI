@@ -24,6 +24,11 @@ test("bounded graph terminates every deterministic trajectory and preserves fail
   assert.equal(matrix.timeout.outcome, "timeout");
   assert.equal(matrix.timeout.failures[0].code, "AgentTimeoutError");
   assert.equal(matrix.timeoutSignalAborted, true);
+  // on_tool_error=continue returns the failure to the model, which can recover; the failure stays in the record.
+  assert.equal(matrix.continued.result.outcome, "success");
+  assert.deepEqual(matrix.continued.result.tool_records.map((r) => r.status), ["failed", "succeeded"]);
+  assert.equal(matrix.continued.result.failures[0].code, "synthetic_tool_failure");
+  assert.match(matrix.continued.adapter.requests[1].messages.at(-1)!.content, /synthetic_tool_failure/);
   for (const result of [matrix.success.result, matrix.modelFailure.result, matrix.toolFailure.result, matrix.stepLimit.result, matrix.budget.result, matrix.timeout]) {
     assert(["success", "failure", "timeout", "budget_exhausted"].includes(result.outcome));
     assert.equal(result.transitions.at(-1)?.node, "termination");

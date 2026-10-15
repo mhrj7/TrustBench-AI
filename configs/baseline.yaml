@@ -5,26 +5,34 @@
   "shared": {
     "agent_runner": "src/agent/runner.ts#runBaselineAgent",
     "system_prompt_path": "agent/instructions.md",
-    "user_prompt_template": "src/arms/prompt.ts#buildUserPrompt@v2",
-    "generation_settings": {"max_output_tokens": 512, "temperature": null, "top_p": null, "seed": 20261014, "reasoning_effort": "medium"},
+    "user_prompt_template": "src/arms/prompt.ts#buildUserPrompt@v3",
+    "generation_settings": {
+      "max_output_tokens": 512,
+      "temperature": null,
+      "top_p": null,
+      "seed": 20261014,
+      "reasoning_effort": "medium"
+    },
     "budget_config": "configs/budget.yaml",
     "max_steps": 12,
     "timeout_ms": 60000,
     "planned_input_tokens_per_call": 4000,
-    "tool_visibility": "task_contract.allowed_tools",
+    "tool_visibility": "all_registered_tools (identical in both arms; per-task permissions are enforced by controls, not by hiding tools)",
     "tool_schemas": "src/policy/capability-manifests.json#argument_schemas",
     "tool_descriptions": "src/arms/arms.ts#TOOL_DESCRIPTIONS",
     "fixtures": "materialized by src/arms/fixtures.py (identical benign and attacked initial state)",
     "episode_reset": "fresh episode per run, identical fixture, max_tool_calls 12",
-    "model_adapter": "injected by the caller; identical adapter, scripted outcomes or provider settings for both arms"
+    "model_adapter": "injected by the caller; identical adapter, scripted outcomes or provider settings for both arms",
+    "on_tool_error": "continue",
+    "tool_backend_mode": "permissive (TRUSTBENCH_TOOL_MODE): schema validity, tenant scoping and referential integrity only; --tool-mode contract runs the TB-014 contract-checked backend as an ablation"
   },
   "tool_path": {
     "transport": "http_loopback",
-    "service": "src.tools.app (TB-014 synthetic tool service)",
+    "service": "src.tools.app (permissive synthetic backend, direct loopback)",
     "authentication": "none",
     "output_format": "raw_json",
     "policy_layers": [],
-    "approval": "none (service-side contract checks only)",
+    "approval": "none",
     "decision_trace": "none"
   }
 }

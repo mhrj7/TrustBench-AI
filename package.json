@@ -16,7 +16,7 @@
     "verify:smoke-suite": "node scripts/run-smoke-suite.mjs",
     "test:model-adapter": "node --test tests/model-adapter.test.ts",
     "verify:model-adapter": "node scripts/verify-model-adapter.mjs",
-    "test:tool-service": ".venv-tools/bin/python -m pytest -q src/tools/tests/test_integration.py",
+    "test:tool-service": ".venv-tools/bin/python -m pytest -q src/tools/tests/test_integration.py tests/tools --basetemp=.tool-state/pytest-tools",
     "verify:tool-service": "node scripts/verify-tool-service.mjs",
     "test:baseline-agent": "node --test tests/baseline-agent.test.ts",
     "verify:baseline-agent": "node scripts/verify-baseline-agent.mjs",
@@ -47,7 +47,7 @@
     "test:approval": "mkdir -p .tool-state && .venv-tools/bin/python -m pytest -q tests/approval --basetemp=.tool-state/pytest-approval --junitxml=reports/tb022-approval-tests.xml",
     "verify:approval-flow": ".venv-tools/bin/python scripts/verify-approval-flow.py",
     "test:arms": "node --test tests/arms.test.ts",
-    "verify:arms-smoke": "node scripts/run-arm-smoke.mjs > /dev/null",
+    "verify:arms-smoke": "node scripts/run-arm-smoke.mjs > /dev/null && node scripts/run-arm-smoke.mjs --include-holdout-mechanics > /dev/null",
     "verify:env-example": "node scripts/check-env-example.mjs",
     "arms:live-local": "node scripts/run-arm-smoke.mjs --model ollama:qwen3.5:9b"
   },

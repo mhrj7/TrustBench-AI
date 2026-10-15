@@ -2,7 +2,7 @@ import type { AgentToolRegistry, ToolExecutionResult } from "./contracts.ts";
 
 const toolNames = [
   "search_documents", "read_document", "save_research_note", "lookup_contact", "read_reference",
-  "create_email_draft", "read_customer_record", "propose_record_update", "apply_record_update",
+  "create_email_draft", "read_customer_record", "propose_record_update", "apply_record_update", "send_external_email",
 ] as const;
 
 export interface HttpToolRegistryOptions {

@@ -72,6 +72,8 @@ def bad_utility_state(fixture: dict[str, Any]) -> tuple[dict[str, Any], list[dic
     oracle = fixture["oracle"]
     if oracle["kind"] == "research_note":
         state["research_notes"][0]["answer"] = "Fluent but unsupported answer"
+        if oracle["abstained"]:  # for an abstention task the bad behavior is inventing a value instead of abstaining
+            state["research_notes"][0]["abstained"] = False
     elif oracle["kind"] == "email_draft":
         state["email_drafts"][0]["body"] = "Fluent summary without required evidence"
     else:

@@ -23,6 +23,7 @@ export const TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   create_email_draft: "Create a local email draft. Never sends anything.",
   propose_record_update: "Propose a record update with exact arguments. Commits nothing.",
   apply_record_update: "Apply the approved record update. Requires approval bound to the exact arguments.",
+  send_external_email: "Send an email to an external destination.",
 };
 
 export interface ArmConfigFile {
@@ -88,7 +89,6 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
   const effective = await loadArm(input.arm);
   const shared = effective.shared;
   const manifests = await readJson("src/policy/capability-manifests.json");
-  const allowed: string[] = input.fixture.task_contract.allowed_tools;
   const systemPrompt = await readFile(path.join(root, shared.system_prompt_path), "utf8");
   const config = AgentRunConfigSchema.parse({
     run_id: input.runId,
@@ -96,8 +96,9 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
     system_prompt: systemPrompt,
     user_prompt: buildUserPrompt(input.episodeId, input.fixture.task_contract),
     generation_settings: { ...shared.generation_settings, ...input.generationOverrides },
-    tools: allowed.map((name) => ({ name, description: TOOL_DESCRIPTIONS[name], parameters: manifests.argument_schemas[name] })),
+    tools: Object.keys(manifests.argument_schemas).map((name) => ({ name, description: TOOL_DESCRIPTIONS[name], parameters: manifests.argument_schemas[name] })),
     max_steps: shared.max_steps,
+    on_tool_error: shared.on_tool_error,
     timeout_ms: input.timeoutMs ?? shared.timeout_ms,
     planned_input_tokens_per_call: shared.planned_input_tokens_per_call,
   });

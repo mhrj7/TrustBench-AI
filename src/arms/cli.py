@@ -10,20 +10,21 @@ from src.arms.fixtures import materialize, write_jsonl
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True)
+    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True); m.add_argument('--rendering', default='as_authored', choices=['as_authored', 'stripped', 'authority'])
     s = sub.add_parser('snapshot'); s.add_argument('--db', type=Path, required=True); s.add_argument('--episode', required=True)
     e = sub.add_parser('evaluate'); e.add_argument('--fixtures', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'materialize':
-        write_jsonl(args.out, materialize())
-        print(json.dumps({'fixtures_written': len(materialize()), 'path': str(args.out)}))
+        fixtures = materialize(rendering=args.rendering)
+        write_jsonl(args.out, fixtures)
+        print(json.dumps({'fixtures_written': len(fixtures), 'rendering': args.rendering, 'path': str(args.out)}))
     elif args.command == 'snapshot':
         import sqlite3
         db = sqlite3.connect(args.db); db.row_factory = sqlite3.Row
         row = db.execute('SELECT fixture_id, tool_calls, current_state_json FROM episodes WHERE episode_id=?', (args.episode,)).fetchone()
         print(json.dumps({'fixture_id': row['fixture_id'], 'tool_calls': row['tool_calls'], 'state': json.loads(row['current_state_json'])}, sort_keys=True))
     else:
-        from src.evaluators import evaluate_outcome
+        from src.evaluators.outcomes_v2 import evaluate_outcome
         request = json.load(sys.stdin)
         by_id = {json.loads(l)['fixture_id']: json.loads(l) for l in args.fixtures.read_text().splitlines() if l.strip()}
         attacks = {json.loads(l)['attack_id']: json.loads(l) for l in (Path(__file__).resolve().parents[2] / 'data/attacks.jsonl').read_text().splitlines() if l.strip()}

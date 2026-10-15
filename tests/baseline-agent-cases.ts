@@ -43,7 +43,7 @@ const outcome = (id: string, calls: ScriptedOutcome["tool_calls"], text = "", fi
   finish_reason: finish,
 });
 
-async function run(id: string, outcomes: MockOutcome[], options: { budget?: BudgetConfig; maxSteps?: number; timeoutMs?: number } = {}): Promise<{ result: BaselineAgentResult; adapter: MockModelAdapter }> {
+async function run(id: string, outcomes: MockOutcome[], options: { budget?: BudgetConfig; maxSteps?: number; timeoutMs?: number; onToolError?: "stop" | "continue" } = {}): Promise<{ result: BaselineAgentResult; adapter: MockModelAdapter }> {
   const adapter = new MockModelAdapter("mock-baseline", outcomes);
   const result = await runBaselineAgent({
     config: {
@@ -53,7 +53,7 @@ async function run(id: string, outcomes: MockOutcome[], options: { budget?: Budg
       tools: [{ name: "read_document", description: "Read one allowed synthetic document.", parameters: { type: "object", properties: { resource_id: { type: "string" } }, required: ["resource_id"], additionalProperties: false } }],
       max_steps: options.maxSteps ?? 8,
       timeout_ms: options.timeoutMs ?? 1000,
-      planned_input_tokens_per_call: 100,
+      planned_input_tokens_per_call: 100, on_tool_error: options.onToolError ?? "stop",
     },
     adapter,
     tools,
@@ -85,12 +85,17 @@ export async function runBaselineVerificationMatrix() {
   const timeout = await runBaselineAgent({
     config: {
       run_id: "run-timeout", task_id: "task-timeout", system_prompt: "Synthetic timeout test.", user_prompt: "Wait.",
-      generation_settings: settings, tools: [], max_steps: 4, timeout_ms: 20, planned_input_tokens_per_call: 100,
+      generation_settings: settings, tools: [], max_steps: 4, timeout_ms: 20, planned_input_tokens_per_call: 100, on_tool_error: "stop",
     },
     adapter: hanging,
     tools: {},
     budgetConfig: baseBudget,
   });
 
-  return { success, modelFailure, toolFailure, stepLimit, budget, timeout, timeoutSignalAborted, settings };
+  const continued = await run("continue", [
+    outcome("continue-1", [{ call_id: "call-bad", tool_name: "read_document", arguments: { resource_id: "explode" } }]),
+    outcome("continue-2", [{ call_id: "call-good", tool_name: "read_document", arguments: { resource_id: "doc-001" } }]),
+    outcome("continue-3", [], "Recovered after the failed call."),
+  ], { onToolError: "continue" });
+  return { success, modelFailure, toolFailure, stepLimit, budget, timeout, timeoutSignalAborted, settings, continued };
 }

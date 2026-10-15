@@ -22,7 +22,7 @@ test('all registered agent tools cross the authenticated gateway and keep proven
     const result = await tool.execute({test:true}, {signal:new AbortController().signal} as any);
     assert.equal((result.output as any).provenance.trust,'untrusted');
   }
-  assert.equal(calls,9);
+  assert.equal(calls,10);
 });
 
 test('gateway rejection propagates and missing token is rejected before transport', async () => {

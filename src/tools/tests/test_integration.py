@@ -79,7 +79,9 @@ def test_every_fixture_allowlisted_tool_has_a_schema_validated_route(client):
         for route in client.app.routes
         if "/tools/" in route.path
     }
-    assert routes == allowed
+    # send_external_email is a deliberately non-allowlisted synthetic sink used only by attack scenarios.
+    assert routes == allowed | {"send_external_email"}
+    assert "send_external_email" not in allowed
 
 
 def test_read_search_note_contact_reference_and_proposal_surfaces(client):

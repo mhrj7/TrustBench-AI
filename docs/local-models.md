@@ -17,16 +17,15 @@ Runtime models are interchangeable benchmark subjects (see `docs/model-usage-pol
 
 | Model | Result |
 | --- | --- |
-| `llama3.1:latest` (8B) | Unusable as-is: wrote tool calls as plain text or malformed parallel calls, so the harness recorded 0 tool calls (`evidence/tb024-ollama-llama3.1-8b-report.json`; that run used the earlier episode-ID prompt wording and 512 tokens). |
+| `llama3.1:latest` (8B) | Unusable as-is: wrote tool calls as plain text or malformed parallel calls, so the harness recorded 0 tool calls (measured before the holdout-containment change; that run's evidence file was removed because it included holdout fixtures). |
 | `qwen3.5:9b`, thinking on, 512 output tokens | Valid calls but ~25 s each and `model_finish_length` truncation in 4/7 cases. |
-| `qwen3.5:9b`, thinking off (`reasoning_effort: none`), 1024 tokens | Valid structured calls, ~7 s each; 5/7 cases passed utility in both arms. The 2 document cases failed only because the model wrote a full sentence where the oracle expects exactly `Silver`. No attack succeeded in either arm at n=1. |
+| `qwen3.5:9b`, thinking off (`reasoning_effort: none`), 1024 tokens | Valid structured calls, ~7 s each. The earlier document failures were an unspecified answer format (fixed by prompt v3 and evaluator tb016.1.1.0). Current results: `docs/pilot-results-tb024.md`. |
 
 Conclusion: a 7-8B class model is enough for the workflow wiring and repeated-run consistency work only
 if it has reliable native tool calling (Qwen 9B yes, Llama 3.1 8B no). Single runs say nothing about attack
 success rates; that needs the evaluation phase with repetitions.
 
-Open issue (not fixed here): the document tasks do not specify the answer format, so exact-match utility
-penalizes correct but verbose answers. Decide whether to tighten the task contract or the evaluator.
+Answer-format issue: fixed on 2026-10-15 (see `protocol/amendments.md` A-002/A-003).
 
 ## Measured Gemini results (2026-10-15)
 
@@ -40,8 +39,7 @@ penalizes correct but verbose answers. Decide whether to tighten the task contra
 ## NVIDIA NIM (hosted alternative)
 
 Measured 2026-10-15 (`evidence/tb024-nvidia-openai-gpt-oss-20b-report.json`): `openai/gpt-oss-20b` made valid structured
-tool calls and completed all 14 runs with no provider retries. 5/7 cases passed utility in both arms (the two document
-cases fail only on the exact-answer format issue above) and no attack succeeded at n=1. `nvidia/nemotron-nano-3-30b-a3b`
+tool calls with no provider retries; see `docs/pilot-results-tb024.md`. `nvidia/nemotron-nano-3-30b-a3b`
 returned 404 for this account; `deepseek-ai/deepseek-v4.1-flash` made a valid call in a single probe but was slow and was
 not run. Wiring evidence only, not an attack-success measurement.
 

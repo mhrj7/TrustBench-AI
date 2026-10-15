@@ -137,7 +137,7 @@ export async function runBaselineAgent(input: {
             messages.push(toolResultMessage(record));
           }
         }
-        if (toolRecords.slice(-response.tool_calls.length).some((record) => record.status === "failed")) {
+        if (config.on_tool_error === "stop" && toolRecords.slice(-response.tool_calls.length).some((record) => record.status === "failed")) {
           finalText = response.output_text;
           return terminate("failure");
         }

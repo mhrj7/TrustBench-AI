@@ -4,13 +4,18 @@
   "note": "JSON content (valid YAML). Effective config = configs/baseline.yaml with only the tool_path overrides below. tests/arms.test.ts rejects any other difference.",
   "extends": "configs/baseline.yaml",
   "allowed_differences": [
-    "tool_path.transport", "tool_path.service", "tool_path.authentication", "tool_path.output_format",
-    "tool_path.policy_layers", "tool_path.approval", "tool_path.decision_trace"
+    "tool_path.transport",
+    "tool_path.service",
+    "tool_path.authentication",
+    "tool_path.output_format",
+    "tool_path.policy_layers",
+    "tool_path.approval",
+    "tool_path.decision_trace"
   ],
   "overrides": {
     "tool_path": {
       "transport": "http_loopback",
-      "service": "src.gateway.app (TB-019 gateway in front of the same src.tools.app backend)",
+      "service": "src.gateway.app (TB-019 gateway in front of the same permissive src.tools.app backend)",
       "authentication": "host-issued per-episode bearer session, never exposed to prompts or tool schemas",
       "output_format": "provenance_envelope tb020.1 (payload identical to baseline raw_json)",
       "policy_layers": [
@@ -24,12 +29,17 @@
     }
   },
   "unchanged_by_design": [
-    "model and generation settings", "system prompt", "user prompt", "tool names, descriptions and schemas visible to the model",
-    "step, time, token, call and cost budgets", "initial state and task contract", "agent state machine and failure handling"
+    "model and generation settings",
+    "system prompt",
+    "user prompt",
+    "tool names, descriptions and schemas visible to the model",
+    "step, time, token, call and cost budgets",
+    "initial state and task contract",
+    "agent state machine and failure handling"
   ],
   "known_limitations": [
-    "The shared runner stops on the first failed tool call, so a blocked call ends a defended run as failure; recovery is studied separately (T-E3).",
-    "The baseline backend still enforces its own task-contract checks (TB-014); only the gateway layers above differ.",
-    "Model-visible tool results carry the provenance envelope in the defended arm; this is an intended gateway behavior."
+    "Model-visible tool results carry the provenance envelope in the defended arm; this is an intended gateway behavior.",
+    "Gateway capability checks assume exact-ID matching; normalization gaps are tested in tests/policy but not proven absent.",
+    "Gemini's compatibility endpoint rejects seeds, so Gemini pairs are not seed-matched (recorded in docs/local-models.md)."
   ]
 }

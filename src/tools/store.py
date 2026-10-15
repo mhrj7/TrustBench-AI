@@ -17,6 +17,7 @@ class EpisodeStore:
     def __init__(self, fixture_path: Path, database_path: Path):
         self.fixture_path = fixture_path
         self.database_path = database_path
+        self.enforce_contract_allowlist = True
         self._lock = threading.RLock()
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self.fixtures = self._load_fixtures()
@@ -83,7 +84,7 @@ class EpisodeStore:
             if row is None:
                 raise ToolError(404, "episode_not_initialized")
             contract = json.loads(row["contract_json"])
-            if tool_name not in contract["allowed_tools"]:
+            if self.enforce_contract_allowlist and tool_name not in contract["allowed_tools"]:
                 raise ToolError(403, "tool_not_allowed_by_contract")
             from src.policy.approvals import check_transaction
             receipt_id, cached_result = check_transaction(db, row, tool_name)
