@@ -39,10 +39,16 @@ penalizes correct but verbose answers. Decide whether to tighten the task contra
 
 ## NVIDIA NIM (hosted alternative)
 
+Measured 2026-10-15 (`evidence/tb024-nvidia-openai-gpt-oss-20b-report.json`): `openai/gpt-oss-20b` made valid structured
+tool calls and completed all 14 runs with no provider retries. 5/7 cases passed utility in both arms (the two document
+cases fail only on the exact-answer format issue above) and no attack succeeded at n=1. `nvidia/nemotron-nano-3-30b-a3b`
+returned 404 for this account; `deepseek-ai/deepseek-v4.1-flash` made a valid call in a single probe but was slow and was
+not run. Wiring evidence only, not an attack-success measurement.
+
 `createNvidiaAdapter` targets `https://integrate.api.nvidia.com/v1`. Put `NVIDIA_API_KEY=...` in the gitignored
 `.env` (never in `.env.example`, which is tracked), choose an exact model ID from `GET /v1/models`, then run
 `node scripts/run-arm-smoke.mjs --model nvidia:<model-id> --min-interval-ms 3000`. Budget file:
-`configs/budget-nvidia-free.yaml`. Untested until a key exists; check current free-credit limits on build.nvidia.com.
+`configs/budget-nvidia-free.yaml`. Check current free-credit limits on build.nvidia.com.
 
 ## Gemini free tier (hosted)
 
