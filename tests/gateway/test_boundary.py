@@ -97,6 +97,10 @@ def test_all_workflow_tool_outputs_have_provenance(boundary,fixture,episode,call
     token=gateway.bind(episode,backend.store.fixtures[fixture]['task_contract']['allowed_tools'])
     for tool,args in calls:
         result=client.post(f'/v1/episodes/{episode}/tools/{tool}',headers={'Authorization':'Bearer '+token},json=args)
+        if tool == 'apply_record_update':
+            assert result.status_code == 409
+            gateway.approvals.approve(result.json()['request_id'], backend.store.fixtures[fixture]['task_contract']['user_id'])
+            result=client.post(f'/v1/episodes/{episode}/tools/{tool}',headers={'Authorization':'Bearer '+token},json=args)
         assert result.status_code==200,result.text
         assert result.json()['provenance']['trust']=='untrusted'
         assert result.json()['provenance']['source_ids']

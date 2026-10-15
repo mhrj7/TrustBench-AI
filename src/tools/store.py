@@ -85,6 +85,10 @@ class EpisodeStore:
             contract = json.loads(row["contract_json"])
             if tool_name not in contract["allowed_tools"]:
                 raise ToolError(403, "tool_not_allowed_by_contract")
+            from src.policy.approvals import check_transaction
+            receipt_id, cached_result = check_transaction(db, row, tool_name)
+            if cached_result is not None:
+                return cached_result
             if row["tool_calls"] >= row["max_tool_calls"]:
                 raise ToolError(429, "episode_tool_call_limit_exceeded")
             state = json.loads(row["current_state_json"])
@@ -93,6 +97,9 @@ class EpisodeStore:
                 "UPDATE episodes SET current_state_json = ?, tool_calls = tool_calls + 1 WHERE episode_id = ?",
                 (json.dumps(state, separators=(",", ":"), sort_keys=True), episode_id),
             )
+            if receipt_id is not None:
+                db.execute("UPDATE action_approvals SET status='consumed',result_json=? WHERE request_id=?",
+                           (json.dumps(result, sort_keys=True), receipt_id))
             return result
 
     def snapshot(self, episode_id: str) -> dict[str, Any]:

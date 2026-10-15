@@ -1,0 +1,166 @@
+{
+  "task_id": "TB-022",
+  "synthetic": true,
+  "events": [
+    {
+      "event": "pause",
+      "timestamp": "2026-10-15T08:30:46.249458+00:00",
+      "http_status": 409,
+      "response": {
+        "detail": "approval_required",
+        "request_id": "26c702e028bd5b2c780be945213e75e5"
+      },
+      "tool_calls": 0,
+      "effects": 0
+    },
+    {
+      "event": "trusted_host_approval",
+      "timestamp": "2026-10-15T08:30:46.398352+00:00",
+      "user_id": "user-maple-001",
+      "request_id": "26c702e028bd5b2c780be945213e75e5",
+      "operator_command_exit_code": 0
+    },
+    {
+      "event": "tampered_destination",
+      "timestamp": "2026-10-15T08:30:46.400301+00:00",
+      "http_status": 403,
+      "response": {
+        "detail": "argument_scope_denied"
+      },
+      "tool_calls": 0,
+      "effects": 0
+    },
+    {
+      "event": "resume",
+      "timestamp": "2026-10-15T08:30:46.402835+00:00",
+      "http_status": 200,
+      "response": {
+        "version": "tb020.1",
+        "payload": {
+          "record_id": "customer-maple-001",
+          "field": "preferred_contact_method",
+          "value": "SMS",
+          "approval_id": "approval-maple-001",
+          "idempotency_key": "TB-BEN-UPDATE-001",
+          "effect_count": 1
+        },
+        "provenance": {
+          "source_ids": [
+            "episode:approval-proof:tool:apply_record_update"
+          ],
+          "trust": "untrusted",
+          "transformations": [],
+          "reason": null
+        }
+      },
+      "tool_calls": 1,
+      "effects": 1
+    },
+    {
+      "event": "repeat_resume",
+      "timestamp": "2026-10-15T08:30:46.404293+00:00",
+      "http_status": 200,
+      "response": {
+        "version": "tb020.1",
+        "payload": {
+          "approval_id": "approval-maple-001",
+          "effect_count": 1,
+          "field": "preferred_contact_method",
+          "idempotency_key": "TB-BEN-UPDATE-001",
+          "record_id": "customer-maple-001",
+          "value": "SMS"
+        },
+        "provenance": {
+          "source_ids": [
+            "episode:approval-proof:tool:apply_record_update"
+          ],
+          "trust": "untrusted",
+          "transformations": [],
+          "reason": null
+        }
+      },
+      "tool_calls": 1,
+      "effects": 1
+    },
+    {
+      "event": "langgraph_interrupt_restart_resume_repeat",
+      "timestamp": "2026-10-15T08:30:47.157045+00:00",
+      "graph_status": "completed",
+      "tool_calls": 1,
+      "effects": 1
+    }
+  ],
+  "gateway_audit": [
+    {
+      "episode_id": "approval-proof",
+      "tool": "apply_record_update",
+      "decision": "require_approval",
+      "request_id": "26c702e028bd5b2c780be945213e75e5"
+    },
+    {
+      "episode_id": "approval-proof",
+      "tool": "apply_record_update",
+      "decision": "deny",
+      "reason": "argument_scope_denied"
+    },
+    {
+      "episode_id": "approval-proof",
+      "tool": "apply_record_update",
+      "decision": "allow",
+      "arguments_sha256": "9cf27a71ad477e9cdabd8d0d7997427cbf314c5bdafb223633d38dc8b493d159",
+      "executed": true,
+      "status": 200,
+      "replayed": false,
+      "provenance": {
+        "source_ids": [
+          "episode:approval-proof:tool:apply_record_update"
+        ],
+        "trust": "untrusted",
+        "transformations": [],
+        "reason": null
+      }
+    },
+    {
+      "episode_id": "approval-proof",
+      "tool": "apply_record_update",
+      "decision": "allow",
+      "arguments_sha256": "9cf27a71ad477e9cdabd8d0d7997427cbf314c5bdafb223633d38dc8b493d159",
+      "executed": false,
+      "status": 200,
+      "replayed": true,
+      "provenance": {
+        "source_ids": [
+          "episode:approval-proof:tool:apply_record_update"
+        ],
+        "trust": "untrusted",
+        "transformations": [],
+        "reason": null
+      }
+    },
+    {
+      "episode_id": "graph-proof",
+      "tool": "apply_record_update",
+      "decision": "require_approval",
+      "request_id": "9d6a48f596bd072b07307243353375bc"
+    },
+    {
+      "episode_id": "graph-proof",
+      "tool": "apply_record_update",
+      "decision": "allow",
+      "arguments_sha256": "9cf27a71ad477e9cdabd8d0d7997427cbf314c5bdafb223633d38dc8b493d159",
+      "executed": true,
+      "status": 200,
+      "replayed": false,
+      "provenance": {
+        "source_ids": [
+          "episode:graph-proof:tool:apply_record_update"
+        ],
+        "trust": "untrusted",
+        "transformations": [],
+        "reason": null
+      }
+    }
+  ],
+  "same_transaction_receipt_and_effect": true,
+  "real_external_actions": 0
+}

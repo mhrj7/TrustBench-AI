@@ -12,6 +12,7 @@ FIXTURE_PATH = Path(os.environ.get("TRUSTBENCH_FIXTURE_PATH", ROOT / "data" / "b
 DATABASE_PATH = Path(os.environ.get("TRUSTBENCH_TOOL_DB", ROOT / ".tool-state" / "episodes.sqlite"))
 store = EpisodeStore(FIXTURE_PATH, DATABASE_PATH)
 app = FastAPI(title="TrustBench Synthetic Tool Service", version="1.0.0", docs_url=None, redoc_url=None)
+app.state.episode_store = store
 
 
 @app.exception_handler(ToolError)

@@ -7,16 +7,22 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import httpx2 as httpx
 from .provenance import digest, wrap
+from pydantic import ValidationError
+from src.policy.capabilities import Capability
+from src.policy.approvals import ApprovalStore, execution_context
 
 @dataclass(frozen=True)
 class Binding:
     episode_id: str
     allowed_tools: frozenset[str]
+    capability: Capability
 
 class Gateway:
     def __init__(self, backend):
         self.app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
         self._backend = backend
+        self.store = backend.state.episode_store
+        self.approvals = ApprovalStore(self.store)
         self._bindings: dict[str, Binding] = {}
         self.audit: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
@@ -32,20 +38,44 @@ class Gateway:
             if reason:
                 self.audit.append({'episode_id': episode_id, 'tool': tool_name, 'decision': 'deny', 'reason': reason})
                 return JSONResponse(status_code=403, content={'detail': reason})
+            if self.store.snapshot(episode_id)['generation'] != binding.capability.generation:
+                return JSONResponse(status_code=403, content={'detail':'stale_capability'})
             try:
                 arguments = await request.json()
                 if not isinstance(arguments, dict):
                     raise ValueError('arguments must be an object')
             except (ValueError, TypeError):
                 return JSONResponse(status_code=422, content={'detail': 'invalid_arguments'})
+            try:
+                arguments = binding.capability.validate(tool_name, arguments)
+            except (ValueError, ValidationError) as error:
+                reason = 'invalid_arguments' if isinstance(error, ValidationError) else str(error)
+                self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason})
+                return JSONResponse(status_code=422 if isinstance(error, ValidationError) else 403, content={'detail':reason})
+            approval_id = None
+            if tool_name == 'apply_record_update':
+                try:
+                    approval = self.approvals.request(binding.capability, tool_name, arguments)
+                except ValueError as error:
+                    return JSONResponse(status_code=403, content={'detail':str(error)})
+                approval_id = approval['request_id']
+                if approval['status'] == 'pending':
+                    self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'require_approval','request_id':approval_id})
+                    return JSONResponse(status_code=409, content={'detail':'approval_required','request_id':approval_id})
             # Log decision before dispatch; never forward incoming headers/URLs to raw tools.
             record = {'episode_id': episode_id, 'tool': tool_name, 'decision': 'allow',
                       'arguments_sha256': digest(arguments), 'executed': False}
             self.audit.append(record)
             async with self._lock:
-                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self._backend), base_url='http://internal') as client:
-                    response = await client.post(f'/v1/episodes/{episode_id}/tools/{tool_name}', json=arguments)
-            record.update(status=response.status_code, executed=response.is_success)
+                authorization = {'capability':binding.capability,'arguments':arguments,'approval_request_id':approval_id}
+                context = execution_context.set(authorization)
+                try:
+                    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self._backend), base_url='http://internal') as client:
+                        response = await client.post(f'/v1/episodes/{episode_id}/tools/{tool_name}', json=arguments)
+                finally:
+                    execution_context.reset(context)
+            record.update(status=response.status_code, executed=response.is_success and not authorization.get('replayed', False),
+                          replayed=authorization.get('replayed', False))
             body = response.json()
             if not response.is_success:
                 return JSONResponse(status_code=response.status_code, content=body)
@@ -60,7 +90,7 @@ class Gateway:
             record['provenance'] = envelope['provenance']
             return envelope
 
-    def bind(self, episode_id: str, allowed_tools: list[str]) -> str:
+    def bind(self, episode_id: str, allowed_tools: list[str], user_id: str | None = None) -> str:
         """Trusted host setup only; no HTTP registration/reset endpoint exists."""
         import re
         if not re.fullmatch(r'[A-Za-z0-9._:-]{1,128}', episode_id):
@@ -68,7 +98,8 @@ class Gateway:
         if any(not re.fullmatch(r'[a-z_]+', name) for name in allowed_tools):
             raise ValueError('invalid tool')
         token = secrets.token_urlsafe(32)
-        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools))
+        capability = Capability.issue(self.store, episode_id, allowed_tools, user_id)
+        self._bindings[token] = Binding(episode_id, frozenset(allowed_tools), capability)
         return token
 
     def revoke(self, token: str):
