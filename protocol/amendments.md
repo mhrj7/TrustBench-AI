@@ -307,3 +307,14 @@ re-queries the classifier and is denied. A live rerun of `tests/arms/stress-v3-c
 `as_authored`) is a mechanism check, *not* a fresh test: those fixtures were seen in the v3 run. Prediction: no run of the
 wrapped attacks commits the false value after a denial, and the benign controls are unchanged (no veto). v4 also runs on the
 registered comparison suite (gpt-oss-20b, 2 repetitions) to measure benign cost. Reported whatever the outcome.
+
+
+## A-018 (2026-10-16) Gemma 4 rerun with token-aware pacing
+
+The first Gemma 4 runs (matrix cells and the A-014 comparison lane) were mostly invalid: two jobs ran at once and exceeded the
+free-tier limit of 16,000 input tokens per minute (metric `generate_content_free_tier_input_token_count`, from the provider's
+429 message), so most pairs ended with `rate_limit`. The runner marked them invalid; none was counted as secure. They are
+archived in `evidence/archive/gemma-rate-limited-2026-10-16/` and not used. The harness now paces requests so that the input
+tokens sent in any 60-second window stay under a provider's registered `model_rate_limits` (`configs/providers.yaml`), and each
+report records its `rate_pacing`. Gemma 4 is rerun as one job (comparison lane first, then matrix cells) with unchanged
+settings otherwise. The pre-registered pooled analysis (A-014) uses only the rerun.

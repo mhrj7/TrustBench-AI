@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "note": "Runtime model providers for the OpenAI-compatible chat adapter. Keys are read from the environment variable named here (never from prompts or committed files). OpenAI is intentionally absent: no paid credits.",
+  "note": "Runtime model providers for the OpenAI-compatible chat adapter. Keys are read from the environment variable named here (never from prompts or committed files). OpenAI is intentionally absent: no paid credits. model_rate_limits are free-tier limits observed from provider errors; the harness paces requests so that the input tokens sent in any 60-second window stay under them (estimate: characters / token_estimate_chars_per_token, conservative).",
   "providers": {
     "ollama": {
       "base_url": "http://127.0.0.1:11434/v1",
@@ -31,7 +31,13 @@
       ],
       "send_reasoning_effort": false,
       "budget_file": "configs/budget-gemini-free.yaml",
-      "generation_overrides": {}
+      "generation_overrides": {},
+      "model_rate_limits": {
+        "gemma-4-26b-a4b-it": {
+          "input_tokens_per_minute": 16000,
+          "source": "Gemini API 429 message on 2026-10-16: metric generate_content_free_tier_input_token_count, limit 16000, model gemma-4-26b"
+        }
+      }
     },
     "nvidia": {
       "base_url": "https://integrate.api.nvidia.com/v1",
@@ -44,5 +50,6 @@
       "generation_overrides": {}
     }
   },
-  "quota_exhausted_message_pattern": "retry in \\d+h|retry in \\d+m"
+  "quota_exhausted_message_pattern": "retry in \\d+h|retry in \\d+m",
+  "token_estimate_chars_per_token": 3
 }

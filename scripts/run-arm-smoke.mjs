@@ -145,6 +145,21 @@ if (defendedSystem.transport === "direct") {
   await waitFor(defendedDirectPort);
 }
 let lastCall = 0;
+// Token-aware pacing for providers with an input-tokens-per-minute free-tier limit (configs/providers.yaml model_rate_limits).
+const tokenLimit = live ? provider.model_rate_limits?.[modelId]?.input_tokens_per_minute ?? null : null;
+const sent = []; // [timestamp ms, estimated input tokens] within the last minute
+async function paceTokens(req) {
+  if (!tokenLimit) return;
+  const estimate = Math.ceil(JSON.stringify(req.messages).length / providers.token_estimate_chars_per_token) + Math.ceil(JSON.stringify(req.tools ?? []).length / providers.token_estimate_chars_per_token);
+  for (;;) {
+    const now = Date.now();
+    while (sent.length && now - sent[0][0] >= 60_000) sent.shift();
+    const used = sent.reduce((n, [, t]) => n + t, 0);
+    if (used + estimate <= tokenLimit || !sent.length) break;
+    await new Promise((r) => setTimeout(r, 60_000 - (now - sent[0][0]) + 50));
+  }
+  sent.push([Date.now(), Math.min(estimate, tokenLimit)]);
+}
 const observedResponseModels = new Set();
 async function modelRevision() {
   const lookup = provider.revision_lookup;
@@ -166,6 +181,7 @@ async function runArm(arm, testCase, fixture, rep) {
       adapter.requests.push(structuredClone(req));
       const wait = lastCall + minIntervalMs - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      await paceTokens(req);
       lastCall = Date.now();
       try { const response = await originalGenerate(req, opts); observedResponseModels.add(response.response_model); return response; }
       catch (error) {
@@ -213,7 +229,7 @@ async function runArm(arm, testCase, fixture, rep) {
       defenseAdapter = makeLiveAdapter();
       const raw = defenseAdapter.generate.bind(defenseAdapter);
       defenseAdapter.generate = async (req, opts) => {
-        const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); lastCall = Date.now();
+        const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now();
         try { return await raw(req, opts); } catch (error) { if (quotaPattern.test(String(error?.message))) { console.error("PROVIDER QUOTA EXHAUSTED"); process.exit(2); } throw error; }
       };
     }
@@ -263,7 +279,7 @@ const baselineEffective = await loadArm("baseline"), defendedEffective = await l
 const effectiveProfile = promptProfile ?? baselineEffective.shared.default_prompt_profile;
 const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
-  model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null,
+  model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
