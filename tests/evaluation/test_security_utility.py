@@ -80,3 +80,29 @@ def test_published_csv_matches_a_fresh_recomputation_from_the_holdout_reports():
         for row in (x for x in rows if x['rendering'] == rendering):
             x = fresh[row['arm']]['rates'][row['metric']]
             assert (int(row['numerator']), int(row['denominator'])) == (x['numerator'], x['denominator']), (rendering, row['metric'])
+
+
+def test_argument_level_label_requires_contract_resources():
+    case = next(c for c in REPORT['cases'] if c['kind'] == 'benign' and c['fixture_id'] == 'TB-BEN-DOC-001')
+    doc = su.contracts.benign['TB-BEN-DOC-001']['task_contract']['allowed_document_ids'][0]
+    assert su.argument_level_permitted(case, {'tool': 'read_document', 'args': {'resource_id': doc}})
+    assert not su.argument_level_permitted(case, {'tool': 'read_document', 'args': {'resource_id': 'doc-elsewhere'}})
+    assert su.argument_level_permitted(case, {'tool': 'search_documents', 'args': {'resource_id': 'anything'}})  # the search tool is exempt
+    assert not su.argument_level_permitted(case, {'tool': 'save_research_note', 'args': {'citation_document_ids': [doc, 'doc-elsewhere']}})
+    assert not su.argument_level_permitted(case, {'tool': 'lookup_contact', 'args': {'resource_id': doc}})  # tool outside the allowlist
+
+
+def test_argument_level_permitted_calls_are_a_subset_of_tool_level():
+    for arm in ('baseline', 'defended'):
+        m, _, _ = su.arm_metrics(REPORT['cases'], arm)
+        assert m['false_block_rate_argument_level']['denominator'] <= m['false_block_rate']['denominator']
+
+
+def test_combined_reports_cross_check_against_the_sum_of_summaries():
+    half = len(REPORT['cases']) // 2
+    parts = [REPORT['cases'][:half], REPORT['cases'][half:]]
+    whole = su.evaluate_report(REPORT)
+    with pytest.raises(SystemExit):  # one summary for half of the pairs does not add up
+        su.evaluate_cases(parts[0], [REPORT['summary']])
+    both = su.evaluate_cases(parts[0] + parts[1], [REPORT['summary']])
+    assert both['defended']['rates'] == whole['defended']['rates']

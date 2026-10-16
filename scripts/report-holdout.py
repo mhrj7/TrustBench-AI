@@ -4,7 +4,10 @@
 Reads <confirmatory_run_dir>/<rendering>/report.json for every rendering in configs/frozen/live-matrix.yaml and writes
 evidence/tb032-holdout-run.json and docs/holdout-run.md: intended, attempted, valid and invalid pairs, invalid reasons,
 observed response models, schedule hashes, early ends and the frozen-configuration check. Exit 0 when every rendering
-has a complete, valid-comparison report."""
+has a complete, valid-comparison report.
+
+With --holdout2 (A-026): the registered holdout-2 (suite, rendering) runs under holdout2.confirmatory_run_dir, written to
+evidence/tb032-holdout2-run.json and docs/holdout2-run.md."""
 import hashlib, json, sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -14,14 +17,24 @@ ROOT = Path(__file__).resolve().parents[1]
 reg = json.loads((ROOT / 'protocol/experiment-registry.yaml').read_text())
 hc = json.loads((ROOT / 'configs/frozen/holdout-config.json').read_text())
 matrix = json.loads((ROOT / 'configs/frozen/live-matrix.yaml').read_text())
-run_dir = ROOT / reg['holdout']['confirmatory_run_dir']
-roles = {'agentdojo_important_instructions': 'primary', 'trusted_user_control': 'positive control'}
+H2 = '--holdout2' in sys.argv
+primary = json.loads((ROOT / 'configs/frozen/selection.json').read_text())['data']['selection_condition']['attack_rendering']
+kinds = {k: v.get('kind') for k, v in json.loads((ROOT / 'data/attack-renderings.json').read_text())['renderings'].items()}
+role_of = lambda r: 'primary' if r == primary else 'positive control' if kinds[r] == 'positive_control' else 'secondary'
+if H2:
+    run_dir = ROOT / reg['holdout2']['confirmatory_run_dir']
+    units = [(r['suite'], r['rendering'], run_dir / r['suite'] / r['rendering']) for r in reg['holdout2']['runs']]
+    out_json, out_doc, suite_desc, rule = 'evidence/tb032-holdout2-run.json', 'docs/holdout2-run.md', reg['holdout2']['suites'], 'protocol/amendments.md A-026'
+else:
+    run_dir = ROOT / reg['holdout']['confirmatory_run_dir']
+    units = [(None, r['id'], run_dir / r['id']) for r in matrix['renderings']]
+    out_json, out_doc, suite_desc, rule = 'evidence/tb032-holdout-run.json', 'docs/holdout-run.md', reg['holdout']['confirmatory_suite'], 'protocol/amendments.md A-025'
 
 rows, complete = [], True
-for rendering in [r['id'] for r in matrix['renderings']]:
-    p = run_dir / rendering / 'report.json'
+for suite_key, rendering, unit_dir in units:
+    p = unit_dir / 'report.json'
     if not p.exists():
-        rows.append({'rendering': rendering, 'role': roles.get(rendering, 'secondary'), 'status': 'missing report', 'started': (run_dir / rendering / 'started.json').exists()})
+        rows.append({'rendering': rendering, 'suite': suite_key, 'role': role_of(rendering), 'status': 'missing report', 'started': (unit_dir / 'started.json').exists()})
         complete = False
         continue
     r = json.loads(p.read_text())
@@ -29,7 +42,7 @@ for rendering in [r['id'] for r in matrix['renderings']]:
     reasons = Counter(f for d in v['invalid_detail'] for side in ('baseline', 'defended') if d[f'{side}_invalid'] for f in d[f'{side}_failures'])
     frozen_ok = (r['model'], r['defended_system'], r['prompt_profile'], r['temperature']) == (hc['model'], hc['defended_system']['system'], hc['prompt_profile'],
                                                                                             matrix['models'][hc['model']]['temperature'])
-    row = {'rendering': rendering, 'role': roles.get(rendering, 'secondary'), 'report': str(p.relative_to(ROOT)), 'report_sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
+    row = {'rendering': rendering, **({'suite': suite_key} if H2 else {}), 'role': role_of(rendering), 'report': str(p.relative_to(ROOT)), 'report_sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
            'intended_pairs': ho['intended_units'], 'attempted_pairs': ho['attempted_units'], 'valid_pairs': v['valid_pairs'], 'invalid_pairs': v['invalid_pairs'],
            'invalid_reasons': dict(reasons), 'ended_early': ho['ended_early'], 'comparison_valid': ho['comparison_valid'] and frozen_ok,
            'frozen_configuration': frozen_ok, 'observed_response_models': r['model_revision']['observed_response_models'],
@@ -38,29 +51,28 @@ for rendering in [r['id'] for r in matrix['renderings']]:
     rows.append(row)
 
 models = sorted({m for x in rows for m in x.get('observed_response_models', [])})
-out = {'task_id': 'TB-032', 'rule': 'protocol/amendments.md A-025', 'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+out = {'task_id': 'TB-032' + (' extension (holdout-2)' if H2 else ''), 'rule': rule, 'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
        'configuration': {'system': hc['defended_system']['system'], 'model': hc['model'], 'prompt_profile': hc['prompt_profile'], 'reliability': hc['reliability']['changes']},
-       'suite': reg['holdout']['confirmatory_suite'], 'repetitions_per_pair': reg['repetitions_per_pair'], 'renderings': rows,
+       'suite': suite_desc, 'repetitions_per_pair': reg['repetitions_per_pair'], 'renderings': rows,
        'response_models_across_renderings': models, 'single_response_model': len(models) == 1, 'complete': complete and len(models) == 1,
        'note': 'Runs and validity only. Security and utility comparisons are TB-033. Invalid pairs are listed and never counted as secure.'}
-(ROOT / 'evidence/tb032-holdout-run.json').write_text(json.dumps(out, indent=1) + '\n')
+(ROOT / out_json).write_text(json.dumps(out, indent=1) + '\n')
 
-lines = ['# Confirmatory holdout run (TB-032)', '', f"Generated by `scripts/report-holdout.py` under A-025. Configuration: `{out['configuration']['system']}` on `{out['configuration']['model']}`, "
-         f"`{out['configuration']['prompt_profile']}`, reliability override {json.dumps(out['configuration']['reliability'])}; suite `{out['suite']}` (3 benign, 3 attack), "
+lines = ['# Holdout-2 run (A-026)' if H2 else '# Confirmatory holdout run (TB-032)', '', f"Generated by `scripts/report-holdout.py{' --holdout2' if H2 else ''}` under {rule.split()[-1]}. Configuration: `{out['configuration']['system']}` on `{out['configuration']['model']}`, "
+         f"`{out['configuration']['prompt_profile']}`, reliability override {json.dumps(out['configuration']['reliability'])}; " + (f"suites {', '.join(f'`{v}`' for v in out['suite'].values())} (12 benign, 12 attack), " if H2 else f"suite `{out['suite']}` (3 benign, 3 attack), ") +
          f"{out['repetitions_per_pair']} repetitions per pair from a TB-028 schedule. Runs and validity only; comparisons are TB-033.", '',
-         '| Rendering | Role | Intended | Attempted | Valid | Invalid | Invalid reasons | Ended early | Comparison valid |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |']
+         ('| Suite ' if H2 else '') + '| Rendering | Role | Intended | Attempted | Valid | Invalid | Invalid reasons | Ended early | Comparison valid |', ('| --- ' if H2 else '') + '| --- | --- | --- | --- | --- | --- | --- | --- | --- |']
 for x in rows:
     if 'report' not in x:
-        lines.append(f"| {x['rendering']} | {x['role']} | — | — | — | — | {x['status']} | — | no |")
+        lines.append((f"| {x['suite']} " if H2 else '') + f"| {x['rendering']} | {x['role']} | — | — | — | — | {x['status']} | — | no |")
         continue
-    lines.append(f"| {x['rendering']} | {x['role']} | {x['intended_pairs']} | {x['attempted_pairs']} | {x['valid_pairs']} | {x['invalid_pairs']} | "
+    lines.append((f"| {x['suite']} " if H2 else '') + f"| {x['rendering']} | {x['role']} | {x['intended_pairs']} | {x['attempted_pairs']} | {x['valid_pairs']} | {x['invalid_pairs']} | "
                  f"{', '.join(f'{k} ×{n}' for k, n in x['invalid_reasons'].items()) or '—'} | {x['ended_early'] or 'no'} | {'yes' if x['comparison_valid'] else 'no'} |")
 lines += ['', f"Response models observed: {', '.join(models) or '—'} ({'single model' if len(models) == 1 else 'MIXED: comparison invalid'}).", '',
           f"**Complete:** {'yes' if out['complete'] else 'no'}.", '',
-          f"Precondition: development release gate `{reg['holdout']['confirmatory_gate_evidence']}` (PASS, A-025). Each rendering's run directory holds "
+          f"Precondition: development release gate `{reg['holdout']['confirmatory_gate_evidence']}` (PASS, A-025){'; pre-run verify `evidence/holdout2-prerun.json`' if H2 else ''}. Each run directory holds "
           '`started.json` (argv and start time), `pairs.jsonl` (written as each pair finished), `report.json`, `policy-traces.jsonl` and `spans.jsonl`. '
-          'The runner refuses a second execution of any rendering whose directory exists. Registry: the single confirmatory use is consumed '
-          '(`holdout_results_seen: true`).', '']
-(ROOT / 'docs/holdout-run.md').write_text('\n'.join(lines) + '\n')
+          'The runner refuses a second execution of any run whose directory exists.' + ('' if H2 else ' Registry: the single confirmatory use is consumed (`holdout_results_seen: true`).'), '']
+(ROOT / out_doc).write_text('\n'.join(lines) + '\n')
 print(json.dumps({'complete': out['complete'], 'renderings': [(x['rendering'], x.get('attempted_pairs'), x.get('valid_pairs'), x.get('invalid_pairs')) for x in rows]}))
 sys.exit(0 if out['complete'] else 1)
