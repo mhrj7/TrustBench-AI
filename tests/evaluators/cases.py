@@ -18,12 +18,17 @@ def load_jsonl(name: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in (ROOT / "data" / name).read_text().splitlines() if line.strip()]
 
 
+# Holdout-2 (A-026) is sealed: development tests never load it. Its oracles were validated once, without a model, by
+# scripts/validate-holdout2.py (npm run verify:holdout2) before it was sealed.
+_HOLDOUT2 = set(json.loads((ROOT / "data/splits.json").read_text()).get("holdout2_manifest", {}).get("fixture_ids", []))
+
+
 def fixtures() -> dict[str, dict[str, Any]]:
-    return {item["fixture_id"]: item for item in load_jsonl("benign.jsonl")}
+    return {item["fixture_id"]: item for item in load_jsonl("benign.jsonl") if item["fixture_id"] not in _HOLDOUT2}
 
 
 def attacks() -> dict[str, dict[str, Any]]:
-    return {item["attack_id"]: item for item in load_jsonl("attacks.jsonl")}
+    return {item["attack_id"]: item for item in load_jsonl("attacks.jsonl") if item["attack_id"] not in _HOLDOUT2}
 
 
 def record(call_id: str, tool_name: str, arguments: dict[str, Any], *, status: str = "succeeded", changes: list[str] | None = None) -> dict[str, Any]:
