@@ -30,10 +30,13 @@ const providerName = live ? modelArg.slice(0, modelArg.indexOf(":")) : null;
 const modelId = live ? modelArg.slice(modelArg.indexOf(":") + 1) : null;
 const provider = live ? providers.providers[providerName] : null;
 if (live && !provider) throw new Error(`provider ${providerName} is not registered in configs/providers.yaml (${Object.keys(providers.providers).join(", ")})`);
-const repetitions = Number(flag("--repetitions", "1"));
+// TB-028: a fixed task-seed schedule (src/evaluation/repeats.py) fixes the units, their seeds and the execution order.
+const scheduleFile = flag("--schedule", null);
+const schedule = scheduleFile ? JSON.parse(await readFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", scheduleFile), "utf8")) : null;
+const repetitions = schedule ? schedule.repetitions : Number(flag("--repetitions", "1"));
 const toolMode = flag("--tool-mode", runConfig.default_tool_mode);
 const temperature = Number(flag("--temperature", String(runConfig.live.default_temperature)));
-const onlyCases = flag("--cases") ? new Set(flag("--cases").split(",")) : null;
+const onlyCases = schedule ? new Set(schedule.entries.map((e) => e.case_id)) : flag("--cases") ? new Set(flag("--cases").split(",")) : null;
 const minIntervalMs = Number(flag("--min-interval-ms", "0"));
 const rendering = flag("--attack-rendering", runConfig.default_attack_rendering);
 const faultProfileName = flag("--fault-profile", null);
@@ -58,7 +61,8 @@ const baseSeed = registry.pair_order_seed; // registered in the experiment regis
 const providerFaultCodes = new Set(ProviderErrorCodeSchema.options);
 const quotaPattern = new RegExp(providers.quota_exhausted_message_pattern);
 if (!["permissive", "contract"].includes(toolMode)) throw new Error("--tool-mode must be permissive or contract");
-if (!Number.isInteger(repetitions) || repetitions < 1 || (!live && repetitions !== 1)) throw new Error("--repetitions must be a positive integer (live runs only)");
+if (!Number.isInteger(repetitions) || repetitions < 1 || (!live && !schedule && repetitions !== 1)) throw new Error("--repetitions must be a positive integer (live runs only; scripted runs may repeat only through a --schedule)");
+if (schedule && flag("--repetitions")) throw new Error("--schedule fixes the repetitions; do not pass --repetitions");
 if (!(rendering in renderingRegistry.renderings)) throw new Error(`--attack-rendering must be one of ${Object.keys(renderingRegistry.renderings).join(", ")}`);
 const positiveControl = renderingRegistry.renderings[rendering].kind === "positive_control";
 if (live && provider.api_key_env) { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
@@ -261,15 +265,19 @@ async function runArm(arm, testCase, fixture, rep) {
 }
 
 const runs = [];
-for (const testCase of selected) {
+// Without a schedule: case by case, repetitions in order. With one: exactly its units, in its recorded order.
+const plan = schedule
+  ? [...schedule.entries].sort((a, b) => a.position - b.position).map((e) => ({ testCase: selected.find((c) => c.case_id === e.case_id), rep: e.repetition, entry: e }))
+  : selected.flatMap((testCase) => Array.from({ length: repetitions }, (_, i) => ({ testCase, rep: i + 1, entry: null })));
+for (const { testCase, rep, entry } of plan) {
+  if (!testCase) throw new Error(`schedule names a case that is not runnable here: ${entry.case_id}`);
+  if (entry && live && entry.seed !== baseSeed + rep * runConfig.live.seed_offset_per_repetition) throw new Error(`schedule seed for ${entry.unit_id} differs from the registered run seed`);
   const fixture = fixtures.get(testCase.fixture_id);
-  for (let rep = 1; rep <= repetitions; rep++) {
-    const order = pairOrder(testCase.case_id, rep);
-    const arms = {};
-    for (const arm of order) arms[arm] = await runArm(arm, testCase, fixture, rep);
-    runs.push({ testCase, rep, order, arms });
-    if (live) console.error(`done ${testCase.case_id} r${rep}`);
-  }
+  const order = pairOrder(testCase.case_id, rep);
+  const arms = {};
+  for (const arm of order) arms[arm] = await runArm(arm, testCase, fixture, rep);
+  runs.push({ testCase, rep, order, arms, entry });
+  if (live) console.error(`done ${testCase.case_id} r${rep}`);
 }
 stopAll();
 
@@ -289,13 +297,14 @@ const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
 };
 const traces = [];
-for (const { testCase, rep, order, arms } of runs) {
+for (const { testCase, rep, order, arms, entry: scheduled } of runs) {
   const { baseline, defended } = arms;
-  const entry = { case_id: testCase.case_id, repetition: rep, pair_order: order, kind: testCase.kind, fixture_id: testCase.fixture_id };
+  const entry = { case_id: testCase.case_id, repetition: rep, pair_order: order, kind: testCase.kind, fixture_id: testCase.fixture_id, attack_id: testCase.attack_id ?? null,
+    ...(scheduled ? { unit_id: scheduled.unit_id, schedule_position: scheduled.position } : {}) };
   entry.run_config_identical = canon(baseline.configEpisode) === canon(defended.configEpisode);
   entry.first_request_identical = canon(baseline.requests[0]) === canon(defended.requests[0]);
   entry.settings_identical = baseline.requests.every((r, i) => canon(r.settings) === canon(defended.requests[i]?.settings ?? r.settings));
@@ -359,7 +368,7 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });
