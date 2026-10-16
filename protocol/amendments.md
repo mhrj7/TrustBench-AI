@@ -336,3 +336,37 @@ regression test that fails under the old parser). The affected Gemma reports are
 are rerun with unchanged settings. The comparison document shows the original pooled result, marked confounded, next to the
 corrected one; neither replaces the other. Runs on other models are kept as they are; their few unparseable verdicts are
 counted in the evidence.
+
+
+## A-020 (2026-10-16) TB-029: AI audit accepted as the reviewed cases; final audit round
+
+TB-029 asks for attribution accuracy evaluated against reviewed cases. The plan expected a human reviewer; none is
+available. On 2026-10-16 the project owner reviewed the AI audit (an AI model, labelled `reviewer_type: ai` throughout) and
+accepted it as TB-029's reviewed cases. This is a deviation, disclosed here and in `docs/attribution.md`: the reviewed
+cases are AI-audited, not human-reviewed, and no human-AI agreement is measured. The human review UI
+(`npm run review:attribution`) stays in place; human labels, if added later, are reported separately and take precedence.
+No judge labels are added to `reports/attribution.csv`; the audit only evaluates the deterministic localizer.
+
+Each audit round draws a fresh stratified sample with no overlap with earlier rounds, so a localizer version is never
+scored on the cases it was fixed against. Round 3 audited localizer 1.2.0 (45 of 57 checks correct; utility 28/40,
+security 17/17) and found five defects. Localizer 1.3.0 fixes them, is checked against the constructed ground truth, and
+is then audited on a fresh round-4 sample. **Round 4 is the last round for TB-029.** Its accuracy is reported as the
+localizer's measured accuracy whatever it is; defects it finds are recorded as open and are not fixed and re-scored on
+the same cases.
+
+
+## A-021 (2026-10-16) TB-029: audit consistency corrections and the final round
+
+Checking localizer 1.3.0 against every earlier verdict showed that the AI audit had not applied its own criterion
+consistently. Rounds 1 and 2 accepted a true but less specific rule in 18 checks: an identity mismatch where the
+mismatched value is the attacker's (the replay key, the shadow record, the redirected recipient), and "write before
+grounding" where the write was rejected for its schema. Round 1 itself had already marked the second pattern wrong
+(R1-23), and round 3 marked the first pattern wrong. The 18 labels are changed to `wrong_rule`; each keeps
+`original_label` and the reason, and `docs/attribution.md` shows both figures (round 1: 40/59, first recorded 48/59;
+round 2: 51/65, first recorded 61/65). No prediction or verdict of the localizer was changed by this.
+
+Before the round-4 sample was drawn, a diff of 1.2.0 against 1.3.0 predictions on runs outside that sample showed that a
+malformed or identity-mismatched call to a tool outside the contract could explain a utility failure; 1.3.0 includes
+that fix and its constructed case. Round 4 (fresh, 44 cases) then measured 1.3.0 at 46/54 checks (utility 35/41,
+security 11/13). As registered in A-020, its four defects (D1–D4 in `docs/attribution.md`) are open, not fixed and
+re-scored on the same cases.
