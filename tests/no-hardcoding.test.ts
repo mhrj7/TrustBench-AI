@@ -9,7 +9,7 @@ import test from "node:test";
  * fixtures they exercise. Frozen artifacts are listed explicitly with the reason they cannot change.
  */
 const root = path.resolve(import.meta.dirname, "..");
-const scanned = ["src", "runtime", "agent", "app", "scripts/run-arm-smoke.mjs", "scripts/run-live-matrix.mjs", "scripts/summarize-live-results.mjs"];
+const scanned = ["src", "runtime", "agent", "app", "web/src", "scripts/run-arm-smoke.mjs", "scripts/run-live-matrix.mjs", "scripts/summarize-live-results.mjs"];
 const exempt = new Map([
   ["src/evaluators/outcomes.py", "frozen tb016.1.0.0 evaluator; its hash is pinned by the TB-017 pilot manifest"],
   ["src/tools/tests", "test inputs"],
@@ -42,7 +42,7 @@ test("runtime code contains no hardcoded fixtures, endpoints, keys, models or se
   for (const entry of scanned) {
     for (const file of await files(entry)) {
       if ([...exempt.keys()].some((e) => file === e || file.startsWith(e + "/"))) continue;
-      if (!/\.(ts|mjs|py)$/.test(file)) continue;
+      if (!/\.(ts|tsx|mjs|py)$/.test(file)) continue;
       const lines = (await readFile(path.join(root, file), "utf8")).split("\n");
       lines.forEach((line, i) => { for (const [what, re] of forbidden) if (re.test(line)) violations.push(`${file}:${i + 1} ${what}: ${line.trim().slice(0, 120)}`); });
     }

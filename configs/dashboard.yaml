@@ -1,14 +1,13 @@
 {
   "schema_version": "1.0.0",
-  "note": "TB-030 review dashboard (app/). The dashboard reads only the versioned run store: the live evidence reports, indexed by content hash in index_file (npm run dashboard:index). Every aggregate keeps the run IDs it counts, so a reviewer can open the raw record (report file, SHA-256, JSON pointer) behind it. Payloads are redacted with the TB-027 sensitive-value set unless the unredacted environment variable is set on the host. JSON content (valid YAML).",
+  "note": "TB-030 review site: the website in web/ reads a redacted export of the versioned run store (app/store.py), indexed by content hash in index_file (npm run dashboard:index) and exported by npm run web:data. Every aggregate keeps the run IDs it counts, so a reviewer can open the raw record (report file, SHA-256, JSON pointer) behind it. JSON content (valid YAML).",
   "report_glob": "evidence/tb024-*-report.json",
   "report_mode": "live_model",
   "attribution_file": "reports/attribution.csv",
   "index_file": "reports/dashboard/run-index.json",
   "redaction": {
     "config": "configs/observability.yaml",
-    "unredacted_env": "TRUSTBENCH_DASHBOARD_UNREDACTED",
-    "note": "Shared demos run without the variable, so the UI offers no way to show unredacted payloads. A local reviewer can set it to 1 to see raw values. The set is the TB-027 sensitive-value set, minus values that a trusted task contract itself names (field names and IDs the user asked for are not secret), plus the attack-oracle markers of the private-data effects below, which catch partial copies of seeded private data (for example part of the salary ledger line).",
+    "note": "The website is a static export, so it is always redacted; there is no unredacted mode (raw records stay in the repository). The set is the TB-027 sensitive-value set, minus values that a trusted task contract itself names (field names and IDs the user asked for are not secret), plus the attack-oracle markers of the private-data effects below, which catch partial copies of seeded private data (for example part of the salary ledger line). Matching treats every Unicode dash and space variant alike and ignores case.",
     "private_data_effects": [
       "security.unauthorized_document_exfiltrated",
       "security.private_attribute_leaked",
@@ -59,63 +58,10 @@
     }
   },
   "wilson_z": 1.959963984540054,
-  "screenshots": {
-    "note": "scripts/dashboard-screenshots.py starts the dashboard in shared-demo mode (redacted), captures each view with headless Chrome over the DevTools protocol, checks the rendered page text for sensitive values and Streamlit exceptions, and writes a manifest with each PNG's SHA-256. Runs and groups are chosen by the selectors below, from the data, not by ID.",
-    "dir": "app/screenshots",
-    "port": 8517,
-    "cdp_port": 9333,
-    "window": [
-      1500,
-      1100
-    ],
-    "max_height": 7000,
-    "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "views": [
-      {
-        "name": "comparison",
-        "query": {
-          "view": "comparison"
-        },
-        "header": "Comparison by configuration"
-      },
-      {
-        "name": "evidence",
-        "query": {
-          "view": "comparison"
-        },
-        "group": "defended_system_with_most_runs",
-        "header": "Comparison by configuration"
-      },
-      {
-        "name": "trace-waterfall",
-        "query": {
-          "view": "trace"
-        },
-        "run": "timed_failed_with_gateway_denial",
-        "header": "Run trace"
-      },
-      {
-        "name": "trace-untimed",
-        "query": {
-          "view": "trace"
-        },
-        "run": "untimed_defense_false_positive",
-        "header": "Run trace"
-      },
-      {
-        "name": "policy",
-        "query": {
-          "view": "policy"
-        },
-        "header": "Policy reasons"
-      },
-      {
-        "name": "outcomes",
-        "query": {
-          "view": "outcomes"
-        },
-        "header": "Task outcomes"
-      }
-    ]
+  "site": {
+    "note": "scripts/export-site-data.py writes the redacted store export the website reads; web/ is the Vite/React site; web/tests holds its Playwright suite.",
+    "data_dir": "web/public/data",
+    "dev_port": 5173,
+    "preview_port": 4173
   }
 }

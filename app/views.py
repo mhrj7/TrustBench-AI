@@ -1,4 +1,4 @@
-"""View logic for the review dashboard (TB-030), separate from Streamlit so it can be tested directly.
+"""View logic for the review site (TB-030): the reference implementation that web/src/lib/aggregate.ts ports and is tested against.
 
 Every aggregate carries the IDs of the runs it counts (numerator and denominator), so the dashboard can open the raw
 evidence behind any number it shows."""

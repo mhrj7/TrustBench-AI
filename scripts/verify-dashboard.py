@@ -105,12 +105,42 @@ for r in runs:
     redacted_records += red.replaced > before
     leaks += [f"{r['run_id']}: {s[:12]}…" for s in red.find(text)]  # any spelling variant counts as a leak
 
+# 4. The website export (web/public/data) is the store, redacted: same runs, same fields, each record the redacted raw one.
+site = ROOT / cfg['site']['data_dir']
+export = {'checked': False}
+if (site / 'runs.json').exists():
+    table = json.loads((site / 'runs.json').read_text())
+    exp = {row[0]: dict(zip(table['fields'], row)) for row in table['rows']}
+    store_json = json.loads((site / 'store.json').read_text())
+    if store_json['store_version'] != index['store_version']:
+        failures.append('website export is from another store version; run npm run web:data')
+    report_no = {e['path']: e['n'] for e in store_json['reports']}
+    mismatched = 0
+    for r in runs:
+        e = exp.get(r['run_id'])
+        if e is None or e['report'] != report_no[r['report']] or any(e[f] != r[f] for f in ('pointer', 'utility_pass', 'security_pass', 'attacker_goal', 'invalid', 'outcome', 'system', 'model', 'kind')):
+            mismatched += 1
+    if mismatched or len(exp) != len(runs):
+        failures.append(f'website export differs from the store for {mismatched} runs ({len(exp)} exported, {len(runs)} in store)')
+    rec_bad = 0
+    for path, n in report_no.items():
+        body = json.loads((site / 'records' / f'{n}.json').read_text())
+        for r in (x for x in runs if x['report'] == path):
+            want = red.value(raw_record(r))
+            if body['sha256'] != r['report_sha256'] or body['runs'][r['pointer']] != {'case': want['case'], 'run': want['run']}:
+                rec_bad += 1
+    if rec_bad:
+        failures.append(f'{rec_bad} exported records differ from the redacted raw records')
+    site_leaks = [p.name for p in site.rglob('*.json') if red.find(p.read_text())]
+    leaks += [f'website export {x}' for x in site_leaks]
+    export = {'checked': True, 'runs': len(exp), 'record_mismatches': rec_bad, 'run_mismatches': mismatched, 'leaking_files': site_leaks}
+
 ok = not problems and not failures and not leaks
 report = {'task_id': 'TB-030', 'ok': ok, 'store_version': index['store_version'], 'index_problems': problems,
           'runs': len(runs), 'runs_opened_to_raw_record': len(raw), 'groupings': [list(g) for g in groupings],
           'aggregate_metric_cells_checked': metric_cells, 'policy_rows_checked': policy_rows, 'outcome_rows_checked': outcome_rows,
           'redaction': {'sensitive_values': len(red.secrets), 'records_with_replacements': redacted_records, 'leaks': leaks[:20], 'leak_count': len(leaks)},
-          'failures': failures[:50], 'failure_count': len(failures),
+          'website_export': export, 'failures': failures[:50], 'failure_count': len(failures),
           'invalid_runs': sum(r['invalid'] for r in runs), 'outcomes': dict(Counter(r['outcome'] for r in runs))}
 (ROOT / 'evidence/tb030-dashboard-report.json').write_text(json.dumps(report, indent=1) + '\n')
 print(json.dumps({k: report[k] for k in ('ok', 'runs', 'aggregate_metric_cells_checked', 'policy_rows_checked', 'outcome_rows_checked', 'failure_count')} | {'leaks': len(leaks), 'redacted_records': redacted_records}))
