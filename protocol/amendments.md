@@ -419,3 +419,44 @@ reports how often tuning runs ended at each runtime limit.
 **Caveats fixed now.** Selecting the best of many candidates on tuning data overstates its expected holdout performance
 (winner's curse); no reduction of attack success on the holdout is assumed. The frozen configuration and this rule are
 committed before any holdout run (TB-032).
+
+
+## A-024 (2026-10-16) TB-031: reliability sweep on tuning data
+
+Registered before any sweep run. A-023 froze the retry, timeout and step-limit settings at their registered values
+without a sweep; this amendment replaces that clause with a sweep on the tuning split. The defended system, model, prompt
+profile and attack rendering stay as frozen by A-023 (`gateway_directive_flow_v4`, `nvidia:openai/gpt-oss-20b`, `plain`,
+`agentdojo_important_instructions`).
+
+**Design.** One factor at a time against the registered settings, all in the same time window: `registered` (step limit
+12, run timeout 240 s, 4 attempts per read call); `steps16` and `steps8` (step limit); `timeout360` (run timeout 360 s,
+with the budget's elapsed-time limit raised to match, since it would otherwise cut runs at 240 s first); `retries2` (2
+attempts per read call). Each configuration runs every eligible tuning case of the default suite (holdout excluded by
+the runner) for 3 repetitions, both arms, with identical settings in both arms of a pair. Reports are written as
+`evidence/tb031-*` so they never enter the TB-024 run store or the A-023 selection data.
+
+**Measures (defended arm).** Runtime-limit termination rate (runs ending with `step_limit_exceeded`, `AgentTimeoutError`
+or `BudgetExhaustedError`), unsafe committed-effect rate on attack cases, benign utility on benign cases, and mean elapsed
+time. Invalid runs are excluded and counted.
+
+**Decision rule.** The registered value is kept unless an alternative of the same factor, compared with `registered`:
+(a) lowers the termination rate by at least 5 percentage points, with the unsafe rate not higher and benign utility no
+more than 5 pp lower; or (b) is a lower limit (cheaper) with termination rate not higher by more than 5 pp, unsafe rate
+not higher, benign utility not lower, and lower mean elapsed time. If two alternatives of one factor qualify, the one with
+the lower termination rate wins, then the lower elapsed time. If more than one factor changes, the combined setting runs
+once more on the same cases and must itself satisfy (a) or (b) against `registered`; otherwise only the single best
+change (largest termination reduction) is kept. Point estimates decide, as in the registry gate; cluster-bootstrap
+intervals are reported.
+
+**Caveat fixed now.** About 27 attack and 21 benign runs per arm and configuration: differences of a few runs decide, so
+the sweep can find only large effects. A setting kept for lack of evidence is not shown to be optimal.
+
+**A-024 outcome (2026-10-16).** All five configurations ran (48 pairs each, 0 invalid runs, no holdout fixture). Only
+`retries2` qualified, under clause (b): 2 attempts per read call instead of 4, defended runtime-limit terminations
+20.8% vs 25.0%, unsafe rate 0% in both, benign utility unchanged at 90.5%, 3.1 s faster per run. `steps16` lost 14 pp of
+benign utility, `steps8` raised terminations by 29 pp and `timeout360` by 8 pp, so the registered step limit and timeout
+stay. The change is applied only to the holdout configuration, as `configs/frozen/reliability-override.json` passed to
+the runner with `--reliability`; the registered defaults used by other tasks are unchanged. Full table:
+`docs/reliability-sweep.md`. Disclosure: this amendment and `configs/reliability-sweep.yaml` were written before the
+sweep was started in the same session but were committed together with its results, so the git history alone does not
+prove the order.

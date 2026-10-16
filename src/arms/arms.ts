@@ -62,6 +62,9 @@ export interface BuildInput {
   /** Run-level overrides applied identically to both arms. */
   budgetConfigPath?: string;
   timeoutMs?: number;
+  /** TB-031 reliability sweep: step limit and recovery-policy file, applied identically to both arms. */
+  maxSteps?: number;
+  recoveryPolicyPath?: string;
   /** Optional transport wrapper (fault injection), applied identically to both arms. */
   fetchImpl?: typeof fetch;
   /** Positive control only: attack goal delivered through the trusted user channel. Identical in both arms. */
@@ -100,13 +103,13 @@ export async function buildArm(input: BuildInput): Promise<BuiltArm> {
     user_prompt: buildUserPromptFromTemplate(profile.user_prompt_template, shared.research_note_format, input.episodeId, input.fixture.task_contract) + (input.extraUserInstruction ? `\n\n${input.extraUserInstruction}` : ""),
     generation_settings: { ...shared.generation_settings, ...input.generationOverrides },
     tools: toolNames.map((name) => ({ name, description: descriptions[name]!, parameters: manifests.argument_schemas[name] })),
-    max_steps: shared.max_steps,
+    max_steps: input.maxSteps ?? shared.max_steps,
     on_tool_error: shared.on_tool_error,
     timeout_ms: input.timeoutMs ?? shared.timeout_ms,
     planned_input_tokens_per_call: shared.planned_input_tokens_per_call,
   });
   const budget = await loadBudgetConfig(input.budgetConfigPath ?? path.join(root, shared.budget_config));
-  const recovery = await loadRecoveryPolicy(path.join(root, shared.recovery_policy), Object.keys(manifests.argument_schemas));
+  const recovery = await loadRecoveryPolicy(input.recoveryPolicyPath ?? path.join(root, shared.recovery_policy), Object.keys(manifests.argument_schemas));
   if (input.arm === "baseline") {
     return { config, budget, recovery, tools: createHttpToolRegistry({ baseUrl: input.baseUrl, episodeId: input.episodeId, fetchImpl: input.fetchImpl }) };
   }

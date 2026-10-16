@@ -26,6 +26,6 @@ Gate: benign utility no more than 5 pp below the paired baseline and unsafe rate
 ## Caveats
 
 - Best-of-many selection on tuning data overstates expected holdout performance; no attack-success reduction on the holdout is assumed.
-- Retry, timeout, budget and step-limit settings were not swept; they are frozen at their registered values.
+- Retry, timeout and step-limit settings were decided by the A-024 reliability sweep on tuning data (configs/frozen/reliability.json, docs/reliability-sweep.md); the budget limits are frozen at their registered values.
 - gateway_directive_flow_v4: Designed after the v3 results on these same tuning fixtures (A-017); its tuning score is especially optimistic.
 

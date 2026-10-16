@@ -23,5 +23,19 @@ if not eligible or eligible[0]['system'] != rec['selected']['system'] or cfg['de
     problems.append('frozen system is not the top-ranked eligible candidate')
 if 'holdout fixtures excluded' not in rec['data']['split']:
     problems.append('selection record does not certify the holdout exclusion')
+rel_path = d / 'reliability.json'
+if not rel_path.exists():
+    problems.append('no reliability decision (configs/frozen/reliability.json, A-024)')
+else:
+    rel = json.loads(rel_path.read_text())
+    if rel.get('combined_confirmation_required'):
+        problems.append('reliability changes need the combined confirmation run before freezing (A-024)')
+    hrel = cfg.get('reliability') or {}
+    if rel['chosen_changes'] and not (d / 'reliability-override.json').exists():
+        problems.append('reliability changes were chosen but the override file is missing')
+    if bool(rel['chosen_changes']) != bool(hrel.get('changes')):
+        problems.append('holdout-config.json does not carry the reliability decision')
+    if rel['condition']['system'] != rec['selected']['system'] or rel['condition']['model'] != rec['selected']['model']:
+        problems.append('reliability sweep ran a different system or model than the frozen selection')
 print(json.dumps({'ok': not problems, 'selected': rec['selected'], 'problems': problems}))
 sys.exit(1 if problems else 0)

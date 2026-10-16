@@ -137,7 +137,7 @@ record = {
     'candidates': candidates, 'selected': chosen and {'system': chosen['system'], 'model': model, 'prompt_profile': reg['primary_prompt_profile']},
     'runtime_limits_in_condition': {'outcomes': dict(terms), 'error_codes': dict(limit_runs.most_common(12))},
     'caveats': ['Best-of-many selection on tuning data overstates expected holdout performance; no attack-success reduction on the holdout is assumed.',
-                'Retry, timeout, budget and step-limit settings were not swept; they are frozen at their registered values.']
+                'Retry, timeout and step-limit settings were decided by the A-024 reliability sweep on tuning data (configs/frozen/reliability.json, docs/reliability-sweep.md); the budget limits are frozen at their registered values.']
                + ([f"{chosen['system']}: {sel['caveats_by_system'][chosen['system']]}"] if chosen and chosen['system'] in sel.get('caveats_by_system', {}) else []),
 }
 (out_dir / 'selection.json').write_text(json.dumps(record, indent=1) + '\n')

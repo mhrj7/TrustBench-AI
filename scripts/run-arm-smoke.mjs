@@ -69,9 +69,33 @@ if (live && provider.api_key_env) { try { process.loadEnvFile(path.join(root, ".
 
 const makeLiveAdapter = () => createAdapterFromSpec(providerName, provider, modelId, process.env);
 const budgetFile = live ? provider.budget_file : runConfig.scripted_budget_file;
+// TB-031 reliability sweep: --reliability <file> sets the step limit, the run timeout and the retry policy for both arms
+// of every pair (identically), and is recorded in the report. Without it the registered values apply.
+const reliabilityFile = flag("--reliability", null);
+const reliability = reliabilityFile ? JSON.parse(await readFile(path.resolve(root, reliabilityFile), "utf8")) : null;
+let recoveryOverridePath = null;
+if (reliability?.retry) {
+  const base = JSON.parse(await readFile(path.join(root, "configs/recovery.yaml"), "utf8"));
+  base.retry = { ...base.retry, ...reliability.retry };
+  recoveryOverridePath = path.join(root, ".tool-state", `recovery-${reliability.name}.json`);
+  await mkdir(path.dirname(recoveryOverridePath), { recursive: true });
+  await writeFile(recoveryOverridePath, JSON.stringify(base, null, 2));
+}
+const reportPrefix = flag("--report-prefix", "tb024");
+// A longer run timeout only takes effect if the budget's elapsed-time limit grows with it, so the override raises both.
+let budgetOverridePath = null;
+if (reliability?.timeout_ms) {
+  const b = JSON.parse(await readFile(path.join(root, budgetFile), "utf8"));
+  b.limits = { ...b.limits, max_elapsed_ms: Math.max(b.limits.max_elapsed_ms, reliability.timeout_ms) };
+  budgetOverridePath = path.join(root, ".tool-state", `budget-${reliability.name}.json`);
+  await mkdir(path.dirname(budgetOverridePath), { recursive: true });
+  await writeFile(budgetOverridePath, JSON.stringify(b, null, 2));
+}
 const runOptions = (rep) => ({
-  budgetConfigPath: path.join(root, budgetFile),
-  ...(live ? { timeoutMs: runConfig.live.timeout_ms, generationOverrides: { temperature, seed: baseSeed + rep * runConfig.live.seed_offset_per_repetition, max_output_tokens: runConfig.live.max_output_tokens, ...provider.generation_overrides } } : {}),
+  budgetConfigPath: budgetOverridePath ?? path.join(root, budgetFile),
+  ...(reliability?.max_steps ? { maxSteps: reliability.max_steps } : {}),
+  ...(recoveryOverridePath ? { recoveryPolicyPath: recoveryOverridePath } : {}),
+  ...(live ? { timeoutMs: reliability?.timeout_ms ?? runConfig.live.timeout_ms, generationOverrides: { temperature, seed: baseSeed + rep * runConfig.live.seed_offset_per_repetition, max_output_tokens: runConfig.live.max_output_tokens, ...provider.generation_overrides } } : {}),
 });
 const suitePath = flag("--suite", runConfig.default_suite);
 const suite = JSON.parse(await readFile(path.resolve(root, suitePath), "utf8"));
@@ -297,6 +321,7 @@ const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
+  reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
 };
@@ -368,18 +393,18 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}${reliability ? `-rel-${reliability.name}` : ""}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });
 await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tests/tb024-${suffix}-policy-traces.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
 await tracing.provider.forceFlush(); await tracing.provider.shutdown();
-const traceOut = path.join(root, live ? obsConfig.trace_dir_live : obsConfig.trace_dir_scripted, `tb024-${suffix}.spans.jsonl`);
+const traceOut = path.join(root, live ? obsConfig.trace_dir_live : obsConfig.trace_dir_scripted, `${reportPrefix}-${suffix}.spans.jsonl`);
 await mkdir(path.dirname(traceOut), { recursive: true });
 await writeFile(traceOut, await readFile(spanFile, "utf8").catch(() => ""));
 report.trace_file = path.relative(root, traceOut);
 report.trace_redaction = { replaced_values: tracing.redactor.replaced, dropped_attributes: Object.fromEntries(tracing.redactor.dropped) };
-await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `reports/tests/tb024-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
+await writeFile(path.join(root, live ? `evidence/${reportPrefix}-${suffix}-report.json` : `reports/tests/${reportPrefix}-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 
 const promptChanging = defendedSystem.agent_defenses.some((d) => defensesRegistry.defenses[d]?.changes_first_request) || Boolean(defendedSystem.architecture && defensesRegistry.architectures[defendedSystem.architecture]?.changes_first_request);

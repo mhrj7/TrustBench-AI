@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "note": "TB-031 reliability sweep (rule: protocol/amendments.md A-024). The frozen system, model, profile and rendering come from configs/frozen/selection.json; temperature and request pacing from configs/live-matrix.yaml for the model; repetitions here. Each configuration is passed to scripts/run-arm-smoke.mjs --reliability. JSON content (valid YAML).",
+  "repetitions": 3,
+  "parallel_lanes": 3,
+  "report_prefix": "tb031",
+  "termination_codes": [
+    "step_limit_exceeded",
+    "AgentTimeoutError",
+    "BudgetExhaustedError"
+  ],
+  "decision": {
+    "termination_gain_pp": 5,
+    "termination_tolerance_pp": 5,
+    "utility_margin_pp": 5
+  },
+  "configurations": [
+    {
+      "name": "registered",
+      "factor": null
+    },
+    {
+      "name": "steps16",
+      "factor": "step_limit",
+      "max_steps": 16
+    },
+    {
+      "name": "steps8",
+      "factor": "step_limit",
+      "max_steps": 8,
+      "cheaper": true
+    },
+    {
+      "name": "timeout360",
+      "factor": "timeout",
+      "timeout_ms": 360000
+    },
+    {
+      "name": "retries2",
+      "factor": "retries",
+      "retry": {
+        "max_attempts_per_call": 2
+      },
+      "cheaper": true
+    }
+  ]
+}
