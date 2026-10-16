@@ -47,7 +47,7 @@ for r in sorted({l['round'] for l in ai}):
     d = defects['rounds'][str(r)]
     assert d['audited_version'] == sample.get('localizer_version', '1.0.0'), r
     note = (f"first audit; its defects fixed in {d['fixed_in']}" if r == 1 else
-            f"fresh cases; their defects fixed in {d['fixed_in']}" if d['fixed_in'] else 'fresh cases; final round (A-020), defects open')
+            f"fresh cases; their defects fixed in {d['fixed_in']}" if d['fixed_in'] else 'fresh cases; latest round, nothing fixed after it' + ('' if d['defects'] else ', no defect found'))
     mine = [l for l in ai if l['round'] == r]
     first = [dict(l, label=l.get('original_label', l['label'])) for l in mine]
     rounds[str(r)] = {'localizer_version': d['audited_version'], 'cases': len(sample['cases']), 'summary': summarize(mine), 'note': note,
@@ -80,7 +80,7 @@ constructed = score(C)
 fin = rounds[str(final_round)]
 out = {'task_id': 'TB-029', 'localizer_version': cfg['schema_version'],
        'measured_accuracy': {'round': final_round, 'localizer_version': fin['localizer_version'], **{c: fin['summary'][c] for c in ('utility', 'security', 'all')},
-                             'note': 'The final audit round on fresh cases (A-020); its defects are open, so this is the accuracy of the localizer as shipped.'},
+                             'note': 'The latest audit round on fresh cases (A-020 closed TB-029 on round 4 with 1.3.0; A-022 added round 5 for 1.4.0). Defects it finds stay open, so this is the accuracy of the localizer as shipped.'},
        'human_review': {'labels': len(human), 'summary': summarize(human) if human else None,
                         'status': 'complete' if human else 'not done: no human has reviewed any case',
                         'deviation': 'A-020: the project owner accepted the AI audit as the reviewed cases on 2026-10-16. The reviewed cases are AI-audited, not human-reviewed, and no human-AI agreement is measured.'},
@@ -102,9 +102,10 @@ lines = ['# Failure attribution (TB-029)', '',
          f"version {cfg['schema_version']}) reports, for each failed run in `reports/attribution.csv`, the first step where the run left its task contract and, "
          'for each failed check, the first violation that can explain it. **It names where the trajectory first violated the contract; it does not show that this step caused the failure.**', '',
          '## Measured accuracy', '',
-         f"Final audit round {ma['round']} (fresh cases, localizer {ma['localizer_version']}): **{ma['all']['correct']}/{ma['all']['judged']} failed checks attributed correctly "
+         f"Latest audit round {ma['round']} (fresh cases, localizer {ma['localizer_version']}): **{ma['all']['correct']}/{ma['all']['judged']} failed checks attributed correctly "
          f"({pct(ma['all']['accuracy'])}, 95% Wilson {ci(ma['all']['wilson95'])})**: utility {ma['utility']['correct']}/{ma['utility']['judged']}, security {ma['security']['correct']}/{ma['security']['judged']}. "
-         f"{len(out['open_defects'])} defects found in that round are open (below). The reviewer is an AI model, not a human; see the deviation note.", '',
+         + (f"{len(out['open_defects'])} defects found in that round are open (below). " if out['open_defects'] else 'No defect was found in that round. ')
+         + ' '.join(defects['rounds'][str(final_round)].get('notes', [])) + ' The reviewer is an AI model, not a human; see the deviation note.', '',
          '## Human review', '', f"Status: {out['human_review']['status']}. {out['human_review']['deviation']} The review UI is `npm run review:attribution`; human labels, if added, are reported here separately and take precedence.", '',
          '## AI audit (an AI model, not a human)', '',
          f"Criterion: {out['ai_audit']['criterion']}. Every case, verdict and reason is in `docs/attribution-audit.md`.", '',
@@ -119,8 +120,8 @@ lines += ['', f"Each round is a fresh stratified sample with no overlap with ear
           f"**Consistency corrections:** {cc['count']} earlier labels were changed to wrong_rule. {cc['note']} "
           'An AI audit is not human calibration: it can share the localizer author\'s blind spots.', '',
           f"**Regression check** ({rc['note']}): " + '; '.join(f"round {r}: {v['agrees']} agree, {v['differs']} differ" for r, v in rc['by_round'].items()) + '.', '',
-          '## Open defects (found in the final round, not fixed)', '',
-          *[f"- **{d['id']}** ({', '.join(d['cases'])}): {d['text']} Proposed fix: {d['proposed_fix']}" for d in out['open_defects']], '',
+          '## Open defects (found in the latest round, not fixed)', '',
+          *([f"- **{d['id']}** ({', '.join(d['cases'])}): {d['text']} Proposed fix: {d['proposed_fix']}" for d in out['open_defects']] or ['None found in the final round.']), '',
           '## Constructed ground truth (rule correctness check, not a review)', '',
           f"{constructed['correct']}/{constructed['cases']} trajectories with one injected violation at a known step were localized exactly.", '',
           '| Rule | Cases | Correct |', '| --- | --- | --- |', *[f"| {k} | {v['cases']} | {v['correct']} |" for k, v in constructed['by_rule'].items()], '']

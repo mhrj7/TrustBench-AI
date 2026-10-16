@@ -29,6 +29,10 @@ for rnd, d in defects['rounds'].items():
     L += [head, '']
     for i, x in enumerate(d['defects'], 1):
         L.append(f"{i}. {x['text']} ({', '.join(x['cases'])})" + (f" Proposed fix: {x['proposed_fix']}" if x.get('proposed_fix') else ''))
+    for x in d.get('notes', []):
+        L.append(f'- Note: {x}')
+    if not d['defects']:
+        L.append('No defect found.')
     for x in d.get('also_fixed_before_round_4', []):
         L.append(f"- Also fixed in {d['fixed_in']}: {x['text']}")
     L.append('')

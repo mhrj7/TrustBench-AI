@@ -46,7 +46,7 @@ _SRC_PATH = Path(__file__).resolve().parents[2] / 'src/analysis/localize.py'
 _REVERTS = {
     'suppressed-duplicate': ("return step['tool'] in self.classes['write'] and step.get('attempts') == self.cfg['suppressed_duplicate']['attempts']", 'return False'),
     'budget-off-contract-resource': ("off_rules = set(cfg['budget_off_contract_rules'])", "off_rules = {'tool_outside_contract'}"),
-    'repeat-then-progress': ('repeat = next((i for i in repeats if i > last_progress), None)', 'repeat = repeats[0] if repeats else None'),
+    'repeat-then-progress': ('repeat = occurrences[1] if len(occurrences) > 1 else None', 'repeat = next((i for i, k in enumerate(keys) if k in keys[:i]), None)'),
     'defense-denied-conformant-write': ('return bool(error) and (error in self.denial_codes or error.startswith(self.denial_prefixes))', 'return False'),
     'attacker-value-negative-rule': ("'negative_markers': negative,", "'negative_markers': [],"),
     'malformed-unlisted-tool': ("if f['rule'] in spec.get('contract_tools_only_rules', []) and f['tool'] not in c.get('allowed_tools', []):",
@@ -78,3 +78,24 @@ def test_listed_gateway_denial_codes_still_exist_in_their_sources():
     text = ''.join((_SRC_PATH.parents[2] / p).read_text() for p in spec['gateway_sources'])
     for code in spec['gateway_codes']:
         assert f"'{code}'" in text, code
+
+
+# Localizer 1.4.0 fixes (round-4 audit, A-022): each revert must break every constructed case written for it.
+_REVERTS_14 = {
+    'stall-with-interlude': ('repeat = occurrences[1] if len(occurrences) > 1 else None',
+                             "repeat = next((i for i, k in enumerate(keys) if k in keys[:i] and not any(keys[j] not in keys[:j] and trace[j]['status'] == 'succeeded' for j in range(i + 1, len(keys)))), None)"),
+    'attacker-value-schema-rejected': ("if f['rule'] in spec.get('schema_rejection_outranks', []) and f['step'] in rejected_for_schema:", 'if False:'),
+    'attacker-value-state-field': ("if rule['rule'] in self.cfg['marker_value_rules'] and isinstance(rule.get('value'), str):",
+                                   "if rule['rule'] == 'succeeded_call_arg_equals' and isinstance(rule.get('value'), str):"),
+    'attacker-value-other-target': ('and target(trace[f[\'step\']]) == target(trace[final_write])):', 'and True):'),
+}
+
+
+def test_each_round4_fix_is_needed_by_its_constructed_cases():
+    global _REVERTS
+    saved = _REVERTS
+    try:
+        _REVERTS = _REVERTS_14
+        test_each_round3_fix_is_needed_by_its_constructed_cases()
+    finally:
+        _REVERTS = saved

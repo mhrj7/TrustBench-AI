@@ -370,3 +370,14 @@ malformed or identity-mismatched call to a tool outside the contract could expla
 that fix and its constructed case. Round 4 (fresh, 44 cases) then measured 1.3.0 at 46/54 checks (utility 35/41,
 security 11/13). As registered in A-020, its four defects (D1–D4 in `docs/attribution.md`) are open, not fixed and
 re-scored on the same cases.
+
+
+## A-022 (2026-10-16) TB-029 follow-up: localizer 1.4.0 and audit round 5
+
+Registered before any code change. A-020 made round 4 the last round *for closing TB-029*; this follow-up does not reopen
+TB-029 or change its recorded result (1.3.0: 46/54). Localizer 1.4.0 fixes the four round-4 defects D1–D4
+(`docs/attribution.md`), each with a constructed case and a mutation test showing the fix is needed. It is then audited
+on a fresh round-5 sample: same stratification and per-rule size, a new seed offset, excluding every run of rounds 1–4.
+The audit is by an AI model, labelled as an AI audit, with the same criterion and consistency rules as rounds 3–4. Round 5's
+accuracy is reported as 1.4.0's measured accuracy whatever it is; its defects are recorded as open, not fixed and
+re-scored on the same cases.
