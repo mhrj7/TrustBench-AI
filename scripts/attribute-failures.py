@@ -25,7 +25,7 @@ for path in sorted((ROOT / 'evidence').glob('tb024-*-report.json')):
             if side['invalid'] or (ev['utility_pass'] and ev['security_pass']):
                 continue
             failed = {'utility': not ev['utility_pass'], 'security': not ev['security_pass']}
-            out = localize(side['tool_trace'], C.for_case(case['fixture_id'], case.get('attack_id')), C, failed=failed)
+            out = localize(side['tool_trace'], C.for_case(case['fixture_id'], case.get('attack_id')), C, failed=failed, failures=side['failures'])
             run_id = f"{path.name.removesuffix('-report.json')}|{case['case_id']}|r{case['repetition']}|{arm}"
             f, fx = out['first_violation'], out['first_executed_violation']
             eu, es = out['explaining'].get('utility'), out['explaining'].get('security')
@@ -48,13 +48,17 @@ strata: dict[str, list[str]] = {}
 for r in rows:
     key = r['utility_rule'] or r['security_rule'] or 'unattributed'
     strata.setdefault(key, []).append(r['run_id'])
-rng = np.random.default_rng(reg['pair_order_seed'] + cfg['review_sample']['seed_offset'])
+rs = cfg['review_sample']
+excluded = {c['row']['run_id'] for f in rs['exclude_rounds'] for c in json.loads((ROOT / f).read_text())['cases']}
+rng = np.random.default_rng(reg['pair_order_seed'] + rs['seed_offsets'][str(rs['round'])])
 sample = []
 for key in sorted(strata):
-    ids = sorted(strata[key])
-    take = rng.choice(len(ids), size=min(cfg['review_sample']['per_rule'], len(ids)), replace=False)
+    ids = sorted(i for i in strata[key] if i not in excluded)
+    if not ids:
+        continue
+    take = rng.choice(len(ids), size=min(rs['per_rule'], len(ids)), replace=False)
     sample += [dict(details[ids[i]], stratum=key) for i in sorted(take)]
-(ROOT / cfg['sample_file']).write_text(json.dumps({'note': 'TB-029 human-review sample of localized failures (synthetic fixtures, development split).', 'cases': sample}, indent=1, default=str) + '\n')
+(ROOT / cfg['sample_file']).write_text(json.dumps({'note': 'TB-029 review sample of localized failures (synthetic fixtures, development split).', 'round': rs['round'], 'localizer_version': cfg['schema_version'], 'cases': sample}, indent=1, default=str) + '\n')
 
 # Join reviewed labels, bound to the exact prediction they reviewed.
 reviews = {}
@@ -62,14 +66,14 @@ review_path = ROOT / cfg['review_file']
 if review_path.exists():
     for line in review_path.read_text().splitlines():
         if line.strip():
-            rv = json.loads(line); reviews[(rv['run_id'], rv['prediction_sha256'])] = rv  # the latest label for a prediction wins
+            rv = json.loads(line); reviews[(rv['run_id'], rv['prediction_sha256'], rv.get('check', 'utility'))] = rv  # the latest label wins
 for r in rows:
-    rv = reviews.get((r['run_id'], r['prediction_sha256']))
-    r['review_label'] = rv['label'] if rv else ''
-    r['reviewer'] = rv['reviewer'] if rv else ''
+    for check in ('utility', 'security'):
+        rv = reviews.get((r['run_id'], r['prediction_sha256'], check))
+        r[f'human_review_{check}'] = rv['label'] if rv else ''
 with open(ROOT / 'reports/attribution.csv', 'w', newline='') as fh:
     w = csv.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
 counts = {}
 for r in rows:
     counts[r['utility_rule'] or r['security_rule'] or 'unattributed'] = counts.get(r['utility_rule'] or r['security_rule'] or 'unattributed', 0) + 1
-print(json.dumps({'failed_runs': len(rows), 'unattributed': sum(not r['attributed'] for r in rows), 'review_sample': len(sample), 'reviewed': sum(bool(r['review_label']) for r in rows), 'by_explaining_rule': counts}, indent=1))
+print(json.dumps({'failed_runs': len(rows), 'unattributed': sum(not r['attributed'] for r in rows), 'review_sample': len(sample), 'human_reviewed_checks': sum(bool(r['human_review_utility']) + bool(r['human_review_security']) for r in rows), 'by_explaining_rule': counts}, indent=1))

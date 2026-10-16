@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 ROOT = Path(__file__).resolve().parents[2]
 CFG = json.loads((ROOT / 'configs/localization.yaml').read_text())
 RULES = {r['id']: r['description'] for r in CFG['step_rules'] + CFG['terminal_rules']}
-LABELS = {'correct': 'Correct: this step and rule are where the failure is', 'wrong_step': 'Wrong step', 'wrong_rule': 'Right step, wrong rule', 'unclear': 'Unclear / cannot judge'}
+LABELS = {'correct': 'Correct: this step and rule are where the failure is', 'wrong_step': 'Wrong step', 'wrong_rule': 'Right step, wrong rule', 'missed': 'Missed: the check failed but no attribution was given', 'unclear': 'Unclear / cannot judge'}
 app = FastAPI()
 
 
@@ -27,14 +27,14 @@ def reviews() -> dict[tuple[str, str], dict]:
     if path.exists():
         for line in path.read_text().splitlines():
             if line.strip():
-                rv = json.loads(line); out[(rv['run_id'], rv['prediction_sha256'])] = rv
+                rv = json.loads(line); out[(rv['run_id'], rv['prediction_sha256'], rv['check'])] = rv
     return out
 
 
-def attribution(case: dict) -> tuple[str, list | None]:
-    """The failure-explaining attribution under review: utility first, then security."""
-    p = case['prediction']
-    return ('utility', p['utility']) if p.get('utility') else ('security', p['security']) if p.get('security') else ('first', p.get('first'))
+def attributions(case: dict) -> list[tuple[str, list | None]]:
+    """One attribution per failed check (utility, security); each is reviewed on its own."""
+    row = case['row']
+    return [(check, case['prediction'].get(check)) for check, passed in (('utility', row['utility_pass']), ('security', row['security_pass'])) if not passed]
 
 
 E = html.escape
@@ -43,21 +43,27 @@ E = html.escape
 @app.get('/', response_class=HTMLResponse)
 def page(i: int | None = None) -> str:
     cases, done = sample(), reviews()
-    reviewed = [(c['row']['run_id'], c['row']['prediction_sha256']) in done for c in cases]
+    reviewed = [all((c['row']['run_id'], c['row']['prediction_sha256'], k) in done for k, _ in attributions(c)) for c in cases]
     if i is None:
         i = next((k for k, r in enumerate(reviewed) if not r), 0)
     i = max(0, min(i, len(cases) - 1))
     c, row = cases[i], cases[i]['row']
-    check, att = attribution(c)
-    prior = done.get((row['run_id'], row['prediction_sha256']))
+    atts = attributions(c)
+    marked = {a[1] for _, a in atts if a}
     steps = ''.join(
-        f"<tr class='{'hit' if att and k == att[1] else ''}'><td>{k}</td><td>{E(s['tool'])}</td><td>{E(s['status'])}</td><td>{E(str(s.get('error') or ''))}</td>"
+        f"<tr class='{'hit' if k in marked else ''}'><td>{k}</td><td>{E(s['tool'])}</td><td>{E(s['status'])}</td><td>{E(str(s.get('error') or ''))}</td>"
         f"<td><code>{E(json.dumps(s.get('args'), sort_keys=True)[:400])}</code></td></tr>" for k, s in enumerate(c['trace']))
-    end_row = f"<tr class='{'hit' if att and att[1] == len(c['trace']) else ''}'><td>{len(c['trace'])}</td><td colspan=4><i>end of run</i> (outcome {E(row['outcome'])})</td></tr>"
+    end_row = f"<tr class='{'hit' if len(c['trace']) in marked else ''}'><td>{len(c['trace'])}</td><td colspan=4><i>end of run</i> (outcome {E(row['outcome'])})</td></tr>"
     violations = ''.join(f"<li>step {v['step']}: <b>{E(v['rule'])}</b> on {E(v['tool'])} ({'executed' if v['executed'] else 'blocked/failed'}): {E(str(v['detail']))}</li>" for v in c['violations']) or '<li>none</li>'
     contract = c['contract']
     rule_opts = ''.join(f"<option value='{k}'>{k}: {E(d)}</option>" for k, d in RULES.items())
-    label_opts = ''.join(f"<label><input type=radio name=label value='{k}' {'checked' if prior and prior['label'] == k else ''}> {E(v)}</label><br>" for k, v in LABELS.items())
+    def group(check: str, att: list | None) -> str:
+        prior = done.get((row['run_id'], row['prediction_sha256'], check))
+        radios = ''.join(f"<label><input type=radio name=label_{check} value='{k}' {'checked' if prior and prior['label'] == k else ''}> {E(v)}</label><br>" for k, v in LABELS.items())
+        said = f"<b>{E(att[0])}</b> at step {att[1]} — {E(RULES.get(att[0], ''))}" if att else '<b>no attribution</b>'
+        return (f"<div class=box><b>Failed {E(check)} check.</b> Localizer: {said}<br>{radios}"
+                f"If not: correct step <input name=step_{check} size=4> correct rule <select name=rule_{check}><option value=''>—</option>{rule_opts}</select></div>")
+    groups = ''.join(group(k, a) for k, a in atts)
     nav = ' '.join(f"<a href='/?i={k}' class='{'cur' if k == i else ''} {'ok' if r else ''}'>{k + 1}</a>" for k, r in enumerate(reviewed))
     return f"""<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Attribution review</title>
 <style>:root{{--bg:#fff;--fg:#1d1d1f;--mut:#666;--hit:#fff4c2;--ok:#d8f5dc;--bd:#ddd}}
@@ -74,17 +80,15 @@ Utility {'passed' if row['utility_pass'] else '<b>failed</b>'} · Security {'pas
 <code>{E(json.dumps({k: v for k, v in contract.items() if k not in ('request', 'allowed_tools', 'user_id')}, sort_keys=True))}</code></div>
 <div class=box><b>Trajectory</b> (highlighted: the attributed step)<table><tr><th>#</th><th>tool</th><th>status</th><th>error</th><th>arguments</th></tr>{steps}{end_row}</table>
 <p class=mut>Run failures: {E(', '.join(c['failures']) or 'none')} · final text: {E((c['final_text'] or '')[:300])}</p></div>
-<div class=box><b>Localizer attribution for the failed {E(check)} check:</b> {'<b>' + E(att[0]) + '</b> at step ' + str(att[1]) + ' — ' + E(RULES.get(att[0], '')) if att else 'none'}
-<p class=mut>All rule hits:</p><ul>{violations}</ul></div>
+<div class=box><p class=mut>All rule hits:</p><ul>{violations}</ul></div>
 <form class=box id=f><input type=hidden name=run_id value='{E(row['run_id'])}'><input type=hidden name=prediction_sha256 value='{E(row['prediction_sha256'])}'><input type=hidden name=i value={i}>
-<b>Is the attribution right?</b><br>{label_opts}
-<p>If not: correct step <input name=correct_step size=4 value='{E(str(prior.get('correct_step', '')) if prior else '')}'> correct rule <select name=correct_rule><option value=''>—</option>{rule_opts}</select></p>
-<p>Note <input name=note size=60 value='{E(prior.get('note', '') if prior else '')}'> · Reviewer <input name=reviewer id=rv size=14 required></p>
+{groups}
+<p>Note <input name=note size=60> · Reviewer <input name=reviewer id=rv size=14 required></p>
 <button type=submit>Save and next</button> <span id=msg class=mut></span></form>
 <script>
 const rv=document.getElementById('rv'); try{{rv.value=localStorage.getItem('reviewer')||''}}catch(e){{}}
 document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
-if(!d.label){{document.getElementById('msg').textContent='choose a label';return}} try{{localStorage.setItem('reviewer',d.reviewer)}}catch(e){{}}
+ try{{localStorage.setItem('reviewer',d.reviewer)}}catch(e){{}}
 const r=await fetch('/label',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify(d)}});
 if(r.ok) location.href='/?i='+(Number(d.i)+1); else document.getElementById('msg').textContent='not saved: '+(await r.text());}};
 </script></body></html>"""
@@ -97,15 +101,19 @@ async def label(request: Request) -> JSONResponse:
     case = cases.get(body.get('run_id'))
     if case is None or body.get('prediction_sha256') != case['row']['prediction_sha256']:
         raise HTTPException(400, 'unknown run or stale prediction')
-    if body.get('label') not in LABELS or not str(body.get('reviewer', '')).strip():
-        raise HTTPException(400, 'label and reviewer are required')
-    check, att = attribution(case)
-    record = {'run_id': case['row']['run_id'], 'prediction_sha256': case['row']['prediction_sha256'], 'reviewed_check': check, 'reviewed_attribution': att,
-              'label': body['label'], 'correct_step': int(body['correct_step']) if str(body.get('correct_step', '')).strip().lstrip('-').isdigit() else None,
-              'correct_rule': body.get('correct_rule') or None, 'note': str(body.get('note', ''))[:500], 'reviewer': str(body['reviewer'])[:60],
-              'reviewed_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+    if not str(body.get('reviewer', '')).strip():
+        raise HTTPException(400, 'reviewer is required')
+    atts = attributions(case)
+    if any(body.get(f'label_{k}') not in LABELS for k, _ in atts):
+        raise HTTPException(400, 'every failed check needs a label')
     path = ROOT / CFG['review_file']
     path.parent.mkdir(parents=True, exist_ok=True)
+    now = time.strftime('%Y-%m-%dT%H:%M:%S%z')
     with path.open('a') as fh:
-        fh.write(json.dumps(record, sort_keys=True) + '\n')
+        for check, att in atts:
+            step = str(body.get(f'step_{check}', '')).strip()
+            fh.write(json.dumps({'run_id': case['row']['run_id'], 'prediction_sha256': case['row']['prediction_sha256'], 'check': check, 'predicted': att,
+                                 'label': body[f'label_{check}'], 'correct_step': int(step) if step.lstrip('-').isdigit() else None,
+                                 'correct_rule': body.get(f'rule_{check}') or None, 'note': str(body.get('note', ''))[:500], 'reviewer': str(body['reviewer'])[:60],
+                                 'reviewer_type': 'human', 'reviewed_at': now}, sort_keys=True) + '\n')
     return JSONResponse({'saved': True})

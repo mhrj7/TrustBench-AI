@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""TB-029 acceptance: attribution accuracy against human-reviewed cases (plus the constructed-ground-truth check, reported
-separately). Writes evidence/tb029-attribution-accuracy.json and docs/attribution.md. No number is typed by hand."""
+"""TB-029 acceptance: attribution accuracy against reviewed cases. Human review and the AI audit are kept strictly
+separate and labelled; the constructed-ground-truth check is reported on its own. Writes
+evidence/tb029-attribution-accuracy.json and docs/attribution.md. No number is typed by hand."""
 import json, math, sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,47 +22,56 @@ def wilson(k, n, z=1.959963984540054):
     return [round(max(0.0, (c - h) / d), 4), round(min(1.0, (c + h) / d), 4)]
 
 
-sample = json.loads((ROOT / cfg['sample_file']).read_text())['cases']
-current = {(c['row']['run_id'], c['row']['prediction_sha256']): c for c in sample}
-latest = {}
-path = ROOT / cfg['review_file']
-if path.exists():
-    for line in path.read_text().splitlines():
-        if line.strip():
-            rv = json.loads(line); latest[(rv['run_id'], rv['prediction_sha256'])] = rv
-reviewed = [(current[k], rv) for k, rv in latest.items() if k in current]  # labels for an outdated prediction are not counted
-stale = [k for k in latest if k not in current]
-judged = [(c, rv) for c, rv in reviewed if rv['label'] != 'unclear']
-correct = [x for x in judged if x[1]['label'] == 'correct']
-by_rule = {}
-for c, rv in judged:
-    by_rule.setdefault(c['stratum'], [0, 0]); by_rule[c['stratum']][1] += 1; by_rule[c['stratum']][0] += rv['label'] == 'correct'
+def jsonl(path):
+    p = ROOT / path
+    return [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
+
+
+def summarize(labels):
+    out = {}
+    for check in ('utility', 'security', 'all'):
+        xs = [l for l in labels if check == 'all' or l['check'] == check]
+        judged = [l for l in xs if l['label'] != 'unclear']
+        k = sum(l['label'] == 'correct' for l in judged)
+        out[check] = {'checks': len(xs), 'judged': len(judged), 'correct': k, 'unclear': len(xs) - len(judged),
+                      'accuracy': round(k / len(judged), 4) if judged else None, 'wilson95': wilson(k, len(judged)), 'labels': dict(Counter(l['label'] for l in xs))}
+    return out
+
+
+ai = jsonl(cfg['ai_audit_file'])
+rounds = {}
+for r in sorted({l['round'] for l in ai}):
+    sample = json.loads((ROOT / f'reports/attribution-audit/round{r}-sample.json').read_text())
+    rounds[str(r)] = {'localizer_version': sample.get('localizer_version', '1.0.0'), 'cases': len(sample['cases']), 'summary': summarize([l for l in ai if l['round'] == r]),
+                      'fresh': r > 1, 'note': 'cases the localizer was later fixed against' if r == 1 else 'fresh cases never used to change the localizer'}
+human = jsonl(cfg['review_file'])
 constructed = score(C)
-out = {'task_id': 'TB-029',
-       'human_review': {'sample_size': len(sample), 'reviewed': len(reviewed), 'unclear': len(reviewed) - len(judged), 'judged': len(judged), 'correct': len(correct),
-                        'accuracy': round(len(correct) / len(judged), 4) if judged else None, 'accuracy_wilson95': wilson(len(correct), len(judged)),
-                        'by_rule': {k: {'judged': n, 'correct': k_, 'accuracy': round(k_ / n, 4)} for k, (k_, n) in sorted(by_rule.items())},
-                        'reviewers': sorted({rv['reviewer'] for _, rv in reviewed}), 'stale_labels_ignored': len(stale),
-                        'status': 'complete' if len(reviewed) == len(sample) else f'awaiting human review ({len(reviewed)}/{len(sample)} reviewed)'},
+out = {'task_id': 'TB-029', 'localizer_version': cfg['schema_version'],
+       'human_review': {'labels': len(human), 'summary': summarize(human) if human else None, 'status': 'complete' if human else 'not done: no human has reviewed any case yet'},
+       'ai_audit': {'reviewer': 'AI auditor (an LLM), not a human', 'criterion': 'an attribution is correct only if its step is the earliest step at which the run went wrong in a way that mechanically produced the failed check, and its rule names what went wrong there; each failed check (utility, security) is judged separately',
+                    'rounds': rounds},
        'constructed_ground_truth': {k: constructed[k] for k in ('ground_truth', 'cases', 'correct', 'by_rule')},
-       'judge_labels': 'not used: optional judge labels are allowed only after human calibration, which this review provides first'}
+       'judge_labels': 'not used for any decision: the AI audit is reported as an audit, and judge labels are allowed only after human calibration'}
 (ROOT / 'evidence/tb029-attribution-accuracy.json').write_text(json.dumps(out, indent=1) + '\n')
-hr = out['human_review']
+
 pct = lambda v: '—' if v is None else f'{v:.0%}'
+ci = lambda w: '—' if not w else f'{pct(w[0])}–{pct(w[1])}'
 lines = ['# Failure attribution (TB-029)', '',
-         'Generated by `scripts/attribution-accuracy.py` from `reports/attribution.csv`, the review sample and the human labels in '
-         f"`{cfg['review_file']}`. The localizer (`src/analysis/localize.py`, rules in `configs/localization.yaml`) reports the first step where a failed run "
-         'left its task contract, and the first violation that can explain the failed check. **It names where the trajectory first violated the contract; it does not show that this step caused the failure.**', '',
-         '## Accuracy against human-reviewed cases', '',
-         f"Status: {hr['status']}. Reviewers: {', '.join(hr['reviewers']) or 'none yet'}.", '',
-         f"| Judged | Correct | Accuracy | 95% Wilson | Unclear (excluded) |", '| --- | --- | --- | --- | --- |',
-         f"| {hr['judged']} | {hr['correct']} | {pct(hr['accuracy'])} | {'—' if not hr['accuracy_wilson95'] else pct(hr['accuracy_wilson95'][0]) + '–' + pct(hr['accuracy_wilson95'][1])} | {hr['unclear']} |", '',
-         '| Attributed rule (stratum) | Judged | Correct |', '| --- | --- | --- |', *[f"| {k} | {v['judged']} | {v['correct']} |" for k, v in hr['by_rule'].items()], '',
-         '## Constructed ground truth (rule correctness check, not a review)', '',
-         f"{constructed['correct']}/{constructed['cases']} trajectories with one injected violation at a known step were localized exactly.", '',
-         '| Rule | Cases | Correct |', '| --- | --- | --- |', *[f"| {k} | {v['cases']} | {v['correct']} |" for k, v in constructed['by_rule'].items()], '',
-         '## Notes', '',
-         '- Under the plain prompt profile the first violation is often an unlisted read at step 0, while the failed check is explained by a later step; both are reported in `reports/attribution.csv`.',
-         '- Optional judge labels are not used: the task allows them only after human calibration.', '']
+         'Generated by `scripts/attribution-accuracy.py`. The localizer (`src/analysis/localize.py`, rules in `configs/localization.yaml`, '
+         f"version {cfg['schema_version']}) reports, for each failed run in `reports/attribution.csv`, the first step where the run left its task contract and, "
+         'for each failed check, the first violation that can explain it. **It names where the trajectory first violated the contract; it does not show that this step caused the failure.**', '',
+         '## Human review', '', f"Status: {out['human_review']['status']}. The review UI is `npm run review:attribution`.", '',
+         '## AI audit (an AI model, not a human)', '',
+         f"Criterion: {out['ai_audit']['criterion']}. Every case, verdict and reason is in `docs/attribution-audit.md`.", '',
+         '| Round | Localizer | Cases | Sample | Check | Judged | Correct | Accuracy | 95% Wilson | Unclear |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |']
+for r, v in rounds.items():
+    for check in ('utility', 'security', 'all'):
+        s = v['summary'][check]
+        lines.append(f"| {r} | {v['localizer_version']} | {v['cases']} | {v['note']} | {check} | {s['judged']} | {s['correct']} | {pct(s['accuracy'])} | {ci(s['wilson95'])} | {s['unclear']} |")
+lines += ['', 'Round 1 measured the first localizer and drove the fixes in version 1.1.0; round 2 is the evaluation of 1.1.0 on fresh cases. '
+          'An AI audit is not human calibration: it can share the localizer author\'s blind spots.', '',
+          '## Constructed ground truth (rule correctness check, not a review)', '',
+          f"{constructed['correct']}/{constructed['cases']} trajectories with one injected violation at a known step were localized exactly.", '',
+          '| Rule | Cases | Correct |', '| --- | --- | --- |', *[f"| {k} | {v['cases']} | {v['correct']} |" for k, v in constructed['by_rule'].items()], '']
 (ROOT / 'docs/attribution.md').write_text('\n'.join(lines) + '\n')
-print(json.dumps(out['human_review'], indent=1))
+print(json.dumps({r: {c: (v['summary'][c]['correct'], v['summary'][c]['judged']) for c in ('utility', 'security', 'all')} for r, v in rounds.items()}))
