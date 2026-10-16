@@ -6,7 +6,7 @@
 // only control. --tool-mode contract runs both arms against the TB-014 contract-checked backend (ablation).
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,11 +104,44 @@ const suite = JSON.parse(await readFile(path.resolve(root, suitePath), "utf8"));
 const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
 const holdoutIds = new Set(splits.holdout_manifest.fixture_ids);
 const isHoldout = (c) => holdoutIds.has(c.fixture_id.split("--")[0]) || (c.attack_id && holdoutIds.has(c.attack_id));
-const selected = suite.cases.filter((c) => (!onlyCases || onlyCases.has(c.case_id)) && !isHoldout(c) && !(live && c.scripted_only));
-const excludedHoldout = suite.cases.filter(isHoldout).map((c) => c.case_id);
+// TB-032 (A-025): --confirmatory-holdout is the one sanctioned holdout execution. It requires a PASS of the development
+// release gate, the frozen configuration exactly (checked by scripts/verify-frozen.py and against
+// configs/frozen/holdout-config.json), the registered holdout suite and a TB-028 schedule, and it refuses to run a rendering
+// whose holdout run directory already exists, so no holdout unit runs twice.
+const confirmatory = process.argv.includes("--confirmatory-holdout");
+let holdoutDir = null;
+if (confirmatory) {
+  const hc = JSON.parse(await readFile(path.join(root, "configs/frozen/holdout-config.json"), "utf8"));
+  const pace = JSON.parse(await readFile(path.join(root, "configs/frozen/live-matrix.yaml"), "utf8")).models[hc.model];
+  const matrixRenderings = JSON.parse(await readFile(path.join(root, "configs/frozen/live-matrix.yaml"), "utf8")).renderings.map((r) => r.id);
+  const gate = JSON.parse(await readFile(path.join(root, registry.holdout.confirmatory_gate_evidence), "utf8").catch(() => "{}"));
+  const problems = [];
+  if (gate.outcome !== "PASS") problems.push(`release gate outcome is ${gate.outcome ?? "missing"}, not PASS`);
+  if (!live || modelArg !== hc.model) problems.push(`model must be ${hc.model}`);
+  if (defendedSystemName !== hc.defended_system.system) problems.push(`defended system must be ${hc.defended_system.system}`);
+  if (promptProfile !== hc.prompt_profile) problems.push(`prompt profile must be ${hc.prompt_profile}`);
+  if (temperature !== pace.temperature || minIntervalMs !== pace.min_interval_ms) problems.push(`temperature and pacing must be ${pace.temperature} and ${pace.min_interval_ms} ms`);
+  if (reliabilityFile !== hc.reliability.override_file) problems.push(`reliability must be ${hc.reliability.override_file}`);
+  if (toolMode !== runConfig.default_tool_mode || faultProfileName || flag("--cases")) problems.push("no tool-mode, fault or case-subset overrides");
+  if (!matrixRenderings.includes(rendering)) problems.push(`rendering must be one of ${matrixRenderings.join(", ")}`);
+  if (suitePath !== registry.holdout.confirmatory_suite) problems.push(`suite must be ${registry.holdout.confirmatory_suite}`);
+  if (!schedule) problems.push("a TB-028 --schedule is required");
+  if (schedule && schedule.repetitions !== registry.repetitions_per_pair) problems.push(`schedule repetitions must be ${registry.repetitions_per_pair}`);
+  const frozen = await new Promise((resolve) => execFile(python, ["scripts/verify-frozen.py"], { cwd: root }, (error) => resolve(!error)));
+  if (!frozen) problems.push("scripts/verify-frozen.py failed: live settings differ from configs/frozen");
+  if (problems.length) throw new Error(`--confirmatory-holdout refused:\n- ${problems.join("\n- ")}`);
+  await mkdir(path.join(root, registry.holdout.confirmatory_run_dir), { recursive: true });
+  holdoutDir = path.join(root, registry.holdout.confirmatory_run_dir, rendering);
+  try { await mkdir(holdoutDir); } catch { throw new Error(`--confirmatory-holdout refused: ${path.relative(root, holdoutDir)} exists; each holdout unit runs once (A-025)`); }
+  await writeFile(path.join(holdoutDir, "started.json"), JSON.stringify({ started_at: new Date().toISOString(), argv: process.argv.slice(2), gate: registry.holdout.confirmatory_gate_evidence }, null, 1) + "\n");
+}
+const selected = confirmatory
+  ? suite.cases.filter((c) => { if (!isHoldout(c)) throw new Error(`confirmatory suite case ${c.case_id} is not a holdout case`); return true; })
+  : suite.cases.filter((c) => (!onlyCases || onlyCases.has(c.case_id)) && !isHoldout(c) && !(live && c.scripted_only));
+const excludedHoldout = confirmatory ? [] : suite.cases.filter(isHoldout).map((c) => c.case_id);
 // Output names identify the suite and, for a --cases subset, the exact case set, so a stress or subset run never
 // overwrites the report of a full run with the same model, rendering, profile and system.
-const eligible = suite.cases.filter((c) => !isHoldout(c) && !(live && c.scripted_only));
+const eligible = confirmatory ? selected : suite.cases.filter((c) => !isHoldout(c) && !(live && c.scripted_only));
 const suiteTag = path.resolve(root, suitePath) === path.resolve(root, runConfig.default_suite) ? "" : `-suite-${path.basename(suitePath, ".json")}`;
 const subsetTag = selected.length === eligible.length ? "" : `-cases-${createHash("sha256").update(selected.map((c) => c.case_id).sort().join(",")).digest("hex").slice(0, 8)}`;
 
@@ -289,6 +322,7 @@ async function runArm(arm, testCase, fixture, rep) {
 }
 
 const runs = [];
+let endedEarly = null;
 // Without a schedule: case by case, repetitions in order. With one: exactly its units, in its recorded order.
 const plan = schedule
   ? [...schedule.entries].sort((a, b) => a.position - b.position).map((e) => ({ testCase: selected.find((c) => c.case_id === e.case_id), rep: e.repetition, entry: e }))
@@ -302,6 +336,11 @@ for (const { testCase, rep, entry } of plan) {
   for (const arm of order) arms[arm] = await runArm(arm, testCase, fixture, rep);
   runs.push({ testCase, rep, order, arms, entry });
   if (live) console.error(`done ${testCase.case_id} r${rep}`);
+  if (holdoutDir) {
+    const brief = (a) => ({ invalid: a.invalid, outcome: a.result.outcome, failures: a.result.failures.map((f) => f.code), utility_pass: a.evaluation.utility_pass, security_pass: a.evaluation.security_pass, attacker_goal_achieved: a.evaluation.attacker_goal_achieved });
+    await appendFile(path.join(holdoutDir, "pairs.jsonl"), JSON.stringify({ unit_id: entry?.unit_id, case_id: testCase.case_id, repetition: rep, order, baseline: brief(arms.baseline), defended: brief(arms.defended), response_models: [...observedResponseModels].sort() }) + "\n");
+    if (observedResponseModels.size > 1) { endedEarly = `provider response model changed mid-run (${[...observedResponseModels].sort().join(", ")}); batch ended and the comparison is invalid (A-025)`; break; }
+  }
 }
 stopAll();
 
@@ -320,10 +359,11 @@ const effectiveProfile = promptProfile ?? baselineEffective.shared.default_promp
 const report = {
   schema_version: "1.1.0", task_id: live ? "TB-024-live-model" : "TB-024", checked_at: new Date().toISOString(),
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
-  status: live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
+  status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
+  ...(confirmatory ? { confirmatory_holdout: { intended_units: plan.length, attempted_units: runs.length, ended_early: endedEarly, comparison_valid: endedEarly === null, run_dir: path.relative(root, holdoutDir) } } : {}),
 };
 const traces = [];
 for (const { testCase, rep, order, arms, entry: scheduled } of runs) {
@@ -397,14 +437,14 @@ const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });
-await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tests/tb024-${suffix}-policy-traces.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
+await writeFile(holdoutDir ? path.join(holdoutDir, "policy-traces.jsonl") : path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tests/tb024-${suffix}-policy-traces.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
 await tracing.provider.forceFlush(); await tracing.provider.shutdown();
-const traceOut = path.join(root, live ? obsConfig.trace_dir_live : obsConfig.trace_dir_scripted, `${reportPrefix}-${suffix}.spans.jsonl`);
+const traceOut = holdoutDir ? path.join(holdoutDir, "spans.jsonl") : path.join(root, live ? obsConfig.trace_dir_live : obsConfig.trace_dir_scripted, `${reportPrefix}-${suffix}.spans.jsonl`);
 await mkdir(path.dirname(traceOut), { recursive: true });
 await writeFile(traceOut, await readFile(spanFile, "utf8").catch(() => ""));
 report.trace_file = path.relative(root, traceOut);
 report.trace_redaction = { replaced_values: tracing.redactor.replaced, dropped_attributes: Object.fromEntries(tracing.redactor.dropped) };
-await writeFile(path.join(root, live ? `evidence/${reportPrefix}-${suffix}-report.json` : `reports/tests/${reportPrefix}-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
+await writeFile(holdoutDir ? path.join(holdoutDir, "report.json") : path.join(root, live ? `evidence/${reportPrefix}-${suffix}-report.json` : `reports/tests/${reportPrefix}-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 
 const promptChanging = defendedSystem.agent_defenses.some((d) => defensesRegistry.defenses[d]?.changes_first_request) || Boolean(defendedSystem.architecture && defensesRegistry.architectures[defendedSystem.architecture]?.changes_first_request);

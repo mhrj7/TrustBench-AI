@@ -182,13 +182,21 @@ def main() -> None:
     s = sub.add_parser('schedule', help='write a fixed task-seed schedule for a case suite')
     s.add_argument('--suite', required=True); s.add_argument('--out', required=True); s.add_argument('--repetitions', type=int); s.add_argument('--order-seed', type=int)
     s.add_argument('--live-only', action='store_true', help='drop scripted-only cases')
+    s.add_argument('--confirmatory-holdout', action='store_true', help='TB-032 (A-025): schedule the registered holdout suite, holdout cases only')
     e = sub.add_parser('evaluate', help='evaluate arm-comparison reports')
     e.add_argument('--reports', nargs='+', required=True); e.add_argument('--schedule'); e.add_argument('--out', required=True)
     args = parser.parse_args()
     if args.cmd == 'schedule':
         holdout = set(_json('data/splits.json')['holdout_manifest']['fixture_ids'])
-        cases = [c for c in _json(args.suite)['cases'] if not (args.live_only and c.get('scripted_only'))
-                 and c['fixture_id'].split('--')[0] not in holdout and c.get('attack_id') not in holdout]
+        is_holdout = lambda c: c['fixture_id'].split('--')[0] in holdout or c.get('attack_id') in holdout
+        if args.confirmatory_holdout:
+            if Path(args.suite).as_posix() != registry()['holdout']['confirmatory_suite']:
+                raise SystemExit('--confirmatory-holdout schedules only the registered holdout suite')
+            cases = _json(args.suite)['cases']
+            if not cases or not all(is_holdout(c) for c in cases):
+                raise SystemExit('the confirmatory suite must contain holdout cases only')
+        else:
+            cases = [c for c in _json(args.suite)['cases'] if not (args.live_only and c.get('scripted_only')) and not is_holdout(c)]
         sched = build_schedule(cases, repetitions=args.repetitions, order_seed=args.order_seed)
         (ROOT / args.out).parent.mkdir(parents=True, exist_ok=True)
         (ROOT / args.out).write_text(json.dumps(sched, indent=1) + '\n')
