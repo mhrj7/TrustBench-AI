@@ -8,6 +8,10 @@ Notation: `baseline → defended`. Rates are numerator/denominator over valid (c
 
 | Model | Attack text | Defended system | Reps | Invalid pairs | Made a tool call | Exposed to injection | Attacker goal | Goal given exposed | Unsafe effect | …of which unlisted-tool use only | Benign utility | Utility under attack | Benign calls blocked | Flow-check denials (benign runs · attack runs) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| gemini:gemma-4-26b-a4b-it | agentdojo_important_instructions | gateway_capability | 2 | 0/18 | 18/18 (100%) → 18/18 (100%) | 18/18 (100%) → 18/18 (100%) | 0/18 (0%) → 0/18 (0%) | 0/18 (0%) → 0/18 (0%) | 0/18 (0%) → 0/18 (0%) | 0/18 → 0/18 | n/a | 18/18 (100%) → 18/18 (100%) | n/a | off |
+| gemini:gemma-4-26b-a4b-it | agentdojo_injecagent | gateway_capability | 2 | 0/18 | 18/18 (100%) → 18/18 (100%) | 18/18 (100%) → 18/18 (100%) | 0/18 (0%) → 0/18 (0%) | 0/18 (0%) → 0/18 (0%) | 0/18 (0%) → 0/18 (0%) | 0/18 → 0/18 | n/a | 18/18 (100%) → 18/18 (100%) | n/a | off |
+| gemini:gemma-4-26b-a4b-it | as_authored | gateway_capability | 2 | 0/32 | 32/32 (100%) → 32/32 (100%) | 18/18 (100%) → 18/18 (100%) | 4/18 (22%) → 2/18 (11%) | 4/18 (22%) → 2/18 (11%) | 4/18 (22%) → 2/18 (11%) | 0/18 → 0/18 | 14/14 (100%) → 13/14 (93%) | 16/18 (89%) → 15/18 (83%) | 0/33 (0%) | off |
+| gemini:gemma-4-26b-a4b-it | trusted_user_control | gateway_capability | 2 | 1/18 | 14/17 (82%) → 14/17 (82%) | 17/17 (100%) → 17/17 (100%) | 5/17 (29%) → 3/17 (18%) | 5/17 (29%) → 3/17 (18%) | 5/17 (29%) → 3/17 (18%) | 0/17 → 0/17 | n/a | 7/17 (41%) → 13/17 (76%) | n/a | off |
 | nvidia:meta/llama-3.2-11b-vision-instruct | agentdojo_important_instructions | gateway_capability | 2 | 0/18 | 18/18 (100%) → 18/18 (100%) | 9/18 (50%) → 10/18 (56%) | 6/18 (33%) → 0/18 (0%) | 6/9 (67%) → 0/10 (0%) | 6/18 (33%) → 0/18 (0%) | 0/18 → 0/18 | n/a | 1/18 (6%) → 5/18 (28%) | n/a | off |
 | nvidia:meta/llama-3.2-11b-vision-instruct | agentdojo_injecagent | gateway_capability | 2 | 0/18 | 18/18 (100%) → 18/18 (100%) | 10/18 (56%) → 10/18 (56%) | 8/18 (44%) → 0/18 (0%) | 8/10 (80%) → 0/10 (0%) | 8/18 (44%) → 0/18 (0%) | 0/18 → 0/18 | n/a | 0/18 (0%) → 4/18 (22%) | n/a | off |
 | nvidia:meta/llama-3.2-11b-vision-instruct | as_authored | gateway_capability | 2 | 0/32 | 32/32 (100%) → 32/32 (100%) | 10/18 (56%) → 10/18 (56%) | 4/18 (22%) → 0/18 (0%) | 4/10 (40%) → 0/10 (0%) | 4/18 (22%) → 0/18 (0%) | 0/18 → 0/18 | 3/14 (21%) → 4/14 (29%) | 2/18 (11%) → 7/18 (39%) | 31/80 (39%) | off |
@@ -113,10 +117,7 @@ Transport faults are injected between the agent and the tool path (`tests/recove
 
 These cells are in `configs/live-matrix.yaml` but have no finished report (not run, interrupted, or blocked by provider quota). They are not counted anywhere above.
 
-- gemini:gemma-4-26b-a4b-it / hardened / as_authored
-- gemini:gemma-4-26b-a4b-it / hardened / agentdojo_important_instructions
-- gemini:gemma-4-26b-a4b-it / hardened / agentdojo_injecagent
-- gemini:gemma-4-26b-a4b-it / hardened / trusted_user_control
+- none
 
 ## How to read this
 
