@@ -14,6 +14,8 @@ import { runBaselineAgent } from "../src/agent/index.ts";
 import { AgentDefenses } from "../src/agent/defenses.ts";
 import { runCamelAgent } from "../src/agent/camel.ts";
 import { rateFaultyFetch } from "../src/reliability/faults.ts";
+import { createTracing, observabilityConfig } from "../src/observability/tracing.ts";
+import { RunSpans } from "../src/observability/run-spans.ts";
 import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
 
@@ -84,6 +86,10 @@ const subsetTag = selected.length === eligible.length ? "" : `-cases-${createHas
 
 await rm(work, { recursive: true, force: true });
 await mkdir(work, { recursive: true });
+// TB-027: spans for every arm run, exported as redacted JSON lines (configs/observability.yaml).
+const obsConfig = observabilityConfig();
+const spanFile = path.join(work, "spans.jsonl");
+const tracing = createTracing(spanFile, "trustbench-arm-smoke");
 const fixturesPath = path.join(work, "fixtures.jsonl");
 await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : [])]);
 const attackInfo = JSON.parse(await readFile(`${fixturesPath}.attack-info.json`, "utf8"));
@@ -173,17 +179,16 @@ async function runArm(arm, testCase, fixture, rep) {
   const episodeId = `arm-smoke-${testCase.case_id}-r${rep}`;
   const taskId = fixture.fixture_id.split("--")[0];
   const adapter = live ? makeLiveAdapter() : new MockModelAdapter("mock-arm-smoke", scriptedOutcomes(testCase));
+  const spans = new RunSpans(tracing.tracer, { "run.id": `run-${testCase.case_id}-r${rep}:${arm}`, "task.id": fixture.fixture_id.split("--")[0], "case.id": testCase.case_id, arm, repetition: rep,
+    "defended.system": arm === "defended" ? defendedSystemName : "none", "model.provider": live ? providerName : "scripted", "model.id": live ? modelId : "mock-arm-smoke" });
   adapter.requests = [];
   adapter.providerRetries = 0;
   if (live) {
     const originalGenerate = adapter.generate.bind(adapter);
     adapter.generate = async (req, opts) => {
       adapter.requests.push(structuredClone(req));
-      const wait = lastCall + minIntervalMs - Date.now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      await paceTokens(req);
-      lastCall = Date.now();
-      try { const response = await originalGenerate(req, opts); observedResponseModels.add(response.response_model); return response; }
+      const pace = async () => { const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now(); };
+      try { const response = await spans.model("agent", req.request_id, pace, () => originalGenerate(req, opts)); observedResponseModels.add(response.response_model); return response; }
       catch (error) {
         if (quotaPattern.test(String(error?.message))) {
           console.error(`PROVIDER QUOTA EXHAUSTED for ${modelArg}; aborting without writing results.`);
@@ -194,7 +199,7 @@ async function runArm(arm, testCase, fixture, rep) {
     };
   } else {
     const originalGenerate = adapter.generate.bind(adapter);
-    adapter.generate = originalGenerate;
+    adapter.generate = (req, opts) => spans.model("agent", req.request_id, async () => {}, () => originalGenerate(req, opts));
   }
   let built, port, dbPath, auditFile, gatewayProcess = null; const approvalLog = [];
   const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};
@@ -229,22 +234,25 @@ async function runArm(arm, testCase, fixture, rep) {
       defenseAdapter = makeLiveAdapter();
       const raw = defenseAdapter.generate.bind(defenseAdapter);
       defenseAdapter.generate = async (req, opts) => {
-        const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now();
-        try { return await raw(req, opts); } catch (error) { if (quotaPattern.test(String(error?.message))) { console.error("PROVIDER QUOTA EXHAUSTED"); process.exit(2); } throw error; }
+        const pace = async () => { const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now(); };
+        try { return await spans.model("defense", req.request_id, pace, () => raw(req, opts)); } catch (error) { if (quotaPattern.test(String(error?.message))) { console.error("PROVIDER QUOTA EXHAUSTED"); process.exit(2); } throw error; }
       };
     }
     defenses = new AgentDefenses({ names: defendedSystem.agent_defenses, registry: defensesRegistry, writeTools: built.recovery.tool_classes.write, adapter: defenseAdapter });
   }
   const architecture = arm === "defended" && defendedSystem.architecture ? defensesRegistry.architectures[defendedSystem.architecture] : null;
   if (arm === "defended" && defendedSystem.architecture && defendedSystem.architecture !== "camel") throw new Error(`unknown architecture ${defendedSystem.architecture}`);
+  const tracedTools = spans.tools(built.tools, built.recovery.tool_classes);
   const result = architecture
-    ? await runCamelAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, architecture, recovery: { policy: built.recovery, seed: baseSeed } })
-    : await runBaselineAgent({ config: built.config, adapter, tools: built.tools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
+    ? await runCamelAgent({ config: built.config, adapter, tools: tracedTools, budgetConfig: built.budget, architecture, recovery: { policy: built.recovery, seed: baseSeed } })
+    : await runBaselineAgent({ config: built.config, adapter, tools: tracedTools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
   const elapsedMs = Date.now() - started;
   const snapshot = await snapshotEpisode("src.arms.cli", ["snapshot", "--db", dbPath, "--episode", episodeId]);
   const evaluation = await evaluate(testCase.fixture_id, testCase.attack_id, snapshot, result);
   const decisions = auditFile ? (await readFile(auditFile, "utf8")).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
   if (gatewayProcess) { gatewayProcess.kill("SIGTERM"); children.splice(children.indexOf(gatewayProcess), 1); } // one gateway per pair; stop it once its audit is read
+  spans.policy(decisions);
+  spans.end({ "run.outcome": result.outcome, "run.tool_calls": result.tool_records.length, "run.elapsed_ms": elapsedMs, "eval.utility_pass": evaluation.utility_pass, "eval.security_pass": evaluation.security_pass, "eval.attacker_goal_achieved": evaluation.attacker_goal_achieved }, result.recovery?.backoff_ms_total ?? 0);
   const marker = testCase.attack_id ? attackInfo[testCase.attack_id].exposure_marker : null;
   const exposed = marker === null ? null : adapter.requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));
@@ -356,6 +364,12 @@ await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });
 await writeFile(path.join(root, live ? `reports/tb024-${suffix}-policy-traces.jsonl` : `reports/tests/tb024-${suffix}-policy-traces.jsonl`), traces.map((t) => JSON.stringify(t)).join("\n") + "\n");
+await tracing.provider.forceFlush(); await tracing.provider.shutdown();
+const traceOut = path.join(root, live ? obsConfig.trace_dir_live : obsConfig.trace_dir_scripted, `tb024-${suffix}.spans.jsonl`);
+await mkdir(path.dirname(traceOut), { recursive: true });
+await writeFile(traceOut, await readFile(spanFile, "utf8").catch(() => ""));
+report.trace_file = path.relative(root, traceOut);
+report.trace_redaction = { replaced_values: tracing.redactor.replaced, dropped_attributes: Object.fromEntries(tracing.redactor.dropped) };
 await writeFile(path.join(root, live ? `evidence/tb024-${suffix}-report.json` : `reports/tests/tb024-${suffix}-report.json`), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ summary: report.summary, cases: report.cases.map((c) => ({ id: c.case_id, r: c.repetition, base: [c.baseline.outcome, c.baseline.evaluation.utility_pass, c.baseline.evaluation.attacker_goal_achieved], def: [c.defended.outcome, c.defended.evaluation.utility_pass, c.defended.evaluation.attacker_goal_achieved], diffs: c.record_differences.length, attributable: c.differences_attributable_to_gateway, state_same: c.final_state_identical })) }, null, 1));
 

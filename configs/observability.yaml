@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "note": "TB-027 tracing. Spans are content-free by design: only allowlisted attributes are exported (names, IDs of the run, statuses, hashes, sizes, timings). As a second layer, every exported string attribute is scanned for registered sensitive fixture values, which are replaced. JSON content (valid YAML).",
+  "span_attribute_allowlist": [
+    "run.id", "task.id", "case.id", "arm", "defended.system", "repetition", "model.provider", "model.id", "model.request_id",
+    "model.input_tokens", "model.output_tokens", "model.finish_reason", "model.tool_calls", "model.role", "queue.ms", "queue.reason",
+    "tool.name", "tool.class", "tool.call_id", "tool.status", "tool.error_code", "tool.attempt", "tool.arguments_sha256", "tool.output_bytes",
+    "policy.decision", "policy.reason", "policy.seq", "policy.executed", "policy.backend_ms", "policy.ms",
+    "run.outcome", "run.model_calls", "run.tool_calls", "run.queue_ms_total", "run.retry_backoff_ms", "run.elapsed_ms", "run.attempts_total",
+    "eval.utility_pass", "eval.security_pass", "eval.attacker_goal_achieved", "error.code"
+  ],
+  "redaction_placeholder": "[REDACTED]",
+  "sensitive_values": {
+    "note": "Seeded secrets come from the data files, never from code: every string value of the attack seed-state additions, plus the named fields of benign fixture rows.",
+    "attack_seed_file": "data/attack-materialization.json",
+    "attack_seed_skip_keys": ["tenant_id", "collection"],
+    "benign_file": "data/benign.jsonl",
+    "benign_fields": {"users": ["email"], "contacts": ["email", "phone", "private_phone", "marker"]},
+    "min_length": 6
+  },
+  "trace_dir_live": "observability/traces",
+  "trace_dir_scripted": "reports/tests/traces"
+}

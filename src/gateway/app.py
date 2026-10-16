@@ -1,6 +1,7 @@
 """Agent-facing gateway; raw ASGI tools have no listener in this deployment."""
 import asyncio
 import json
+import time
 import secrets
 from dataclasses import dataclass
 from typing import Any
@@ -52,13 +53,18 @@ class Gateway:
         @self.app.post('/v1/episodes/{episode_id}/tools/{tool_name}')
         async def dispatch(episode_id: str, tool_name: str, request: Request):
             # A model supplies only arguments. Host-issued capability is never in prompt/tool schema.
+            # TB-027: decision timing for policy spans (wall-clock arrival, time to decision, time in the tool backend).
+            arrived_ms, t0 = time.time() * 1000, time.perf_counter()
+            def stamp(entry):
+                entry.update(started_at_ms=round(arrived_ms, 3), policy_ms=round((time.perf_counter() - t0) * 1000, 3))
+                return entry
             token = request.headers.get('authorization', '').removeprefix('Bearer ')
             binding = self._bindings.get(token) or self._load_session(token)
             reason = ('missing_or_invalid_session' if binding is None else
                       'episode_mismatch' if binding.episode_id != episode_id else
                       'tool_not_allowed' if tool_name not in binding.allowed_tools else None)
             if reason:
-                self.audit.append({'episode_id': episode_id, 'tool': tool_name, 'decision': 'deny', 'reason': reason})
+                self.audit.append(stamp({'episode_id': episode_id, 'tool': tool_name, 'decision': 'deny', 'reason': reason}))
                 return JSONResponse(status_code=403, content={'detail': reason})
             if self.store.snapshot(episode_id)['generation'] != binding.capability.generation:
                 return JSONResponse(status_code=403, content={'detail':'stale_capability'})
@@ -72,13 +78,13 @@ class Gateway:
                 arguments = binding.capability.validate(tool_name, arguments)
             except (ValueError, ValidationError) as error:
                 reason = 'invalid_arguments' if isinstance(error, ValidationError) else str(error)
-                self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason})
+                self.audit.append(stamp({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason}))
                 return JSONResponse(status_code=422 if isinstance(error, ValidationError) else 403, content={'detail':reason})
             if binding.flow is not None:
                 violation = binding.flow.check(tool_name, arguments, self.store.snapshot(episode_id)['state'])
                 if violation is not None:
                     reason = f"untrusted_flow:{violation['rule']}"
-                    self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason,'flow':violation})
+                    self.audit.append(stamp({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason,'flow':violation}))
                     return JSONResponse(status_code=403, content={'detail':reason})
             approval_id = None
             if tool_name in POLICY['approval_required_tools']:
@@ -88,12 +94,13 @@ class Gateway:
                     return JSONResponse(status_code=403, content={'detail':str(error)})
                 approval_id = approval['request_id']
                 if approval['status'] == 'pending':
-                    self.audit.append({'episode_id':episode_id,'tool':tool_name,'decision':'require_approval','request_id':approval_id})
+                    self.audit.append(stamp({'episode_id':episode_id,'tool':tool_name,'decision':'require_approval','request_id':approval_id}))
                     return JSONResponse(status_code=409, content={'detail':'approval_required','request_id':approval_id})
             # Log decision before dispatch; never forward incoming headers/URLs to raw tools.
             record = {'episode_id': episode_id, 'tool': tool_name, 'decision': 'allow',
                       'arguments_sha256': digest(arguments), 'executed': False}
-            self.audit.append(record)
+            self.audit.append(stamp(record))
+            backend_t0 = time.perf_counter()
             async with self._lock:
                 authorization = {'capability':binding.capability,'arguments':arguments,'approval_request_id':approval_id}
                 context = execution_context.set(authorization)
@@ -102,6 +109,7 @@ class Gateway:
                         response = await client.post(f'/v1/episodes/{episode_id}/tools/{tool_name}', json=arguments)
                 finally:
                     execution_context.reset(context)
+            record.update(backend_ms=round((time.perf_counter() - backend_t0) * 1000, 3))
             record.update(status=response.status_code, executed=response.is_success and not authorization.get('replayed', False),
                           replayed=authorization.get('replayed', False))
             try:
