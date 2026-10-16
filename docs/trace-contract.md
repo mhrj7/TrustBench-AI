@@ -43,3 +43,10 @@ Schema changes require a new `schema_version`, updated fixtures, migration or ex
 - `fixtures/traces/valid-run.jsonl` round-trips without information loss.
 - `reconstructExecutedToolCalls` reconstructs both executed calls in order with arguments and outcomes.
 - Tests cover invalid shapes, sequence gaps, execution after denial, orphan completion, argument tampering, secret-bearing fields, credential-shaped values, and incorrect run summaries.
+
+## TB-027 spans
+
+Timing spans (model, retrieval and other tool calls, gateway policy decisions, and a root span per run) are emitted as
+OpenTelemetry spans and exported as JSON lines; see `observability/README.md`. They complement this event trace: spans carry
+timing and allowlisted metadata only, every span carries `run.id`, and sensitive fixture values are redacted at export and
+checked by `npm run verify:observability`.
