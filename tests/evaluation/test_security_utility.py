@@ -106,3 +106,12 @@ def test_combined_reports_cross_check_against_the_sum_of_summaries():
         su.evaluate_cases(parts[0], [REPORT['summary']])
     both = su.evaluate_cases(parts[0] + parts[1], [REPORT['summary']])
     assert both['defended']['rates'] == whole['defended']['rates']
+
+
+def test_scipy_wilson_matches_the_closed_form_used_elsewhere():
+    """TB-033 uses SciPy's Wilson interval; it must agree with app/views.py's closed form (used by the review site)."""
+    from app.views import wilson
+    for k, n in ((0, 15), (3, 15), (15, 15), (7, 33), (1, 1)):
+        a, b = su.wilson95(k, n), wilson(k, n, 1.959963984540054)
+        assert abs(a[0] - b[0]) < 1e-9 and abs(a[1] - b[1]) < 1e-9
+    assert su.wilson95(0, 0) is None

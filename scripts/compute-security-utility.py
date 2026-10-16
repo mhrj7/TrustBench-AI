@@ -9,21 +9,21 @@ percentiles. Writes the paths in configs/security-utility.yaml. Paired-differenc
   compute-security-utility.py --holdout2 holdout-2 (A-026): per registered run, holdout-1 + holdout-2 pooled for the primary
                                          rendering, and the attack slice by family_status
   compute-security-utility.py --report P one development report, for testing only (writes nothing)"""
-import csv, hashlib, json, sys
+import hashlib, json, sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
+from scipy.stats import binomtest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from app.views import wilson  # noqa: E402
 from src.analysis.localize import Contracts  # noqa: E402
 
 CFG = json.loads((ROOT / 'configs/security-utility.yaml').read_text())
 REG = json.loads((ROOT / 'protocol/experiment-registry.yaml').read_text())
-Z = CFG['wilson_z']
 MARGIN = REG['utility_noninferiority_margin_percentage_points'] / 100
 contracts = Contracts()
 ARG = CFG['argument_level_permission']
@@ -45,8 +45,16 @@ def argument_level_permitted(case, step):
     return all(isinstance(x, str) and x in allowed for x in named)
 
 
+def wilson95(k, n):
+    """Two-sided Wilson score interval (SciPy); None for an empty denominator."""
+    if not n:
+        return None
+    ci = binomtest(k, n).proportion_ci(confidence_level=CFG['confidence_level'], method='wilson')
+    return ci.low, ci.high
+
+
 def rate(k, n, definition, exclusions):
-    ci = wilson(k, n, Z)
+    ci = wilson95(k, n)
     return {'numerator': k, 'denominator': n, 'rate': round(k / n, 4) if n else None,
             'wilson95': [round(ci[0], 4), round(ci[1], 4)] if ci else None, 'definition': definition, 'exclusions': exclusions}
 
@@ -187,10 +195,7 @@ def main_holdout2():
     pooled['role'] = 'primary'
     pooled['components'] = {'holdout1': str(h1.relative_to(ROOT)), 'holdout2': [p for p, _, _ in reports[primary]]}
     rows += csv_rows('pooled holdout1+holdout2', primary, 'primary', pooled)
-    out = ROOT / CFG['holdout2_outputs']['csv']
-    with out.open('w', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader(); w.writerows(rows)
+    pd.DataFrame(rows).to_csv(ROOT / CFG['holdout2_outputs']['csv'], index=False)
     meta = {'task_id': 'TB-033 extension (holdout-2)', 'rule': 'protocol/amendments.md A-026', 'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
             'configuration': {'system': hc['defended_system']['system'], 'model': hc['model'], 'prompt_profile': hc['prompt_profile']},
             'source': source | {'holdout1_primary': {'report': str(h1.relative_to(ROOT)), 'sha256': hashlib.sha256(h1.read_bytes()).hexdigest()}},
@@ -267,9 +272,7 @@ def main():
                              'excluded_invalid_pairs': x['exclusions']['invalid_pairs'], 'definition': x['definition']})
     out = ROOT / CFG['outputs']['csv']
     out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open('w', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader(); w.writerows(rows)
+    pd.DataFrame(rows).to_csv(out, index=False)
     meta = {'task_id': 'TB-033', 'rule': 'protocol/preregister.md (primary, secondary, outcome rules); A-025 roles', 'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
             'configuration': {'system': hc['defended_system']['system'], 'model': hc['model'], 'prompt_profile': hc['prompt_profile']},
             'source': {x['rendering']: {'report': x['report'], 'sha256': x['report_sha256']} for x in record['renderings']}, 'csv': CFG['outputs']['csv'], 'renderings': results,
