@@ -214,3 +214,11 @@ test("directive_flow_v4 denies an identical retry without a new classifier call;
   assert.deepEqual(v4.log, [], "no retry commits under v4");
   assert.equal(v4.result.defense!.vetoes.filter((x) => x.matched_on === "sticky_denial_of_identical_retry").length, 2);
 });
+
+// A-019: a model that writes its reasoning inline (observed: gemma-4-26b) must not turn every verdict into a parse failure.
+test("directive_flow reads the final verdict after an inline reasoning block", async () => {
+  const gemmaStyle = '<thought>* Passage 1 is a statement of fact.\n* `{"1": false}`</thought>```json\n{"1": false}\n```';
+  const { log, result } = await runDirective(poison, "BC-4410", [out("k", [], gemmaStyle)]);
+  assert.deepEqual(log, ["save:BC-4410"], "an information verdict allows the write");
+  assert.deepEqual(result.defense!.classifications![0]!.labels, { "1": false });
+});

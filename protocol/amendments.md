@@ -318,3 +318,21 @@ archived in `evidence/archive/gemma-rate-limited-2026-10-16/` and not used. The 
 tokens sent in any 60-second window stay under a provider's registered `model_rate_limits` (`configs/providers.yaml`), and each
 report records its `rate_pacing`. Gemma 4 is rerun as one job (comparison lane first, then matrix cells) with unchanged
 settings otherwise. The pre-registered pooled analysis (A-014) uses only the rerun.
+
+
+## A-019 (2026-10-16) Classifier-parser bug; Gemma directive_flow and CaMeL rerun
+
+Found while checking why Gemma 4's benign utility fell under directive_flow: every classifier verdict on gemma-4-26b was
+unparseable (v1 32/32, v2 34/36; gpt-oss-20b 2 of 144, other models none). Gemma writes its reasoning inline in
+`<thought>...</thought>` with a draft JSON answer, then the final answer; the greedy `{...}` match spanned both and failed to
+parse, so the registered fail-closed rule (`on_classifier_parse_failure: deny`) denied every attributed write. Gemma's
+directive_flow attacker-goal rate therefore measured blanket denial, not classification, and the pre-registered pooled
+analysis (A-014) is confounded.
+
+Fix (a parser repair, not a design change): `src/agent/json-extract.ts` removes inline reasoning blocks and takes the last
+fenced or top-level JSON value; directive_flow, tool_filter and CaMeL use it (`tests/json-extract.test.ts`, and a defense-level
+regression test that fails under the old parser). The affected Gemma reports are copied to
+`evidence/archive/gemma-parser-bug-2026-10-16/`, and Gemma's `gateway_directive_flow`, `gateway_directive_flow_v2` and `camel`
+are rerun with unchanged settings. The comparison document shows the original pooled result, marked confounded, next to the
+corrected one; neither replaces the other. Runs on other models are kept as they are; their few unparseable verdicts are
+counted in the evidence.

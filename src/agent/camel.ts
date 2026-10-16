@@ -3,6 +3,7 @@ import path from "node:path";
 import { BudgetController, BudgetExhaustedError, type BudgetConfig } from "../../runtime/budget.ts";
 import { canonicalJson } from "../../schemas/trace.ts";
 import { RecoveryManager, type RecoveryPolicy } from "./recovery.ts";
+import { extractJson } from "./json-extract.ts";
 import type { DefenseStats } from "./defenses.ts";
 import type { ModelAdapter, ModelRequest } from "../models/contracts.ts";
 import {
@@ -47,10 +48,9 @@ class StepError extends Error {
 }
 
 function firstJsonObject(text: string): unknown {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("no JSON object in the response");
-  return JSON.parse(text.slice(start, end + 1));
+  const value = extractJson(text);
+  if (value === null) throw new Error("no JSON object in the response");
+  return value;
 }
 
 export function parsePlan(text: string): Plan {

@@ -50,3 +50,14 @@ Limits: scripted runs check wiring and parity, not attack success rates. Live re
 - `--fault-profile <id>` (live only) injects transport faults from `tests/recovery/fault-schedules.json` `live_profiles`.
 - Gateway envelopes are HMAC-signed per session; unverifiable outputs are counted in `defended_unverified_tool_outputs`.
 - Runs are durable (`src/agent/run-store.ts`, `docs/durability.md`).
+
+## CaMeL, directive_flow versions, pacing and matrix filters (2026-10-16, A-014 to A-018)
+
+- `--defended-system camel` runs the CaMeL-style agent (`src/agent/camel.ts`, `docs/camel.md`) instead of the shared ReAct
+  runner, on the direct tool service. Systems may set `architecture` in `configs/defenses.yaml`; `changes_first_request`
+  marks defenses and architectures whose first request legitimately differs from the baseline's.
+- `gateway_directive_flow_v2`, `_v3` and `_v4` are the pre-registered directive_flow versions (`docs/flow-check.md`).
+- Providers with an input-token free-tier limit (`model_rate_limits` in `configs/providers.yaml`) are paced so that each
+  60-second window stays under it; reports record `rate_pacing`.
+- Each pair's gateway is stopped once its audit is read, and SIGTERM/SIGINT stop all child servers.
+- `scripts/run-live-matrix.mjs` accepts `--only-missing`, `--models`, `--profiles`, `--renderings` and `--log-tag`.

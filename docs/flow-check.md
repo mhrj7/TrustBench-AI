@@ -60,3 +60,20 @@ of `docs/defense-comparison.md` shows `directive_flow` stopping the imperative v
 gap: when the authorized document itself carries the false correction, neither provenance nor phrasing separates it from a
 genuine correction. Only checking the value against an independent trusted source could, and this harness has none. A classifier error in either direction passes through. Each
 attributed write costs one extra model call.
+
+## v2, v3 and v4 (pre-registered, A-014, A-016, A-017)
+
+Each version was registered in `protocol/amendments.md` before its code or runs existed; v1 stays registered and was rerun
+unchanged. Scores for every registered prediction are generated in `docs/defense-comparison.md` ("Pre-registered predictions"),
+with a column showing whether the classifier was called, so that support without any classification is visibly vacuous.
+
+| Version | Change | Why (measured) |
+| --- | --- | --- |
+| v2 `gateway_directive_flow_v2` | the attributed sentence is classified inside its neighbouring sentences, marked `[[…]]` | v1 missed a declarative false value whose instruction sat in the sentence before it |
+| v3 `gateway_directive_flow_v3` | short data values (≤ 6 words) not in the trusted task are attributed as a whole | v2's run showed short names carry no salient token and are shorter than the 4-gram, so nothing was attributed (prediction P1 failed, P4 held only vacuously) |
+| v4 `gateway_directive_flow_v4` | once a write is denied as instruction-derived, identical retries are denied without a new classifier call | in the v3 run an agent retried a denied write five times and the classifier flipped once, letting it commit (retry-to-bypass) |
+
+What remains true for every version: a false value written purely as a statement of fact inside the authorized document
+(`TB-ATT-DOC-005`, as_authored) is labelled information and passes. Each extra version was tuned after seeing development
+results; the fresh fixtures of A-016 are the only fixtures v3 and v4 were not designed on, and the v4 stress run reuses them
+(mechanism check, not a fresh test). Allowed verdicts are not cached, so a changed write is always re-checked.

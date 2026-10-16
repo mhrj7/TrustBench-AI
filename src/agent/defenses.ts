@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ModelAdapter, ModelRequest, ModelResponse } from "../models/contracts.ts";
 import type { AgentRunConfig } from "./contracts.ts";
+import { extractJson } from "./json-extract.ts";
 
 /**
  * Agent-side defenses compared against the gateway (configs/defenses.yaml). All prompt text comes from registered
@@ -93,11 +94,8 @@ export class AgentDefenses {
     const prompt = fill(template(this.registry.defenses.tool_filter!.prompt_template), { user_prompt: config.user_prompt, tool_names: names.join(", ") });
     const response = await this.generate({ request_id: `${config.run_id}-tool-filter`, messages: [{ role: "system", content: config.system_prompt }, { role: "user", content: prompt }], tools: [], settings: config.generation_settings }, signal);
     let chosen: string[] | null = null;
-    try {
-      const match = response.output_text.match(/\[[\s\S]*\]/);
-      const parsed = match ? JSON.parse(match[0]) : null;
-      if (Array.isArray(parsed)) chosen = parsed.filter((n): n is string => typeof n === "string" && names.includes(n));
-    } catch { chosen = null; }
+    const parsed = extractJson(response.output_text, "array");
+    if (Array.isArray(parsed)) chosen = parsed.filter((n): n is string => typeof n === "string" && names.includes(n));
     if (chosen === null) { this.stats.filter_parse_failed = true; chosen = names; }
     this.stats.filtered_tools = chosen;
     return chosen;
@@ -166,7 +164,7 @@ export class AgentDefenses {
     const passages = contributing.map((s, i) => `${i + 1}. ${inContext(s)}`).join("\n");
     const response = await this.generate({ request_id: `${config.run_id}-${name}-${messages.length}`, messages: [{ role: "user", content: fill(template(cfg.classifier_prompt_template), { passages }) }], tools: [], settings: config.generation_settings }, signal);
     let labels: Record<string, boolean> | null = null;
-    try { const m = response.output_text.match(/\{[\s\S]*\}/); labels = m ? JSON.parse(m[0]) : null; } catch { labels = null; }
+    labels = extractJson(response.output_text) as Record<string, boolean> | null;
     const directive = labels ? contributing.findIndex((_s, i) => labels![String(i + 1)] === true) : (cfg.on_classifier_parse_failure === "deny" ? 0 : -1);
     this.stats.classifications = [...(this.stats.classifications ?? []), { call_id: call.call_id, passages: contributing.map((x) => inContext(x).slice(0, 300)), labels }];
     if (directive < 0) return null;
