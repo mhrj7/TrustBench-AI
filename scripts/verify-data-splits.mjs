@@ -27,7 +27,7 @@ const templateSplits = new Map();
 const familySplits = new Map();
 const textHashes = new Map();
 for (const group of split.groups) {
-  assert.ok(["tuning", "holdout"].includes(group.split), `${group.group_id} has invalid split`);
+  assert.ok(["tuning", "holdout", "holdout2"].includes(group.split), `${group.group_id} has invalid split`);
   assert.ok(group.fixture_ids.length > 0, `${group.group_id} cannot be empty`);
   for (const id of group.fixture_ids) {
     assert.ok(fixtureById.has(id), `${group.group_id} references unknown fixture ${id}`);
@@ -42,6 +42,16 @@ for (const group of split.groups) {
     assert.ok(!familySplits.has(familyId), `Attack family ${familyId} crosses groups/splits`);
     familySplits.set(familyId, { split: group.split, groupId: group.group_id });
   }
+  // A-026: holdout-2 may reuse a family from another split only when it declares the reuse.
+  assert.ok(group.split === "holdout2" || !group.reused_attack_family_ids, `${group.group_id}: only holdout-2 groups may reuse attack families`);
+  if (group.split === "holdout2") assert.ok(["new", "holdout1_family", "tuning_family"].includes(group.family_status), `${group.group_id} needs a family_status`);
+}
+for (const group of split.groups.filter((g) => g.reused_attack_family_ids)) {
+  for (const familyId of group.reused_attack_family_ids) {
+    const owner = familySplits.get(familyId);
+    assert.ok(owner && owner.split !== "holdout2", `${group.group_id} reuses unknown family ${familyId}`);
+    assert.equal(owner.split === "tuning" ? "tuning_family" : "holdout1_family", group.family_status, `${group.group_id} family_status disagrees with the reused family's split`);
+  }
 }
 assert.deepEqual([...memberships.keys()].sort(), [...fixtureById.keys()].sort(), "Every baseline and attack fixture must occur exactly once");
 
@@ -51,7 +61,7 @@ for (const attack of attacks) {
   assert.ok(group && baseGroup, `${attack.attack_id} and its benign base must both be assigned`);
   assert.equal(group.group_id, baseGroup.group_id, `${attack.attack_id} must remain grouped with its base task`);
   assert.ok(group.task_template_ids.length > 0, `${attack.attack_id} group needs reviewed task-template labels`);
-  assert.ok(group.attack_family_ids.length > 0, `${attack.attack_id} group needs a semantic attack-family label`);
+  assert.ok(group.attack_family_ids.length + (group.reused_attack_family_ids?.length ?? 0) > 0, `${attack.attack_id} group needs a semantic attack-family label`);
   const normalized = attack.untrusted_text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
   const digest = createHash("sha256").update(normalized).digest("hex");
   const previous = textHashes.get(digest);
@@ -63,10 +73,17 @@ const holdoutFixtureIds = split.groups.filter((group) => group.split === "holdou
 assert.deepEqual(split.holdout_manifest.fixture_ids, holdoutFixtureIds, "Locked holdout manifest must list every holdout fixture exactly once in sorted order");
 const holdoutDigest = createHash("sha256").update(JSON.stringify(holdoutFixtureIds)).digest("hex");
 assert.equal(split.holdout_manifest.sha256, holdoutDigest, "Locked holdout manifest hash is stale or incorrect");
-const fixtureCount = fixtureById.size;
+// Holdout-2 (A-026) is a separate sealed set; the registered 80/20 split concerns the core groups only.
+const holdout2Ids = split.groups.filter((group) => group.split === "holdout2").flatMap((group) => group.fixture_ids).sort();
+if (holdout2Ids.length || split.holdout2_manifest) {
+  assert.deepEqual(split.holdout2_manifest.fixture_ids, holdout2Ids, "holdout2_manifest must list every holdout-2 fixture exactly once in sorted order");
+  assert.equal(split.holdout2_manifest.sha256, createHash("sha256").update(JSON.stringify(holdout2Ids)).digest("hex"), "holdout2_manifest hash is stale or incorrect");
+}
+const coreGroups = split.groups.filter((group) => group.split !== "holdout2");
+const fixtureCount = fixtureById.size - holdout2Ids.length;
 const holdoutCount = holdoutFixtureIds.length;
 const holdoutFractionByRows = holdoutCount / fixtureCount;
-const holdoutFractionByGroups = split.groups.filter((group) => group.split === "holdout").length / split.groups.length;
+const holdoutFractionByGroups = coreGroups.filter((group) => group.split === "holdout").length / coreGroups.length;
 // The target fraction comes from the registered protocol; the tolerance is declared in the split manifest because the
 // fixture count is small and cannot hit the target exactly.
 const registry = JSON.parse(await readFile(new URL("protocol/experiment-registry.yaml", root), "utf8"));
@@ -85,7 +102,9 @@ const report = {
   holdout_fraction_tolerance: tolerance,
   ok: true,
   fixture_count: fixtureCount,
-  group_count: split.groups.length,
+  group_count: coreGroups.length,
+  holdout2_fixture_count: holdout2Ids.length,
+  holdout2_manifest_sha256: split.holdout2_manifest?.sha256 ?? null,
   tuning_fixture_count: fixtureCount - holdoutCount,
   holdout_fixture_count: holdoutCount,
   holdout_fraction_by_rows: holdoutFractionByRows,

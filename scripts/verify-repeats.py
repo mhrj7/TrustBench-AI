@@ -7,9 +7,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src.evaluation.repeats import build_schedule, evaluate, load_runs, registry  # noqa: E402
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 suite = 'tests/arms/smoke-cases.json'
-holdout = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
+holdout = sealed_fixture_ids()
 # Scripted-only cases are harness tests (another trajectory on an existing unit), not experimental units.
 cases = [c for c in json.loads((ROOT / suite).read_text())['cases'] if not c.get('scripted_only') and c['fixture_id'].split('--')[0] not in holdout and c.get('attack_id') not in holdout]
 base = registry()['pair_order_seed']

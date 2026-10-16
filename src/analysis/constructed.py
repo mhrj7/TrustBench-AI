@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .localize import Contracts, localize
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,7 +19,7 @@ def _trace(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def constructed_cases(contracts: Contracts) -> list[dict[str, Any]]:
     suite = json.loads((ROOT / 'tests/arms/smoke-cases.json').read_text())['cases']
-    holdout = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
+    holdout = sealed_fixture_ids()
     writes = set(contracts.classes['write'])
     out: list[dict[str, Any]] = []
     for case in suite:

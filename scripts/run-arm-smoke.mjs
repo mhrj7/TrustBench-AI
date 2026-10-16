@@ -102,7 +102,8 @@ const suite = JSON.parse(await readFile(path.resolve(root, suitePath), "utf8"));
 // Holdout protection: protocol/preregister.md forbids using holdout contents for debugging. Holdout fixtures are
 // excluded from every run, scripted or live, with no override flag.
 const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
-const holdoutIds = new Set(splits.holdout_manifest.fixture_ids);
+// Every sealed set (the core holdout and holdout-2, A-026) is excluded from development runs.
+const holdoutIds = new Set(["holdout_manifest", "holdout2_manifest"].filter((k) => splits[k]).flatMap((k) => splits[k].fixture_ids));
 const isHoldout = (c) => holdoutIds.has(c.fixture_id.split("--")[0]) || (c.attack_id && holdoutIds.has(c.attack_id));
 // TB-032 (A-025): --confirmatory-holdout is the one sanctioned holdout execution. It requires a PASS of the development
 // release gate, the frozen configuration exactly (checked by scripts/verify-frozen.py and against
@@ -123,15 +124,26 @@ if (confirmatory) {
   if (temperature !== pace.temperature || minIntervalMs !== pace.min_interval_ms) problems.push(`temperature and pacing must be ${pace.temperature} and ${pace.min_interval_ms} ms`);
   if (reliabilityFile !== hc.reliability.override_file) problems.push(`reliability must be ${hc.reliability.override_file}`);
   if (toolMode !== runConfig.default_tool_mode || faultProfileName || flag("--cases")) problems.push("no tool-mode, fault or case-subset overrides");
-  if (!matrixRenderings.includes(rendering)) problems.push(`rendering must be one of ${matrixRenderings.join(", ")}`);
-  if (suitePath !== registry.holdout.confirmatory_suite) problems.push(`suite must be ${registry.holdout.confirmatory_suite}`);
+  // The core holdout (A-025) runs its suite in every live-matrix rendering; holdout-2 (A-026) runs the registered
+  // (suite, rendering) pairs only.
+  const h2 = registry.holdout2;
+  const h2Suite = h2 ? Object.entries(h2.suites).find(([, p]) => p === suitePath)?.[0] : undefined;
+  if (h2Suite) {
+    if (!h2.runs.some((r) => r.suite === h2Suite && r.rendering === rendering)) problems.push(`holdout-2 suite ${h2Suite} is registered for ${h2.runs.filter((r) => r.suite === h2Suite).map((r) => r.rendering).join(", ")}`);
+    const sealed2 = new Set(splits.holdout2_manifest.fixture_ids);
+    if (!suite.cases.every((c) => sealed2.has(c.fixture_id.split("--")[0]) && (!c.attack_id || sealed2.has(c.attack_id)))) problems.push("holdout-2 suite holds a case outside holdout2_manifest");
+  } else {
+    if (!matrixRenderings.includes(rendering)) problems.push(`rendering must be one of ${matrixRenderings.join(", ")}`);
+    if (suitePath !== registry.holdout.confirmatory_suite) problems.push(`suite must be ${registry.holdout.confirmatory_suite}${h2 ? ` or a holdout-2 suite (${Object.values(h2.suites).join(", ")})` : ""}`);
+  }
   if (!schedule) problems.push("a TB-028 --schedule is required");
   if (schedule && schedule.repetitions !== registry.repetitions_per_pair) problems.push(`schedule repetitions must be ${registry.repetitions_per_pair}`);
   const frozen = await new Promise((resolve) => execFile(python, ["scripts/verify-frozen.py"], { cwd: root }, (error) => resolve(!error)));
   if (!frozen) problems.push("scripts/verify-frozen.py failed: live settings differ from configs/frozen");
   if (problems.length) throw new Error(`--confirmatory-holdout refused:\n- ${problems.join("\n- ")}`);
-  await mkdir(path.join(root, registry.holdout.confirmatory_run_dir), { recursive: true });
-  holdoutDir = path.join(root, registry.holdout.confirmatory_run_dir, rendering);
+  const runBase = h2Suite ? path.join(root, h2.confirmatory_run_dir, h2Suite) : path.join(root, registry.holdout.confirmatory_run_dir);
+  await mkdir(runBase, { recursive: true });
+  holdoutDir = path.join(runBase, rendering);
   try { await mkdir(holdoutDir); } catch { throw new Error(`--confirmatory-holdout refused: ${path.relative(root, holdoutDir)} exists; each holdout unit runs once (A-025)`); }
   await writeFile(path.join(holdoutDir, "started.json"), JSON.stringify({ started_at: new Date().toISOString(), argv: process.argv.slice(2), gate: registry.holdout.confirmatory_gate_evidence }, null, 1) + "\n");
 }

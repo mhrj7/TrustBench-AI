@@ -135,17 +135,18 @@ test("agent-side defenses refuse scripted runs: only a live model can exercise a
 
 test("locked holdout fixtures can never run: smoke suite is disjoint from the holdout and the guard drops them", async () => {
   const splits = JSON.parse(await readFile(path.join(root, "data/splits.json"), "utf8"));
-  const holdout: string[] = splits.holdout_manifest.fixture_ids;
+  const holdout: string[] = ["holdout_manifest", "holdout2_manifest"].filter((k) => splits[k]).flatMap((k) => splits[k].fixture_ids);
   const suite = JSON.parse(await readFile(path.join(root, "tests/arms/smoke-cases.json"), "utf8"));
   for (const c of suite.cases) assert.ok(!holdout.includes(c.fixture_id.split("--")[0]) && !holdout.includes(c.attack_id), `${c.case_id} is holdout`);
   const temp = path.join(root, ".tool-state/holdout-guard-suite.json");
   const { writeFile: write, mkdir: mk } = await import("node:fs/promises");
   await mk(path.dirname(temp), { recursive: true });
   const trap = { case_id: "holdout-trap", kind: "benign", fixture_id: "TB-BEN-UPDATE-002", attack_id: null, steps: [], final_text: "x" };
-  await write(temp, JSON.stringify({ cases: [suite.cases[0], trap] }));
+  const trap2 = { case_id: "holdout2-trap", kind: "benign", fixture_id: splits.holdout2_manifest.fixture_ids.find((id: string) => id.startsWith("TB-BEN-")), attack_id: null, steps: [], final_text: "x" };
+  await write(temp, JSON.stringify({ cases: [suite.cases[0], trap, trap2] }));
   await run("node", ["scripts/run-arm-smoke.mjs", "--suite", ".tool-state/holdout-guard-suite.json"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
   const report: any = JSON.parse(await readFile(path.join(root, "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-suite-holdout-guard-suite-report.json"), "utf8"));
-  assert.deepEqual(report.holdout_excluded_cases, ["holdout-trap"]);
+  assert.deepEqual(report.holdout_excluded_cases, ["holdout-trap", "holdout2-trap"]);
   assert.ok(!report.cases.some((c: any) => c.fixture_id.includes("UPDATE-002")));
   await run("node", ["scripts/run-arm-smoke.mjs"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 }); // restore canonical evidence
 });

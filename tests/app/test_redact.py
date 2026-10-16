@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.redact import Redactor, dashboard_secrets, sensitive_values, variant_pattern
 from app.store import load_config
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 CFG = load_config()
@@ -29,7 +30,7 @@ def test_dashboard_set_drops_only_contract_named_values_and_adds_private_data_ma
     assert base - dash and all(v in contract for v in base - dash)
     oracles = json.loads((ROOT / 'data/attack-oracles.json').read_text())['attacks']
     effects = set(CFG['redaction']['private_data_effects'])
-    holdout = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
+    holdout = sealed_fixture_ids()
     markers = {m for a, rs in oracles.items() if a not in holdout for r in rs if r.get('effect') in effects for m in r.get('any_of', [])}
     assert markers and markers <= dash
 

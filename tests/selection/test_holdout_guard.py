@@ -44,3 +44,34 @@ def test_holdout_run_record_matches_the_run_directory():
         assert hashlib.sha256(report.read_bytes()).hexdigest() == row['report_sha256']
         pairs = (report.parent / 'pairs.jsonl').read_text().splitlines()
         assert row['attempted_pairs'] == row['intended_pairs'] == len(pairs) == len(json.loads(report.read_text())['cases'])
+
+
+def test_holdout2_suites_hold_exactly_the_holdout2_manifest():
+    """A-026: the benign and attack suites together are the sealed holdout-2 set, live-only, disjoint from the core holdout."""
+    splits = json.loads((ROOT / 'data/splits.json').read_text())
+    ids = set(splits['holdout2_manifest']['fixture_ids'])
+    covered = set()
+    for kind, path in REG['holdout2']['suites'].items():
+        suite = json.loads((ROOT / path).read_text())
+        assert all(c['kind'] == kind and 'steps' not in c for c in suite['cases'])
+        covered |= {c['attack_id'] or c['fixture_id'] for c in suite['cases']}
+    benign_bases = {c['fixture_id'] for c in json.loads((ROOT / REG['holdout2']['suites']['benign']).read_text())['cases']}
+    assert covered | benign_bases == ids
+    assert not ids & set(splits['holdout_manifest']['fixture_ids'])
+
+
+def test_holdout2_refuses_an_unregistered_rendering_without_side_effects():
+    base = ROOT / REG['holdout2']['confirmatory_run_dir'] / 'benign'
+    before = sorted(x.name for x in base.glob('*')) if base.exists() else []
+    p = run('--model', 'ollama:qwen3.5:9b', '--attack-rendering', 'as_authored', '--suite', REG['holdout2']['suites']['benign'], '--work-dir', '.tool-state/holdout2-guard-test')
+    assert p.returncode != 0 and 'holdout-2 suite benign is registered for agentdojo_important_instructions' in p.stderr
+    assert (sorted(x.name for x in base.glob('*')) if base.exists() else []) == before
+
+
+def test_development_runs_exclude_holdout2_from_schedules(tmp_path):
+    """The development schedule builder drops every sealed case, holdout-2 included."""
+    suite = {'cases': json.loads((ROOT / REG['holdout2']['suites']['attack']).read_text())['cases'][:2]}
+    (tmp_path / 's.json').write_text(json.dumps(suite))
+    p = subprocess.run([str(ROOT / '.venv-tools/bin/python'), '-c', f"import json,sys; sys.path.insert(0,'{ROOT}'); from src.splits import sealed_fixture_ids; "
+                        f"s=json.load(open('{tmp_path / 's.json'}')); ids=sealed_fixture_ids(); print(all(c['attack_id'] in ids for c in s['cases']))"], capture_output=True, text=True)
+    assert p.stdout.strip() == 'True'

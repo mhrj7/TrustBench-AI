@@ -16,11 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from app.views import wilson  # noqa: E402
 from src.evaluation.reliability import decide  # noqa: E402
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 sweep = json.loads((ROOT / 'configs/reliability-sweep.yaml').read_text())
 reg = json.loads((ROOT / 'protocol/experiment-registry.yaml').read_text())
 sel = json.loads((ROOT / 'configs/frozen/selection.json').read_text())
-holdout = set(json.loads((ROOT / reg['holdout']['split_manifest']).read_text())['holdout_manifest']['fixture_ids'])
+holdout = sealed_fixture_ids()
 term_codes = set(sweep['termination_codes'])
 dec = {k: v / 100 for k, v in sweep['decision'].items()}
 B, SEED = reg['uncertainty']['bootstrap_resamples'], reg['pair_order_seed'] + 24

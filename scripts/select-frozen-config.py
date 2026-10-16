@@ -17,11 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from app.store import load_config, load_runs, raw_record  # noqa: E402
 from app.views import wilson  # noqa: E402
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 reg = json.loads((ROOT / 'protocol/experiment-registry.yaml').read_text())
 sel = json.loads((ROOT / 'configs/selection.yaml').read_text())
 splits = json.loads((ROOT / reg['holdout']['split_manifest']).read_text())
-holdout = set(splits['holdout_manifest']['fixture_ids'])
+holdout = sealed_fixture_ids()
 cfg = load_config()
 index = json.loads((ROOT / cfg['index_file']).read_text())
 all_runs = load_runs(index, cfg)

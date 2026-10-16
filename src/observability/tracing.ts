@@ -22,7 +22,8 @@ export function sensitiveValues(cfg = observabilityConfig()): string[] {
     else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
   };
   // Sealed holdout fixtures are never read for development purposes, redaction included (protocol/preregister.md).
-  const holdout = new Set<string>(JSON.parse(readFileSync(path.join(root, "data/splits.json"), "utf8")).holdout_manifest.fixture_ids);
+  const splits = JSON.parse(readFileSync(path.join(root, "data/splits.json"), "utf8"));
+  const holdout = new Set<string>(["holdout_manifest", "holdout2_manifest"].filter((k) => splits[k]).flatMap((k) => splits[k].fixture_ids as string[]));
   const seeds = JSON.parse(readFileSync(path.join(root, s.attack_seed_file), "utf8")).attacks;
   for (const [attackId, add] of Object.entries(seeds)) if (!holdout.has(attackId)) walk(add);
   for (const line of readFileSync(path.join(root, s.benign_file), "utf8").trim().split("\n")) {

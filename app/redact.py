@@ -9,6 +9,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,7 +29,7 @@ def sensitive_values(cfg: dict[str, Any] | None = None) -> list[str]:
             for k, x in v.items():
                 walk(x, k)
 
-    holdout = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
+    holdout = sealed_fixture_ids()
     for attack_id, add in json.loads((ROOT / s['attack_seed_file']).read_text())['attacks'].items():
         if attack_id not in holdout:
             walk(add)
@@ -58,7 +59,7 @@ def _strings(obj: Any) -> set[str]:
 def dashboard_secrets(dash_cfg: dict[str, Any]) -> list[str]:
     """The payload redaction set (configs/dashboard.yaml, redaction): TB-027 values not named by any trusted task contract,
     plus the oracle markers of private-data effects."""
-    holdout = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
+    holdout = sealed_fixture_ids()
     contract: set[str] = set()
     for line in (ROOT / 'data/benign.jsonl').read_text().strip().splitlines():
         f = json.loads(line)

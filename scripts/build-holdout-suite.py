@@ -3,13 +3,15 @@
 
 One live case per sealed fixture: each benign fixture as itself, each attack on its registered base fixture
 (data/attacks.jsonl base_fixture_id, metadata only). No scripted steps: the suite is live-only. Writes the path
-registered as holdout.confirmatory_suite in protocol/experiment-registry.yaml and refuses to overwrite a different one."""
+registered as holdout.confirmatory_suite in protocol/experiment-registry.yaml and refuses to overwrite a different one.
+With --holdout2 (A-026) it builds the registered holdout-2 suites instead: holdout2.suites.benign and .attack."""
 import json, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 reg = json.loads((ROOT / 'protocol/experiment-registry.yaml').read_text())
-manifest = json.loads((ROOT / reg['holdout']['split_manifest']).read_text())['holdout_manifest']
+H2 = '--holdout2' in sys.argv
+manifest = json.loads((ROOT / reg['holdout']['split_manifest']).read_text())['holdout2_manifest' if H2 else 'holdout_manifest']
 ids = manifest['fixture_ids']
 benign_ids = {json.loads(l)['fixture_id'] for l in (ROOT / 'data/benign.jsonl').read_text().splitlines() if l.strip()}
 base_of = {a['attack_id']: a['base_fixture_id'] for a in map(json.loads, filter(str.strip, (ROOT / 'data/attacks.jsonl').read_text().splitlines()))}
@@ -25,11 +27,18 @@ for fid in sorted(ids):
     else:
         sys.exit(f'manifest ID {fid} is neither a benign fixture nor an attack')
 
-suite = {'schema_version': '1.0.0', 'note': 'TB-032 confirmatory holdout suite (A-025), built by scripts/build-holdout-suite.py from the sealed manifest IDs alone. Live runs only, through run-arm-smoke.mjs --confirmatory-holdout.',
-         'manifest_sha256': manifest['sha256'], 'cases': cases}
-out = ROOT / reg['holdout']['confirmatory_suite']
-text = json.dumps(suite, indent=1) + '\n'
-if out.exists() and out.read_text() != text:
-    sys.exit(f'{out.relative_to(ROOT)} exists and differs; the holdout suite is built once')
-out.write_text(text)
-print(json.dumps({'suite': str(out.relative_to(ROOT)), 'cases': [(c['case_id'], c['kind']) for c in cases]}))
+def write(path, chosen, note):
+    suite = {'schema_version': '1.0.0', 'note': note, 'manifest_sha256': manifest['sha256'], 'cases': chosen}
+    out = ROOT / path
+    text = json.dumps(suite, indent=1) + '\n'
+    if out.exists() and out.read_text() != text:
+        sys.exit(f'{out.relative_to(ROOT)} exists and differs; the holdout suite is built once')
+    out.write_text(text)
+    print(json.dumps({'suite': str(out.relative_to(ROOT)), 'cases': [(c['case_id'], c['kind']) for c in chosen]}))
+
+
+if H2:
+    for kind, path in reg['holdout2']['suites'].items():
+        write(path, [c for c in cases if c['kind'] == kind], f'Holdout-2 {kind} suite (A-026), built by scripts/build-holdout-suite.py --holdout2 from the sealed holdout2_manifest IDs alone. Live runs only, through run-arm-smoke.mjs --confirmatory-holdout.')
+else:
+    write(reg['holdout']['confirmatory_suite'], cases, 'TB-032 confirmatory holdout suite (A-025), built by scripts/build-holdout-suite.py from the sealed manifest IDs alone. Live runs only, through run-arm-smoke.mjs --confirmatory-holdout.')

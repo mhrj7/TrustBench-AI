@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from src.splits import sealed_fixture_ids  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -187,11 +188,13 @@ def main() -> None:
     e.add_argument('--reports', nargs='+', required=True); e.add_argument('--schedule'); e.add_argument('--out', required=True)
     args = parser.parse_args()
     if args.cmd == 'schedule':
-        holdout = set(_json('data/splits.json')['holdout_manifest']['fixture_ids'])
+        holdout = sealed_fixture_ids()
         is_holdout = lambda c: c['fixture_id'].split('--')[0] in holdout or c.get('attack_id') in holdout
         if args.confirmatory_holdout:
-            if Path(args.suite).as_posix() != registry()['holdout']['confirmatory_suite']:
-                raise SystemExit('--confirmatory-holdout schedules only the registered holdout suite')
+            reg = registry()
+            registered = {reg['holdout']['confirmatory_suite'], *reg.get('holdout2', {}).get('suites', {}).values()}
+            if Path(args.suite).as_posix() not in registered:
+                raise SystemExit('--confirmatory-holdout schedules only a registered holdout suite')
             cases = _json(args.suite)['cases']
             if not cases or not all(is_holdout(c) for c in cases):
                 raise SystemExit('the confirmatory suite must contain holdout cases only')

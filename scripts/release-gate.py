@@ -14,6 +14,8 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from src.splits import sealed_fixture_ids  # noqa: E402
 OUT = ROOT / 'evidence/release-gate-dev.json'
 DOC = ROOT / 'docs/release-gate.md'
 PREFIX = 'tbgate'
@@ -25,7 +27,7 @@ hc = json.loads((ROOT / 'configs/frozen/holdout-config.json').read_text())
 sel = json.loads((ROOT / 'configs/frozen/selection.json').read_text())
 live_run = json.loads((ROOT / 'configs/frozen/live-run.yaml').read_text())
 pace = json.loads((ROOT / 'configs/frozen/live-matrix.yaml').read_text())['models'][hc['model']]
-holdout = set(json.loads((ROOT / reg['holdout']['split_manifest']).read_text())['holdout_manifest']['fixture_ids'])
+holdout = sealed_fixture_ids()
 rendering = sel['data']['selection_condition']['attack_rendering']
 override_file = hc['reliability']['override_file']
 override = json.loads((ROOT / override_file).read_text())
