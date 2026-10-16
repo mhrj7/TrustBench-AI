@@ -9,7 +9,7 @@ import test from "node:test";
  * fixtures they exercise. Frozen artifacts are listed explicitly with the reason they cannot change.
  */
 const root = path.resolve(import.meta.dirname, "..");
-const scanned = ["src", "runtime", "agent", "scripts/run-arm-smoke.mjs", "scripts/run-live-matrix.mjs", "scripts/summarize-live-results.mjs"];
+const scanned = ["src", "runtime", "agent", "app", "scripts/run-arm-smoke.mjs", "scripts/run-live-matrix.mjs", "scripts/summarize-live-results.mjs"];
 const exempt = new Map([
   ["src/evaluators/outcomes.py", "frozen tb016.1.0.0 evaluator; its hash is pinned by the TB-017 pilot manifest"],
   ["src/tools/tests", "test inputs"],

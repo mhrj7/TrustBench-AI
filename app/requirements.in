@@ -1,0 +1,9 @@
+# TB-030 review dashboard: the tool requirements plus the dashboard stack, pinned to the same versions as the tool lock.
+# The tool-service sandbox image installs only src/tools/requirements.lock; the dashboard packages never enter it.
+# Compile: uv pip compile app/requirements.in --generate-hashes --output-file app/requirements.lock --python-version 3.14
+# Install into the tools environment: uv pip sync app/requirements.lock --python .venv-tools/bin/python
+-r ../src/tools/requirements.in
+-c ../src/tools/requirements.lock
+plotly>=5.24,<7
+streamlit>=1.40,<2
+websockets>=13,<17
