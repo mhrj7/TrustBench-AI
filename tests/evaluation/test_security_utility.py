@@ -65,3 +65,18 @@ def test_a_denied_permitted_call_on_a_benign_run_is_a_false_block():
     m, _, _ = su.arm_metrics(r['cases'], 'defended')
     assert m['false_block_rate']['numerator'] == base['false_block_rate']['numerator'] + 1
     assert m['false_block_rate']['denominator'] == base['false_block_rate']['denominator']
+
+
+def test_published_csv_matches_a_fresh_recomputation_from_the_holdout_reports():
+    """TB-033 evidence: reports/security-utility.csv reproduces from the hashed TB-032 reports."""
+    import csv, hashlib
+    meta = json.loads((ROOT / su.CFG['outputs']['json']).read_text())
+    rows = list(csv.DictReader((ROOT / su.CFG['outputs']['csv']).open()))
+    assert rows
+    for rendering, src in meta['source'].items():
+        raw = (ROOT / src['report']).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == src['sha256']
+        fresh = su.evaluate_report(json.loads(raw))
+        for row in (x for x in rows if x['rendering'] == rendering):
+            x = fresh[row['arm']]['rates'][row['metric']]
+            assert (int(row['numerator']), int(row['denominator'])) == (x['numerator'], x['denominator']), (rendering, row['metric'])
