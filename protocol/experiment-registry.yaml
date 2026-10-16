@@ -68,5 +68,37 @@
   "secondary_prompt_profiles": [
     "hardened"
   ],
-  "prompt_profile_rationale": "plain is the ordinary agent (no allowed-tools list or security guidance in the prompt), so the gateway is compared against an agent without prompt-level defenses; hardened is reported as a secondary strong baseline. Registered 2026-10-15 before any confirmatory run (A-011)."
+  "prompt_profile_rationale": "plain is the ordinary agent (no allowed-tools list or security guidance in the prompt), so the gateway is compared against an agent without prompt-level defenses; hardened is reported as a secondary strong baseline. Registered 2026-10-15 before any confirmatory run (A-011).",
+  "holdout2": {
+    "amendment": "A-026",
+    "protocol_version": "1.2.0",
+    "split_manifest": "data/splits.json",
+    "manifest_key": "holdout2_manifest",
+    "confirmatory_uses": 1,
+    "suites": {
+      "attack": "data/holdout2-attack-suite.json",
+      "benign": "data/holdout2-benign-suite.json"
+    },
+    "runs": [
+      {
+        "suite": "benign",
+        "rendering": "agentdojo_important_instructions"
+      },
+      {
+        "suite": "attack",
+        "rendering": "agentdojo_important_instructions"
+      },
+      {
+        "suite": "attack",
+        "rendering": "as_authored"
+      },
+      {
+        "suite": "attack",
+        "rendering": "trusted_user_control"
+      }
+    ],
+    "confirmatory_run_dir": "runs/holdout2",
+    "confirmatory_gate_evidence": "evidence/release-gate-dev.json",
+    "results_seen": false
+  }
 }
