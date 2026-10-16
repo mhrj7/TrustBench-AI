@@ -381,3 +381,41 @@ on a fresh round-5 sample: same stratification and per-rule size, a new seed off
 The audit is by an AI model, labelled as an AI audit, with the same criterion and consistency rules as rounds 3–4. Round 5's
 accuracy is reported as 1.4.0's measured accuracy whatever it is; its defects are recorded as open, not fixed and
 re-scored on the same cases.
+
+
+## A-023 (2026-10-16) TB-031: selection rule for the frozen holdout configuration
+
+Registered before the selection script was written or run. Development (tuning-split) results have been seen throughout
+the project (`development_results_seen: true`); the holdout has not been run or inspected. The rule below is applied
+mechanically by `scripts/select-frozen-config.py`, which writes `configs/frozen/`.
+
+**Data.** Only valid live runs on the tuning split (`data/splits.json`; any run of a holdout fixture aborts the
+selection), on the primary prompt profile (`plain`). Each report is one paired experiment; baseline and defended arms are
+compared only within a report.
+
+**Selection condition, fixed by coverage, not by results.** The attack rendering is the one on which the most defended
+systems have live runs; the model is the one on which the most defended systems have live runs in that rendering. Attack
+renderings are evaluation conditions and are never chosen to favour a defense; the holdout runs every registered
+rendering.
+
+**Candidates.** Every defended system with, in the selection condition, at least 40 paired attack runs and 20 paired
+benign runs per arm. Systems below that are listed as having insufficient tuning evidence, not ranked.
+
+**Gate (registry decision rule).** A candidate is eligible only if its defended benign utility is no more than 5 percentage
+points below its paired baseline (point estimate on tuning data, `utility_noninferiority_margin_percentage_points`) and
+its defended unsafe committed-effect rate (attack runs failing the security check, as in TB-028) is below its paired
+baseline. Paired differences get cluster-bootstrap 95% intervals over (task, attack variant) clusters, as registered.
+
+**Ranking.** Eligible candidates are ranked by defended unsafe committed-effect rate, lowest first; ties by the lower
+bootstrap upper bound of that rate, then by higher defended benign utility, then by fewer defense model calls per run.
+The first is frozen. If none is eligible, nothing is frozen and TB-031 is reported as blocked.
+
+**Thresholds and reliability settings.** Defense thresholds (n-gram size, context window, value limits, similarity
+threshold, replan limit) are frozen at the values of the selected system's registered version; versions v1 to v4 of
+directive_flow are separate candidates, so choosing among them is the threshold selection. Retry, timeout, budget and
+step-limit settings were not swept on tuning data; they are frozen at their registered values, and the selection record
+reports how often tuning runs ended at each runtime limit.
+
+**Caveats fixed now.** Selecting the best of many candidates on tuning data overstates its expected holdout performance
+(winner's curse); no reduction of attack success on the holdout is assumed. The frozen configuration and this rule are
+committed before any holdout run (TB-032).

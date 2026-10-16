@@ -1,0 +1,80 @@
+{
+ "task_id": "TB-031",
+ "selected_by": "configs/frozen/selection.json (A-023)",
+ "store_version": "38ee6ed8f7c9b0014385980b95841382d3dc3c4b8775f10295bf029c457a9685",
+ "model": "nvidia:openai/gpt-oss-20b",
+ "provider": "nvidia",
+ "provider_entry": {
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "loopback_only": false,
+  "api_key_env": "NVIDIA_API_KEY",
+  "reduced_schemas": false,
+  "omit_settings": [],
+  "send_reasoning_effort": false,
+  "budget_file": "configs/budget-nvidia-free.yaml",
+  "generation_overrides": {}
+ },
+ "prompt_profile": "plain",
+ "repetitions_per_pair": 5,
+ "defended_system": {
+  "system": "gateway_directive_flow_v4",
+  "source": "configs/defenses.yaml systems",
+  "definition": {
+   "transport": "gateway",
+   "gateway_variant": "capability_only",
+   "agent_defenses": [
+    "directive_flow_v4"
+   ],
+   "family": "ours (novel candidate 2, v4, pre-registered A-017): directive_flow v3 plus sticky denials of identical retried writes"
+  },
+  "defenses": {
+   "directive_flow_v4": {
+    "classifier_prompt_template": "configs/prompts/defenses/directive-classifier-v2.md",
+    "scope": "write_class_tools",
+    "data_arguments": [
+     "answer",
+     "body",
+     "subject",
+     "destination"
+    ],
+    "untrusted_trust_levels": [
+     "untrusted",
+     "unknown"
+    ],
+    "salient_token_patterns": {
+     "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+     "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+     "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+    },
+    "ngram_size": 4,
+    "sentence_split": "(?<=[.!?])\\s+|\\n+",
+    "denied_error_code": "directive_attributed_flow",
+    "on_classifier_parse_failure": "deny",
+    "uses_model": true,
+    "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+    "kind": "directive_flow",
+    "context_window_sentences": 1,
+    "context_marker_open": "[[",
+    "context_marker_close": "]]",
+    "whole_value_max_words": 6,
+    "whole_value_min_chars": 3,
+    "sticky_denials": true
+   }
+  },
+  "architectures": {}
+ },
+ "attack_renderings": "every registered rendering (evaluation conditions, not tuned)",
+ "runtime_settings": {
+  "configs/defenses.yaml": "configs/frozen/defenses.yaml",
+  "configs/defended.yaml": "configs/frozen/defended.yaml",
+  "configs/policy.yaml": "configs/frozen/policy.yaml",
+  "configs/recovery.yaml": "configs/frozen/recovery.yaml",
+  "configs/durability.yaml": "configs/frozen/durability.yaml",
+  "configs/budget.yaml": "configs/frozen/budget.yaml",
+  "configs/live-run.yaml": "configs/frozen/live-run.yaml",
+  "configs/baseline.yaml": "configs/frozen/baseline.yaml",
+  "configs/providers.yaml": "configs/frozen/providers.yaml",
+  "configs/budget-nvidia-free.yaml": "configs/frozen/budget-nvidia-free.yaml",
+  "configs/prompts/defenses/directive-classifier-v2.md": "configs/frozen/prompts/defenses/directive-classifier-v2.md"
+ }
+}

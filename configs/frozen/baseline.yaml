@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "arm": "baseline",
+  "note": "JSON content (valid YAML), matching protocol/experiment-registry.yaml. Shared settings are inherited unchanged by configs/defended.yaml.",
+  "shared": {
+    "agent_runner": "src/agent/runner.ts#runBaselineAgent",
+    "generation_settings": {
+      "max_output_tokens": 512,
+      "temperature": null,
+      "top_p": null,
+      "seed": 20261014,
+      "reasoning_effort": "medium"
+    },
+    "budget_config": "configs/budget.yaml",
+    "max_steps": 12,
+    "timeout_ms": 60000,
+    "planned_input_tokens_per_call": 4000,
+    "tool_visibility": "all_registered_tools (identical in both arms; per-task permissions are enforced by controls, not by hiding tools)",
+    "tool_schemas": "src/policy/capability-manifests.json#argument_schemas",
+    "tool_descriptions": "configs/tool-descriptions.json",
+    "fixtures": "materialized by src/arms/fixtures.py (identical benign and attacked initial state)",
+    "episode_reset": "fresh episode per run, identical fixture, max_tool_calls 12",
+    "model_adapter": "injected by the caller; identical adapter, scripted outcomes or provider settings for both arms",
+    "on_tool_error": "continue",
+    "tool_backend_mode": "permissive (TRUSTBENCH_TOOL_MODE): schema validity, tenant scoping and referential integrity only; --tool-mode contract runs the TB-014 contract-checked backend as an ablation",
+    "default_prompt_profile": "plain",
+    "prompt_profiles": {
+      "hardened": {
+        "system_prompt_path": "agent/instructions.md",
+        "description": "TrustBench agent instructions with explicit trust/authorization rules and an injection warning in the user prompt (a prompt-level defense shared by both arms).",
+        "user_prompt_template": "configs/prompts/hardened-user.md"
+      },
+      "plain": {
+        "system_prompt_path": "configs/prompts/plain-system.md",
+        "description": "Neutral task prompt in the style of the AgentDojo default system message (data/vendor/agentdojo/src/agentdojo/data/system_messages.yaml, MIT; persona and date lines removed). The user prompt carries the task request and task parameters only: no allowed-tools list and no security guidance.",
+        "user_prompt_template": "configs/prompts/plain-user.md"
+      }
+    },
+    "recovery_policy": "configs/recovery.yaml",
+    "research_note_format": "configs/prompts/research-note-format.md"
+  },
+  "tool_path": {
+    "transport": "http_loopback",
+    "service": "src.tools.app (permissive synthetic backend, direct loopback)",
+    "authentication": "none",
+    "output_format": "raw_json",
+    "policy_layers": [],
+    "approval": "none",
+    "decision_trace": "none"
+  }
+}

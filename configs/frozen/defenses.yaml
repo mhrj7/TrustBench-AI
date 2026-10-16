@@ -1,0 +1,304 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Defended systems compared against the baseline. Each system = transport (direct tool service or the TrustBench gateway) + optional agent-side defenses. Published baselines are re-implemented from their papers/AgentDojo source on this harness; they are not the original code. Prompts live in configs/prompts/defenses/. `changes_first_request` marks defenses and architectures whose first model request legitimately differs from the baseline's (the parity check skips that comparison for them).",
+  "systems": {
+    "gateway_capability": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [],
+      "family": "ours (TB-021/022)"
+    },
+    "gateway_flow_block": {
+      "transport": "gateway",
+      "gateway_variant": "capability_plus_flow",
+      "agent_defenses": [],
+      "family": "ours (token provenance, blocking)"
+    },
+    "gateway_counterfactual_writes": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "counterfactual_writes"
+      ],
+      "family": "ours (novel candidate): capability gateway + task-masked counterfactual check at write boundaries"
+    },
+    "spotlighting": {
+      "transport": "direct",
+      "agent_defenses": [
+        "spotlighting"
+      ],
+      "family": "baseline: Hines et al. 2024 delimiting, as in AgentDojo spotlighting_with_delimiting"
+    },
+    "sandwich": {
+      "transport": "direct",
+      "agent_defenses": [
+        "sandwich"
+      ],
+      "family": "baseline: AgentDojo repeat_user_prompt"
+    },
+    "tool_filter": {
+      "transport": "direct",
+      "agent_defenses": [
+        "tool_filter"
+      ],
+      "family": "baseline: AgentDojo tool_filter"
+    },
+    "melon": {
+      "transport": "direct",
+      "agent_defenses": [
+        "melon"
+      ],
+      "family": "baseline: MELON-style masked re-execution at every tool call (Zhu et al. 2025), simplified"
+    },
+    "gateway_directive_flow": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow"
+      ],
+      "family": "ours (novel candidate 2): capability gateway + directive-attributed flow check on write data arguments, using signature-verified provenance"
+    },
+    "camel": {
+      "transport": "direct",
+      "architecture": "camel",
+      "agent_defenses": [],
+      "family": "baseline: CaMeL-style re-implementation (Debenedetti et al. 2025, 'Defeating Prompt Injections by Design'): privileged planner that never sees tool outputs, quarantined extractor, capability-tracked values and per-tool policies. Simplified: JSON plan instead of Python, linear plans, replanning sees error codes only."
+    },
+    "gateway_directive_flow_v2": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow_v2"
+      ],
+      "family": "ours (novel candidate 2, v2, pre-registered A-014): directive_flow with each attributed sentence classified in its neighbouring-sentence context"
+    },
+    "gateway_directive_flow_v3": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow_v3"
+      ],
+      "family": "ours (novel candidate 2, v3, pre-registered A-016): directive_flow v2 plus whole-value attribution of short data values"
+    },
+    "gateway_directive_flow_v4": {
+      "transport": "gateway",
+      "gateway_variant": "capability_only",
+      "agent_defenses": [
+        "directive_flow_v4"
+      ],
+      "family": "ours (novel candidate 2, v4, pre-registered A-017): directive_flow v3 plus sticky denials of identical retried writes"
+    }
+  },
+  "defenses": {
+    "spotlighting": {
+      "system_prompt_template": "configs/prompts/defenses/spotlighting-system.md",
+      "open": "<<",
+      "close": ">>",
+      "uses_model": false,
+      "changes_first_request": true
+    },
+    "sandwich": {
+      "reminder_template": "configs/prompts/defenses/sandwich-reminder.md",
+      "uses_model": false
+    },
+    "tool_filter": {
+      "prompt_template": "configs/prompts/defenses/tool-filter.md",
+      "denied_error_code": "tool_filtered",
+      "uses_model": true,
+      "changes_first_request": true
+    },
+    "melon": {
+      "masked_prompt_template": "configs/prompts/defenses/masked-task.md",
+      "scope": "all_tool_calls",
+      "denied_error_code": "masked_rerun_match",
+      "uses_model": true
+    },
+    "counterfactual_writes": {
+      "masked_prompt_template": "configs/prompts/defenses/masked-task.md",
+      "scope": "write_class_tools",
+      "denied_error_code": "counterfactual_write_match",
+      "uses_model": true
+    },
+    "directive_flow": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+      "kind": "directive_flow",
+      "context_window_sentences": 0
+    },
+    "directive_flow_v2": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier-v2.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+      "kind": "directive_flow",
+      "context_window_sentences": 1,
+      "context_marker_open": "[[",
+      "context_marker_close": "]]"
+    },
+    "directive_flow_v3": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier-v2.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+      "kind": "directive_flow",
+      "context_window_sentences": 1,
+      "context_marker_open": "[[",
+      "context_marker_close": "]]",
+      "whole_value_max_words": 6,
+      "whole_value_min_chars": 3
+    },
+    "directive_flow_v4": {
+      "classifier_prompt_template": "configs/prompts/defenses/directive-classifier-v2.md",
+      "scope": "write_class_tools",
+      "data_arguments": [
+        "answer",
+        "body",
+        "subject",
+        "destination"
+      ],
+      "untrusted_trust_levels": [
+        "untrusted",
+        "unknown"
+      ],
+      "salient_token_patterns": {
+        "has_digit": "[A-Za-z]*\\d[\\w.@:/-]*",
+        "address_or_uri": "[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|[a-z][a-z0-9+.-]*://\\S+",
+        "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+      },
+      "ngram_size": 4,
+      "sentence_split": "(?<=[.!?])\\s+|\\n+",
+      "denied_error_code": "directive_attributed_flow",
+      "on_classifier_parse_failure": "deny",
+      "uses_model": true,
+      "token_trailing_punctuation": "[.,;:!?)\\]'\"]+$",
+      "kind": "directive_flow",
+      "context_window_sentences": 1,
+      "context_marker_open": "[[",
+      "context_marker_close": "]]",
+      "whole_value_max_words": 6,
+      "whole_value_min_chars": 3,
+      "sticky_denials": true
+    }
+  },
+  "masked_call_matching": {
+    "identity_arguments": [
+      "recipient_id",
+      "destination",
+      "record_id",
+      "value",
+      "idempotency_key",
+      "resource_id",
+      "note_id",
+      "draft_id"
+    ],
+    "text_arguments": [
+      "body",
+      "answer",
+      "subject"
+    ],
+    "text_jaccard_min": 0.5,
+    "note": "A masked call matches the real call when the tool is the same and either any identity argument present in both is equal, or a text argument's word-set Jaccard similarity reaches the threshold."
+  },
+  "default_system": "gateway_capability",
+  "architectures": {
+    "camel": {
+      "planner_prompt_template": "configs/prompts/defenses/camel-planner.md",
+      "query_prompt_template": "configs/prompts/defenses/camel-query.md",
+      "replan_prompt_template": "configs/prompts/defenses/camel-replan.md",
+      "max_replans": 2,
+      "trusted_source": "user",
+      "policy": {
+        "note": "Write-control arguments must be built only from values the planner wrote itself (taken from the trusted task). Values extracted from tool outputs may flow into data arguments. Reads are always allowed. '*' means every argument.",
+        "control_arguments": {
+          "save_research_note": [
+            "note_id"
+          ],
+          "create_email_draft": [
+            "draft_id",
+            "recipient_id",
+            "subject",
+            "idempotency_key"
+          ],
+          "apply_record_update": [
+            "record_id",
+            "field",
+            "value",
+            "approval_id",
+            "idempotency_key"
+          ],
+          "send_external_email": [
+            "*"
+          ],
+          "propose_record_update": [
+            "record_id",
+            "field",
+            "value"
+          ]
+        }
+      },
+      "denied_error_code": "camel_policy_denied",
+      "plan_error_code": "camel_plan_invalid",
+      "insufficient_information_code": "camel_query_insufficient_information",
+      "changes_first_request": true
+    }
+  }
+}

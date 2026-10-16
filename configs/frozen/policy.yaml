@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Gateway policy rules (TB-021/022, flow check added 2026-10-15). JSON content (valid YAML). Code in src/policy reads these rules; no tool name or contract key is hardcoded there.",
+  "tool_argument_schemas": {
+    "search_documents": "QueryRequest",
+    "read_document": "ResourceRequest",
+    "read_reference": "ResourceRequest",
+    "lookup_contact": "ResourceRequest",
+    "read_customer_record": "ResourceRequest",
+    "save_research_note": "ResearchNoteRequest",
+    "create_email_draft": "EmailDraftRequest",
+    "propose_record_update": "RecordUpdateRequest",
+    "apply_record_update": "RecordUpdateRequest",
+    "send_external_email": "SendEmailRequest"
+  },
+  "document_allowlist_contract_keys": [
+    "allowed_document_ids",
+    "reference_document_ids"
+  ],
+  "document_resource_arguments": {
+    "read_document": "resource_id",
+    "read_reference": "resource_id"
+  },
+  "citation_arguments": {
+    "save_research_note": "citation_document_ids"
+  },
+  "contract_bindings": {
+    "lookup_contact": {
+      "resource_id": "recipient_id"
+    },
+    "read_customer_record": {
+      "resource_id": "record_id"
+    },
+    "save_research_note": {
+      "note_id": "allowed_note_id"
+    },
+    "create_email_draft": {
+      "draft_id": "draft_id",
+      "recipient_id": "recipient_id",
+      "subject": "subject",
+      "idempotency_key": "idempotency_key"
+    },
+    "propose_record_update": {
+      "record_id": "record_id",
+      "field": "field",
+      "value": "value",
+      "approval_id": "approval_id",
+      "idempotency_key": "idempotency_key"
+    },
+    "apply_record_update": {
+      "record_id": "record_id",
+      "field": "field",
+      "value": "value",
+      "approval_id": "approval_id",
+      "idempotency_key": "idempotency_key"
+    }
+  },
+  "required_fragments": {
+    "create_email_draft": {
+      "argument": "body",
+      "contract_key": "required_body_fragments"
+    }
+  },
+  "approval_required_tools": [
+    "apply_record_update"
+  ],
+  "approval_idempotency_argument": "idempotency_key",
+  "synthetic_approval_event_keys": [
+    "approval_id",
+    "record_id",
+    "field",
+    "value",
+    "idempotency_key"
+  ],
+  "provenance_flow": {
+    "description": "Provenance-aware flow check for free-text data arguments of write tools. A token in a checked argument is denied when it (a) names a resource identifier present in the episode state that the task contract does not authorize, or (b) matches a marker/address pattern, was first seen in an untrusted tool output during this session, and does not occur in the trusted task contract.",
+    "checked_arguments": {
+      "save_research_note": [
+        "answer"
+      ],
+      "create_email_draft": [
+        "body",
+        "subject"
+      ],
+      "send_external_email": [
+        "destination",
+        "body"
+      ]
+    },
+    "untrusted_trust_levels": [
+      "untrusted",
+      "unknown"
+    ],
+    "state_identifier_key_suffix": "_id",
+    "token_patterns": {
+      "email_address": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+      "uri": "[a-z][a-z0-9+.-]*://[^\\s\"'<>]+",
+      "uppercase_marker": "\\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\\b"
+    },
+    "action": "deny"
+  },
+  "provenance_sources": {
+    "id_field": "document_id",
+    "list_fields": [
+      "results"
+    ],
+    "source_prefix": "document:",
+    "operation_source_template": "episode:{episode}:tool:{tool}"
+  },
+  "approval_mode": "synthetic",
+  "human_approval": {
+    "queue_dir": ".tool-state/approvals",
+    "poll_interval_ms": 500,
+    "wait_timeout_s": 300,
+    "note": "approval_mode 'human': the host writes each pending consequential action to queue_dir/pending and waits for a decision written by the operator console (python -m src.policy.approval_console). No decision within wait_timeout_s means rejected."
+  }
+}

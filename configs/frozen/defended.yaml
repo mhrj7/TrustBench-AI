@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "arm": "defended",
+  "note": "JSON content (valid YAML). Effective config = configs/baseline.yaml with only the tool_path overrides below. tests/arms.test.ts rejects any other difference.",
+  "extends": "configs/baseline.yaml",
+  "allowed_differences": [
+    "tool_path.transport",
+    "tool_path.service",
+    "tool_path.authentication",
+    "tool_path.output_format",
+    "tool_path.policy_layers",
+    "tool_path.approval",
+    "tool_path.decision_trace"
+  ],
+  "overrides": {
+    "tool_path": {
+      "transport": "http_loopback",
+      "service": "src.gateway.app (TB-019 gateway in front of the same permissive src.tools.app backend)",
+      "authentication": "host-issued per-episode bearer session, never exposed to prompts or tool schemas",
+      "output_format": "provenance_envelope tb020.1 (payload identical to baseline raw_json)",
+      "policy_layers": [
+        "session and tool allowlist (TB-019)",
+        "provenance envelope (TB-020)",
+        "capability and strict argument policy (TB-021)",
+        "approval bound to exact arguments via LangGraph interrupt (TB-022)",
+        "provenance-aware flow check on free-text write arguments (variant capability_plus_flow; configs/policy.yaml provenance_flow)"
+      ],
+      "approval": "apply_record_update pauses at the gateway (409); src/policy/approved_call.py runs the LangGraph workflow and approves only when the call matches the fixture's synthetic approval event exactly",
+      "decision_trace": "gateway audit JSONL (decision, reason, tool, argument hash, provenance, request id)"
+    }
+  },
+  "unchanged_by_design": [
+    "model and generation settings",
+    "system prompt",
+    "user prompt",
+    "tool names, descriptions and schemas visible to the model",
+    "step, time, token, call and cost budgets",
+    "initial state and task contract",
+    "agent state machine and failure handling"
+  ],
+  "known_limitations": [
+    "Model-visible tool results carry the provenance envelope in the defended arm; this is an intended gateway behavior.",
+    "Gateway capability checks assume exact-ID matching; normalization gaps are tested in tests/policy but not proven absent.",
+    "Gemini's compatibility endpoint rejects seeds, so Gemini pairs are not seed-matched (recorded in docs/local-models.md)."
+  ],
+  "defended_variants": {
+    "capability_plus_flow": {
+      "flow_check": true,
+      "description": "Capability and exact-argument policy plus the token-provenance flow check (blocking). Ablation since 2026-10-15 (A-012): it false-blocks code-shaped values extracted from documents."
+    },
+    "capability_only": {
+      "flow_check": false,
+      "description": "TB-021/022 capability and approval policy (default gateway variant)."
+    }
+  },
+  "default_defended_variant": "capability_only"
+}
