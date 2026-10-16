@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Registered live-run matrix for scripts/run-live-matrix.mjs. Models, repetitions, renderings and lanes live here, not in code. Seeds come from protocol/experiment-registry.yaml. Holdout fixtures are always excluded by the runner. 'registry' repetitions means protocol/experiment-registry.yaml repetitions_per_pair. 'profiles' restricts a rendering to those prompt profiles (default: all). A-015 (2026-10-16): repetitions for llama-3.2-11b, llama3.2 and gemma-4-26b lowered to 2 for their unfinished cells (measured throughput about 2 minutes per pair); the earlier value is kept as registered_repetitions_before_A015.",
+  "lanes": {
+    "nvidia-gptoss": [
+      "nvidia:openai/gpt-oss-20b"
+    ],
+    "nvidia-llama": [
+      "nvidia:meta/llama-3.2-11b-vision-instruct"
+    ],
+    "ollama": [
+      "ollama:qwen3.5:9b",
+      "ollama:llama3.2:latest"
+    ],
+    "gemini": [
+      "gemini:gemma-4-26b-a4b-it"
+    ]
+  },
+  "models": {
+    "nvidia:openai/gpt-oss-20b": {
+      "repetitions": "registry",
+      "temperature": 0.3,
+      "min_interval_ms": 1000
+    },
+    "nvidia:meta/llama-3.2-11b-vision-instruct": {
+      "repetitions": 2,
+      "temperature": 0.3,
+      "min_interval_ms": 1000,
+      "registered_repetitions_before_A015": "registry"
+    },
+    "ollama:qwen3.5:9b": {
+      "repetitions": 3,
+      "temperature": 0.3,
+      "min_interval_ms": 0
+    },
+    "ollama:llama3.2:latest": {
+      "repetitions": 2,
+      "temperature": 0.3,
+      "min_interval_ms": 0,
+      "registered_repetitions_before_A015": 5
+    },
+    "gemini:gemma-4-26b-a4b-it": {
+      "repetitions": 2,
+      "temperature": 0.3,
+      "min_interval_ms": 2500,
+      "registered_repetitions_before_A015": 3
+    }
+  },
+  "renderings": [
+    {
+      "id": "as_authored",
+      "include_benign": true
+    },
+    {
+      "id": "agentdojo_important_instructions"
+    },
+    {
+      "id": "agentdojo_injecagent"
+    },
+    {
+      "id": "stripped",
+      "profiles": [
+        "plain"
+      ]
+    },
+    {
+      "id": "trusted_user_control",
+      "repetitions_cap": 5
+    }
+  ],
+  "prompt_profiles": [
+    "plain",
+    "hardened"
+  ],
+  "replaced_models": {
+    "gemini:gemini-3.5-flash-lite": {
+      "repetitions": 1,
+      "temperature": 0.3,
+      "min_interval_ms": 3000,
+      "replaced_by": "gemini:gemma-4-26b-a4b-it",
+      "amendment": "A-014",
+      "reason": "Its free-tier quota (observed about 20 requests per day) cannot complete one matrix cell (each cell needs hundreds of model calls); Gemma 4 26B is served through the same Gemini API and provider adapter with a separate free quota, and passed a live tool-calling probe on 2026-10-16."
+    }
+  }
+}
