@@ -32,3 +32,15 @@ def test_suite_holds_exactly_the_sealed_manifest():
     ids = set(json.loads((ROOT / 'data/splits.json').read_text())['holdout_manifest']['fixture_ids'])
     covered = {c['attack_id'] or c['fixture_id'] for c in suite['cases']}
     assert covered == ids and all('steps' not in c for c in suite['cases'])
+
+
+def test_holdout_run_record_matches_the_run_directory():
+    """TB-032 evidence: every rendering ran its full schedule once; the record agrees with the raw reports."""
+    import hashlib
+    rec = json.loads((ROOT / 'evidence/tb032-holdout-run.json').read_text())
+    assert rec['complete'] and rec['single_response_model']
+    for row in rec['renderings']:
+        report = ROOT / row['report']
+        assert hashlib.sha256(report.read_bytes()).hexdigest() == row['report_sha256']
+        pairs = (report.parent / 'pairs.jsonl').read_text().splitlines()
+        assert row['attempted_pairs'] == row['intended_pairs'] == len(pairs) == len(json.loads(report.read_text())['cases'])

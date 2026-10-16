@@ -56,7 +56,11 @@ for x in rows:
     lines.append(f"| {x['rendering']} | {x['role']} | {x['intended_pairs']} | {x['attempted_pairs']} | {x['valid_pairs']} | {x['invalid_pairs']} | "
                  f"{', '.join(f'{k} ×{n}' for k, n in x['invalid_reasons'].items()) or '—'} | {x['ended_early'] or 'no'} | {'yes' if x['comparison_valid'] else 'no'} |")
 lines += ['', f"Response models observed: {', '.join(models) or '—'} ({'single model' if len(models) == 1 else 'MIXED: comparison invalid'}).", '',
-          f"**Complete:** {'yes' if out['complete'] else 'no'}.", '']
+          f"**Complete:** {'yes' if out['complete'] else 'no'}.", '',
+          f"Precondition: development release gate `{reg['holdout']['confirmatory_gate_evidence']}` (PASS, A-025). Each rendering's run directory holds "
+          '`started.json` (argv and start time), `pairs.jsonl` (written as each pair finished), `report.json`, `policy-traces.jsonl` and `spans.jsonl`. '
+          'The runner refuses a second execution of any rendering whose directory exists. Registry: the single confirmatory use is consumed '
+          '(`holdout_results_seen: true`).', '']
 (ROOT / 'docs/holdout-run.md').write_text('\n'.join(lines) + '\n')
 print(json.dumps({'complete': out['complete'], 'renderings': [(x['rendering'], x.get('attempted_pairs'), x.get('valid_pairs'), x.get('invalid_pairs')) for x in rows]}))
 sys.exit(0 if out['complete'] else 1)
