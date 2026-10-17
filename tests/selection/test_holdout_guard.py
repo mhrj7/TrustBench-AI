@@ -75,3 +75,13 @@ def test_development_runs_exclude_holdout2_from_schedules(tmp_path):
     p = subprocess.run([str(ROOT / '.venv-tools/bin/python'), '-c', f"import json,sys; sys.path.insert(0,'{ROOT}'); from src.splits import sealed_fixture_ids; "
                         f"s=json.load(open('{tmp_path / 's.json'}')); ids=sealed_fixture_ids(); print(all(c['attack_id'] in ids for c in s['cases']))"], capture_output=True, text=True)
     assert p.stdout.strip() == 'True'
+
+
+def test_holdout2_run_record_matches_the_run_directory():
+    import hashlib
+    rec = json.loads((ROOT / 'evidence/tb032-holdout2-run.json').read_text())
+    assert rec['complete'] and rec['single_response_model'] and len(rec['renderings']) == len(REG['holdout2']['runs'])
+    for row in rec['renderings']:
+        report = ROOT / row['report']
+        assert hashlib.sha256(report.read_bytes()).hexdigest() == row['report_sha256']
+        assert row['attempted_pairs'] == row['intended_pairs'] == len((report.parent / 'pairs.jsonl').read_text().splitlines())

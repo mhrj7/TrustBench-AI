@@ -115,3 +115,25 @@ def test_scipy_wilson_matches_the_closed_form_used_elsewhere():
         a, b = su.wilson95(k, n), wilson(k, n, 1.959963984540054)
         assert abs(a[0] - b[0]) < 1e-9 and abs(a[1] - b[1]) < 1e-9
     assert su.wilson95(0, 0) is None
+
+
+def test_holdout2_csv_matches_a_fresh_recomputation():
+    """A-026 evidence: reports/security-utility-holdout2.csv reproduces from the hashed holdout-2 reports."""
+    import hashlib
+    import pandas as pd
+    meta = json.loads((ROOT / su.CFG['holdout2_outputs']['json']).read_text())
+    rows = pd.read_csv(ROOT / su.CFG['holdout2_outputs']['csv'])
+    for rendering, srcs in meta['source'].items():
+        if rendering == 'holdout1_primary':
+            continue
+        reps = []
+        for s in srcs:
+            raw = (ROOT / s['report']).read_bytes()
+            assert hashlib.sha256(raw).hexdigest() == s['sha256']
+            reps.append(json.loads(raw))
+        fresh = su.evaluate_cases([c for r in reps for c in r['cases']], [r['summary'] for r in reps])
+        sub = rows[(rows['scope'] == 'holdout2') & (rows['rendering'] == rendering)]
+        assert len(sub)
+        for _, row in sub.iterrows():
+            x = fresh[row['arm']]['rates'][row['metric']]
+            assert (int(row['numerator']), int(row['denominator'])) == (x['numerator'], x['denominator'])
