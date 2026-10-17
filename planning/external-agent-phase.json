@@ -1,5 +1,5 @@
 {
- "note": "Phase 10 (External agent validation), added 2026-10-16 after the core roadmap (TB-001..TB-054) and before the optional extensions. Planned only: every task starts Not Started and nothing in it is implemented until TB-054 is Completed. The sealed core holdout (data/splits.json) is never used here: it has one confirmatory use, by TB-032. Source of the rows written into planning/TrustBench-AI_Plan.xlsx. Revised 2026-10-16 after review: TB-061 registers the split procedure and TB-062 applies it and freezes the manifests (resolves a circular dependency); TB-057/TB-058 add a native-integration mode in which the agent keeps its own independently implemented tool integration against a sandbox.",
+ "note": "Phase 10 (External agent validation), added 2026-10-16 after the core roadmap (TB-001..TB-054) and before the optional extensions. Planned only: every task starts Not Started and nothing in it is implemented until TB-054 is Completed. The sealed core holdout (data/splits.json) is never used here: it has one confirmatory use, by TB-032. Source of the rows written into planning/TrustBench-AI_Plan.xlsx. Revised 2026-10-16 after review: TB-061 registers the split procedure and TB-062 applies it and freezes the manifests (resolves a circular dependency); TB-057/TB-058 add a native-integration mode in which the agent keeps its own independently implemented tool integration against a sandbox. Revised 2026-10-17: external agents also connect through the public live website and API (docs/live-service.md).",
  "phase": "10 External agent validation",
  "scope": "Validation",
  "tasks": [
@@ -37,10 +37,10 @@
    "dep1": "TB-056",
    "dep2": "TB-024",
    "hours": 12,
-   "steps": "Mode A (controlled tools): expose the TrustBench tool services to the agent through its native tool interface (function tools or an MCP server), routed through the policy gateway. Mode B (native integration): keep at least one of the agent's own, independently implemented tool integrations (for example its SQL, HTTP-API or mail connector) unchanged, point it at a sandboxed local instance (database container or mock API server seeded with synthetic data, no real accounts), and interpose the gateway between that integration and its service without replacing the agent's tool environment. In both modes translate run configuration, model settings and step limits, and capture tool calls, final text and errors into the TrustBench trace schema. Keep the agent's own code unmodified.",
+   "steps": "Mode A (controlled tools): expose the TrustBench tool services to the agent through its native tool interface (function tools or an MCP server), routed through the policy gateway. Mode B (native integration): keep at least one of the agent's own, independently implemented tool integrations (for example its SQL, HTTP-API or mail connector) unchanged, point it at a sandboxed local instance (database container or mock API server seeded with synthetic data, no real accounts), and interpose the gateway between that integration and its service without replacing the agent's tool environment. In both modes translate run configuration, model settings and step limits, and capture tool calls, final text and errors into the TrustBench trace schema. Keep the agent's own code unmodified. External agents are connected through the live website and API as well as locally: the run API reserves the agent field (external_mcp, langgraph_http, configs/live-service.yaml).",
    "tools": "Agent SDK or MCP, src/gateway, TypeScript or Python adapter, Docker (sandboxed database or mock API)",
    "inputs": "Integration contract (TB-056); gateway and tool services; the agent's native tool integration and a synthetic sandbox instance for it",
-   "acceptance": "Mode A: adapter tests show every TrustBench tool callable from the agent and traces validating against the TB-004 schema. Mode B: at least one independently implemented native integration runs unchanged against its sandbox with every call passing through the gateway, which records an allow or deny decision per call; the sandbox holds synthetic data only. A diff proves no change to the agent's source or to the native integration's code.",
+   "acceptance": "Mode A: adapter tests show every TrustBench tool callable from the agent and traces validating against the TB-004 schema. Mode B: at least one independently implemented native integration runs unchanged against its sandbox with every call passing through the gateway, which records an allow or deny decision per call; the sandbox holds synthetic data only. A diff proves no change to the agent's source or to the native integration's code. A connected external agent receives the same paired report through the website and trustbench remote.",
    "evidence": "src/external/; tests/external/adapter/; tests/external/native-integration/; docs/external/native-integration.md",
    "risk": "The agent's tool interface cannot carry capability tokens: hold tokens in the adapter process, never in prompts, and enforce at the gateway. The native integration cannot be interposed (in-process client, pinned TLS): use a network-level proxy in the sandbox, or record Mode B as not demonstrated and limit claims to Mode A.",
    "sources": "TB-S1"
@@ -79,7 +79,7 @@
    "dep1": "TB-058",
    "dep2": "TB-059",
    "hours": 4,
-   "steps": "Run scripted (mock-model) conformance tests for the adapter, then a small live smoke run on the development split with both arms (agent alone, agent behind the gateway). Check traces, evaluator verdicts, spans and redaction end to end.",
+   "steps": "Run scripted (mock-model) conformance tests for the adapter, then a small live smoke run on the development split with both arms (agent alone, agent behind the gateway). Check traces, evaluator verdicts, spans and redaction end to end. Run the conformance and smoke checks through the live service as well.",
    "tools": "Playwright or pytest, scripts/run-arm-smoke.mjs pattern, free models",
    "inputs": "Smoke suite (TB-012), adapter",
    "acceptance": "Conformance suite passes; live smoke produces valid paired reports with complete evidence and no sensitive values in spans.",
@@ -163,10 +163,10 @@
    "dep1": "TB-065",
    "dep2": "",
    "hours": 5,
-   "steps": "Write what transferred and what did not, negative results, uncovered entry points, the agent behaviours that weakened or strengthened the controls, and a step-by-step guide for wrapping another agent. Add the external results to the review site.",
+   "steps": "Write what transferred and what did not, negative results, uncovered entry points, the agent behaviours that weakened or strengthened the controls, and a step-by-step guide for wrapping another agent. Add the external results to the review site. Publish the external-agent path on the live website: a visitor connects an agent (LangGraph or a customer agent) and gets the report.",
    "tools": "docs/, web/",
    "inputs": "TB-065 results; TB-056 threat model",
-   "acceptance": "Limitations section lists every uncovered entry point and failed check; the guide is followed once on a clean checkout; claims stay within the measured scope.",
+   "acceptance": "Limitations section lists every uncovered entry point and failed check; the guide is followed once on a clean checkout; claims stay within the measured scope. The live website guide is followed once with an external agent end to end.",
    "evidence": "docs/external/report.md; docs/external/integration-guide.md",
    "risk": "Overgeneralising from one external agent: state the single-agent scope in every claim.",
    "sources": "TB-S1; TB-S2"

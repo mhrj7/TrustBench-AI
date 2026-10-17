@@ -7,9 +7,10 @@
   trustbench evaluate REPORT...  security, utility and uncertainty for arm-comparison reports
   trustbench report [--check]    regenerate the published reports; --check runs their reproduction tests
   trustbench manifest [--write]  check (or write) the pinned data, lock and protocol hashes
+  trustbench remote ...          the same runs on a live-test service (the website's API): catalog, run, status, report
 
 Every step is named in configs/cli/trustbench.yaml and delegates to the project's own scripts."""
-import hashlib, importlib.util, json, os, subprocess, sys
+import hashlib, importlib.util, json, os, subprocess, sys, time
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -186,6 +187,81 @@ def manifest(write: Annotated[bool, typer.Option(help='rewrite the pinned manife
     changed = sorted(f for f in set(pinned) | set(current) if pinned.get(f) != current.get(f))
     typer.echo(json.dumps({'ok': not changed, 'files': len(current), 'changed': changed}, indent=1))
     raise typer.Exit(0 if not changed else 1)
+
+
+# ---- remote: the live-test service (src/service/app.py), the same API the website's Live page uses -------------------------
+remote = typer.Typer(help='Run benchmarks on a TrustBench live-test service (the website\'s API).', no_args_is_help=True)
+app.add_typer(remote, name='remote')
+
+
+def http(method: str, url: str, body: Optional[dict] = None, token: Optional[str] = None):
+    import urllib.error, urllib.request
+    headers = {'content-type': 'application/json', **({'x-trustbench-token': token} if token else {})}
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read() or b'null')
+    except urllib.error.HTTPError as e:
+        detail = json.loads(e.read() or b'{}').get('detail', e.reason)
+        typer.echo(f'{e.code}: {detail}', err=True)
+        raise typer.Exit(1)
+
+
+@remote.command('catalog')
+def remote_catalog(url: Annotated[str, typer.Option(help='service origin, e.g. https://trustbench.example')]):
+    """Modes, models, defenses, renderings and cases this service offers, and whether the project key is available."""
+    typer.echo(json.dumps(http('GET', f'{url.rstrip("/")}/api/catalog'), indent=1))
+
+
+@remote.command('run')
+def remote_run(url: Annotated[str, typer.Option(help='service origin')],
+               mode: Annotated[str, typer.Option(help='scripted, hosted (project key) or own_key (your key)')] = 'scripted',
+               system: Annotated[str, typer.Option(help='defense system id (see catalog)')] = 'gateway_capability',
+               model: Annotated[Optional[str], typer.Option(help='provider:model for live modes')] = None,
+               rendering: Annotated[Optional[str], typer.Option(help='attack rendering')] = None,
+               cases: Annotated[Optional[str], typer.Option(help='comma-separated case ids (default: every case the mode allows)')] = None,
+               repetitions: Annotated[int, typer.Option(min=1)] = 1,
+               key_env: Annotated[Optional[str], typer.Option(help='own_key mode: name of the environment variable holding your key')] = None,
+               token_env: Annotated[Optional[str], typer.Option(help='environment variable holding the deployment access token, if it needs one')] = None,
+               wait: Annotated[bool, typer.Option(help='wait for the run and print its summary')] = False):
+    """Start a paired run. Keys are read from an environment variable, never from the command line."""
+    body = {'mode': mode, 'system': system, 'repetitions': repetitions, **({'model': model} if model else {}), **({'rendering': rendering} if rendering else {}),
+            **({'cases': cases.split(',')} if cases else {})}
+    if mode == 'own_key':
+        if not key_env or not os.environ.get(key_env):
+            typer.echo('own_key mode: set --key-env to the name of an environment variable that holds your key', err=True)
+            raise typer.Exit(2)
+        body['api_key'] = os.environ[key_env]
+    base = url.rstrip('/')
+    job = http('POST', f'{base}/api/runs', body, os.environ.get(token_env) if token_env else None)
+    typer.echo(json.dumps({'id': job['id'], 'status': job['status'], 'pairs': job['pairs'], 'link': f"{base}/live?run={job['id']}"}, indent=1))
+    while wait and job['status'] in ('queued', 'running'):
+        time.sleep(3)
+        job = http('GET', f"{base}/api/runs/{job['id']}")
+    if wait:
+        typer.echo(json.dumps({k: job.get(k) for k in ('id', 'status', 'error', 'summary')}, indent=1))
+        raise typer.Exit(0 if job['status'] in ('done', 'done_with_parity_warnings') else 1)
+
+
+@remote.command('status')
+def remote_status(run_id: str, url: Annotated[str, typer.Option(help='service origin')]):
+    """Status and summary of a run."""
+    typer.echo(json.dumps(http('GET', f'{url.rstrip("/")}/api/runs/{run_id}'), indent=1))
+
+
+@remote.command('report')
+def remote_report(run_id: str, url: Annotated[str, typer.Option(help='service origin')],
+                  out: Annotated[Optional[Path], typer.Option(help='write the report here')] = None,
+                  evaluation: Annotated[bool, typer.Option(help='fetch the metrics and intervals instead of the raw report')] = False):
+    """The run's arm-comparison report (schema-checked) or its evaluation."""
+    data = http('GET', f'{url.rstrip("/")}/api/runs/{run_id}/{"evaluation" if evaluation else "report"}')
+    if not evaluation:
+        errors = schema_errors(data, CFG['report_schema'])
+        if errors:
+            typer.echo(f'report does not match {CFG["report_schema"]}: {errors[0]}', err=True)
+            raise typer.Exit(1)
+    text = json.dumps(data, indent=1)
+    (out.write_text(text + '\n') if out else typer.echo(text))
 
 
 if __name__ == '__main__':

@@ -4,6 +4,15 @@ TrustBench-AI is a local-first evaluation and enforcement project for tool-using
 
 This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://eve.dev/docs/reference/cli#eve-init).
 
+## Try it live (no setup)
+
+The TrustBench website has a **Run it live** page (`/live`): run the paired benchmark from the browser with the project's
+free-tier key, with your own free-tier key, or instantly with no model at all, then read the verdicts and download the
+report. The same runs work from a terminal with `sh bin/trustbench remote run --url <site> ...`. Keys stay server-side or
+in memory for one run; sealed holdouts are never offered. Details, limits and deployment: [`docs/live-service.md`](docs/live-service.md).
+
+<!-- Public link: added at deployment (TB-041). -->
+
 ## Benchmark quickstart (TB-037)
 
 Requirements: Node.js 26.5.0 with npm 12.0.0 (`package.json` engines), [uv](https://docs.astral.sh/uv/) (it installs Python
@@ -46,6 +55,7 @@ sh bin/trustbench report --check
 | `evaluate <report>...` | Security and utility rates (TB-033) and paired cluster-bootstrap intervals (TB-034) | no |
 | `report [--check]` | Regenerates the published TB-033..TB-036 reports from raw records, or runs their reproduction tests | no |
 | `manifest [--write]` | Checks the pinned hashes of data, locks, frozen configuration, schema and protocol (`manifests/pinned.json`) | no |
+| `remote catalog\|run\|status\|report --url <site>` | The same runs on a live-test service (the website's API); `--mode scripted\|hosted\|own_key`, your key read from `--key-env` | only for `own_key`: your own key |
 
 The same checks in a clean container:
 

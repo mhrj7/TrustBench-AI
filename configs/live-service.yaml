@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Live-test service (src/service/app.py): the API behind the website's Live page and `trustbench remote`. Three modes so a visitor can always run something: scripted (no model, no key), hosted (the project's own free-tier key, held server-side, budget-capped) and own_key (the visitor's free-tier key, used for that run only and never stored or logged). Only the development suite is offered; sealed holdouts are excluded by the runner and never listed. Every limit is here. JSON content (valid YAML).",
+  "suite": "tests/arms/smoke-cases.json",
+  "modes": {
+    "scripted": {
+      "label": "Instant: scripted trajectories, no model and no key",
+      "live": false,
+      "max_pairs_per_run": 34,
+      "max_repetitions": 2,
+      "per_client_runs_per_hour": 30
+    },
+    "hosted": {
+      "label": "Live model with the project's free-tier key",
+      "live": true,
+      "key_source": "server environment (the provider's api_key_env); never sent to the browser",
+      "providers": [
+        "nvidia"
+      ],
+      "max_pairs_per_run": 4,
+      "max_repetitions": 1,
+      "per_client_runs_per_day": 3,
+      "daily_pair_budget": 60,
+      "budget_file": "hosted-budget.json"
+    },
+    "own_key": {
+      "label": "Live model with your own free-tier key",
+      "live": true,
+      "key_source": "the request body; kept in memory for that run, passed to the runner in its environment, never written, logged or returned",
+      "providers": [
+        "nvidia",
+        "gemini"
+      ],
+      "max_pairs_per_run": 16,
+      "max_repetitions": 3,
+      "per_client_runs_per_hour": 6,
+      "key_pattern": "^[A-Za-z0-9._\\-]{16,200}$"
+    }
+  },
+  "models_from": "configs/live-matrix.yaml models (pacing and temperature per model)",
+  "systems": {
+    "gateway_directive_flow_v4": {
+      "label": "Frozen TrustBench system (gateway + directive-flow v4)",
+      "modes": [
+        "hosted",
+        "own_key"
+      ],
+      "frozen": true
+    },
+    "gateway_capability": {
+      "label": "Capability gateway (allowlist, contract scoping, approval)",
+      "modes": [
+        "scripted",
+        "hosted",
+        "own_key"
+      ]
+    },
+    "gateway_flow_block": {
+      "label": "Capability gateway + blocking flow check",
+      "modes": [
+        "scripted",
+        "hosted",
+        "own_key"
+      ]
+    },
+    "ablation_gateway_schema_only": {
+      "label": "Ablation: gateway with argument schemas only",
+      "modes": [
+        "scripted",
+        "hosted",
+        "own_key"
+      ]
+    },
+    "spotlighting": {
+      "label": "Baseline defense: spotlighting (Hines et al. 2024)",
+      "modes": [
+        "hosted",
+        "own_key"
+      ]
+    },
+    "tool_filter": {
+      "label": "Baseline defense: AgentDojo tool filter",
+      "modes": [
+        "hosted",
+        "own_key"
+      ]
+    }
+  },
+  "frozen_settings_for": [
+    "gateway_directive_flow_v4"
+  ],
+  "renderings_from": "configs/live-matrix.yaml renderings",
+  "default_rendering": "agentdojo_important_instructions",
+  "agents": {
+    "trustbench_baseline": {
+      "status": "available",
+      "label": "TrustBench bounded baseline agent (src/agent)"
+    },
+    "external_mcp": {
+      "status": "planned",
+      "label": "External agent through an MCP adapter",
+      "tasks": "TB-055..TB-066 (phase 10)"
+    },
+    "langgraph_http": {
+      "status": "planned",
+      "label": "External LangGraph or customer agent over HTTP",
+      "tasks": "TB-055..TB-066 (phase 10)"
+    }
+  },
+  "workers": {
+    "scripted": 2,
+    "live": 1
+  },
+  "retention_hours": 24,
+  "data_dir_env": "TRUSTBENCH_SERVICE_DATA",
+  "default_data_dir": ".tool-state/live-service",
+  "access_token_env": "TRUSTBENCH_DEMO_TOKEN",
+  "trust_proxy_header": "X-Forwarded-For",
+  "trust_proxy_env": "TRUSTBENCH_TRUST_PROXY",
+  "max_request_bytes": 8192,
+  "static_site": "web/dist",
+  "invalid_reason_messages": {
+    "authentication": "The model provider rejected the key. Check that it is a valid key for this provider, or use the project key or the instant mode.",
+    "rate_limit": "The provider's free-tier rate limit or quota was reached. Try again later, use fewer cases, or switch provider or mode.",
+    "quota_exhausted": "The provider's free-tier quota is used up for now. Try again later or switch provider or mode.",
+    "timeout": "The provider did not answer in time. Try again; free-tier endpoints are sometimes slow.",
+    "server": "The provider returned a server error. Try again later.",
+    "network": "The service could not reach the provider. Try again later.",
+    "default": "The model provider failed for these runs, so they are invalid and not counted."
+  }
+}

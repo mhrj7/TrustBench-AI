@@ -14,6 +14,7 @@ const Run = lazy(() => import('./pages/Run'));
 const Policy = lazy(() => import('./pages/Policy').then((m) => ({ default: m.Policy })));
 const Outcomes = lazy(() => import('./pages/Policy').then((m) => ({ default: m.Outcomes })));
 const Attribution = lazy(() => import('./pages/Attribution').then((m) => ({ default: m.Attribution })));
+const Live = lazy(() => import('./pages/Live'));
 const Method = lazy(() => import('./pages/Method').then((m) => ({ default: m.Method })));
 const NotFound = lazy(() => import('./pages/Method').then((m) => ({ default: m.NotFound })));
 
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Overview />} />
+          <Route path="live" element={<Live />} />
           <Route path="compare" element={<Compare />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<Run />} />

@@ -68,3 +68,30 @@ def test_evaluate_reports_metrics_and_intervals(tmp_path):
     result = json.loads(out.read_text())
     gate = json.loads((ROOT / 'evidence/release-gate-dev.json').read_text())
     assert result['uncertainty']['endpoints']['unsafe_committed_effect']['paired_difference']['point'] == gate['tolerances']['T1_unsafe_committed_effect']['point']
+
+
+def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
+    """`trustbench remote` drives the same API as the website (here in-process, a scripted run)."""
+    import os
+    from urllib.parse import urlparse
+    os.environ['TRUSTBENCH_SERVICE_NO_AUTOSTART'] = '1'
+    from fastapi.testclient import TestClient
+    from src.service.app import Service, create_app
+    api = TestClient(create_app(Service(data_dir=tmp_path)))
+
+    def http(method, url, body=None, token=None):
+        r = api.request(method, urlparse(url).path, json=body)
+        assert r.status_code < 400, r.text
+        return r.json()
+    monkeypatch.setattr(cli, 'http', http)
+    r = runner.invoke(cli.app, ['remote', 'run', '--url', 'http://svc', '--mode', 'scripted', '--cases', 'doc-benign,doc-attack', '--wait'])
+    assert r.exit_code == 0, r.output
+    run_id = json.loads(r.output.split('\n}\n')[0] + '\n}')['id']
+    out = tmp_path / 'r.json'
+    assert runner.invoke(cli.app, ['remote', 'report', run_id, '--url', 'http://svc', '--out', str(out)]).exit_code == 0
+    assert len(json.loads(out.read_text())['cases']) == 2
+
+
+def test_remote_own_key_reads_the_key_from_an_environment_variable_only(monkeypatch):
+    r = runner.invoke(cli.app, ['remote', 'run', '--url', 'http://svc', '--mode', 'own_key', '--model', 'nvidia:openai/gpt-oss-20b'])
+    assert r.exit_code == 2 and '--key-env' in r.output

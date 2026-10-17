@@ -27,11 +27,13 @@ export function Nav() {
           {LINKS.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
         </nav>
         <Link to="/method" className="btn btn-secondary">Evidence index</Link>
+        <Link to="/live" className="btn btn-primary">Run it live</Link>
         <button className="nav-toggle" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen((o) => !o)}>{open ? 'Close' : 'Menu'}</button>
         {open && (
           <nav id="mobile-nav" className="nav-links" aria-label="Main (mobile)">
             {LINKS.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
             <NavLink to="/method">Evidence index</NavLink>
+            <NavLink to="/live">Run it live</NavLink>
           </nav>
         )}
       </div>
@@ -47,7 +49,7 @@ export function Footer() {
       <div className="wrap stack-48">
         <div className="footer-word" aria-hidden="true">TrustBench</div>
         <div className="grid" style={{ rowGap: 32 }}>
-          <p className="span-6 body ink-2">A benchmark for prompt-injection defenses in autonomous agents. Pilot evidence on the development split; not confirmatory estimates.</p>
+          <p className="span-6 body ink-2">A benchmark for prompt-injection defenses in autonomous agents. The run views here are development-split evidence; the two confirmatory holdout results (TB-032 to TB-034) are reported in the repository's docs.</p>
           <div className="start-8 small stack-8">
             {store && <p>Run store <code translate="no">{store.store_version.slice(0, 12)}</code>, {store.reports.length} reports</p>}
             <p className="ink-2">Payloads are redacted in this site. Raw records stay in the repository.</p>

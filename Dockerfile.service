@@ -1,0 +1,26 @@
+# TrustBench live website + live-test service in one container (deployable to any container host).
+#   docker build -f Dockerfile.service -t trustbench-live .
+#   docker run --rm -p 8080:8080 -e NVIDIA_API_KEY=... trustbench-live      # the project key: a host secret, never baked in
+# Without a key the site still serves every published result, scripted runs and own-key runs; the hosted mode reports itself
+# unavailable. Optional: TRUSTBENCH_DEMO_TOKEN (require a token to start runs), TRUSTBENCH_TRUST_PROXY=1 behind a proxy.
+FROM ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa AS uv
+FROM node:26.5.0-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=uv /uv /uvx /usr/local/bin/
+ENV TRUSTBENCH_STORAGE_ROOT=/workspace \
+    npm_config_cache=/workspace/.cache/npm \
+    UV_CACHE_DIR=/workspace/.cache/uv \
+    UV_PYTHON_INSTALL_DIR=/workspace/.cache/python \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TRUSTBENCH_SERVICE_DATA=/workspace/service-data \
+    TRUSTBENCH_TRUST_PROXY=1 \
+    PORT=8080
+RUN npm install -g npm@12.0.0
+WORKDIR /workspace/TrustBench-AI
+COPY . .
+RUN cp .env.example .env && npm ci && npm run setup && npm run web:build \
+    && useradd --create-home --uid 10001 trustbench && mkdir -p /workspace/service-data && chown -R trustbench /workspace
+USER 10001
+EXPOSE 8080
+CMD ["sh", "-c", ".venv-tools/bin/python -m uvicorn src.service.app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --no-access-log"]
