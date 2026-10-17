@@ -26,4 +26,5 @@ USER 1000
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD .venv-tools/bin/python -c "import json, sys, urllib.request; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('PORT', '8080') + '/api/health', timeout=4))['ok'] else 1)" 
-CMD ["sh", "-c", ".venv-tools/bin/python -m uvicorn src.service.app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --no-access-log"]
+# exec: uvicorn replaces the shell, so it receives SIGTERM from `docker stop` and shuts down cleanly.
+CMD ["sh", "-c", "exec .venv-tools/bin/python -m uvicorn src.service.app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --no-access-log"]

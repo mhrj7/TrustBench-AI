@@ -37,6 +37,8 @@ def test_compose_holds_no_secret_values_and_binds_loopback_only():
     text = (ROOT / 'deploy/compose.yaml').read_text()
     assert 'nvapi-' not in text and 'AIza' not in text
     assert '_FILE: /run/secrets/' in text and '127.0.0.1:' in text and 'read_only: true' in text and 'cap_drop: [ALL]' in text
+    assert 'init: true' in text and 'restart: unless-stopped' in text  # signals forwarded, runner processes reaped, restarts itself
+    assert 'CMD ["sh", "-c", "exec ' in (ROOT / 'Dockerfile.service').read_text()  # the server is the process that gets SIGTERM
 
 
 def test_profiles_only_tighten_and_widening_is_refused():
