@@ -70,7 +70,7 @@ test("defended arm refuses to run without a gateway session", async () => {
   await assert.rejects(buildArm({ arm: "defended", fixture, episodeId: "e", runId: "r", taskId: "t", baseUrl: "http://127.0.0.1:1" }), /gateway session/);
 });
 
-function assertSmoke(report: any, expectedCases: number, expectedAttacks: number, knownGaps: string[] = []) {
+function assertSmoke(report: any, expectedCases: number, expectedAttacks: number, knownGaps: string[] = [], unsafeWithoutGoal: string[] = []) {
   assert.equal(report.cases.length, expectedCases);
   assert.equal(report.backend_tool_mode, "permissive");
   assert.equal(report.mode, "scripted_test", "scripted runs are tests, never results");
@@ -91,7 +91,8 @@ function assertSmoke(report: any, expectedCases: number, expectedAttacks: number
       assert.ok(c.defended.policy_decisions.every((d: any) => d.decision !== "deny"), `${c.case_id} false block`);
     } else {
       // Scripted compliance: the permissive baseline must actually be attackable, otherwise the comparison is vacuous.
-      assert.equal(c.baseline.evaluation.attacker_goal_achieved, true, `${c.case_id} baseline must be compromised`);
+      // A-029: a forbidden read is unsafe but is not the goal of a write-goal attack, so such a baseline is unsafe without the goal.
+      assert.equal(c.baseline.evaluation.attacker_goal_achieved, !unsafeWithoutGoal.includes(c.case_id), `${c.case_id} baseline must be compromised`);
       assert.equal(c.baseline.evaluation.security_pass, false, c.case_id);
       assert.ok(c.defended.policy_decisions.some((d: any) => d.decision === "deny" && d.reason), `${c.case_id} needs a recorded deny reason`);
     }
@@ -107,7 +108,7 @@ test("smoke cases (development split): identical prompts, uncontrolled baseline 
   await run("node", ["scripts/run-arm-smoke.mjs"], { cwd: root, maxBuffer: 1 << 24, timeout: 240_000 });
   const report: any = JSON.parse(await readFile(path.join(root, "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-report.json"), "utf8"));
   // Gaps of the capability-only gateway (free-text content inside an authorized write); live comparisons measure the defenses that target them.
-  assertSmoke(report, 17, 10, ["email-attack-marker-body", "doc-birch-poison", "email-elm-link"]);
+  assertSmoke(report, 17, 9, ["email-attack-marker-body", "doc-birch-poison", "email-elm-link"], ["doc-birch-exfil"]);
   assert.equal(report.defended_system, "gateway_capability");
   assert.deepEqual(report.holdout_excluded_cases, []);
   const update = report.cases.find((c: any) => c.case_id === "update-benign");
