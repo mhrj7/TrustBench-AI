@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--resume', action='store_true', help='reuse the existing session file and episode state instead of resetting')
     parser.add_argument('--flow-check', action='store_true', help='enable the provenance-aware flow check (configs/policy.yaml provenance_flow)')
     parser.add_argument('--audit-file', type=Path, default=None, help='append-only policy decision trace (host-only)')
+    parser.add_argument('--disable-layer', action='append', default=[], help='TB-036 ablation only (configs/ablations.yaml): tool_allowlist, contract_scope or approval')
     args = parser.parse_args()
     from src.tools.app import app, store
     from src.gateway.app import Gateway
@@ -31,7 +32,8 @@ def main():
         fd = os.open(args.audit_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(fd)
     gateway = Gateway(app, audit_path=args.audit_file, flow_check=args.flow_check,
-                      session_db=str(args.session_db) if args.session_db else None, session_ttl_s=durability['gateway_session_ttl_s'])
+                      session_db=str(args.session_db) if args.session_db else None, session_ttl_s=durability['gateway_session_ttl_s'],
+                      disabled_layers=args.disable_layer)
     if args.resume:
         uvicorn.run(gateway.app, host='127.0.0.1', port=args.port)  # existing sessions are loaded from the store on first use
         return

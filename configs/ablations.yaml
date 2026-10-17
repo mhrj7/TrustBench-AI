@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-036",
+  "amendment": "A-027",
+  "note": "Component ablations on development data. Ablation-only systems and gateway variants live here so the frozen configuration (configs/defenses.yaml, configs/defended.yaml and their copies in configs/frozen/) is untouched; scripts/run-arm-smoke.mjs reads this file only for names the frozen registries do not define, and the confirmatory holdout mode never accepts them. JSON content (valid YAML).",
+  "gateway_variants": {
+    "schema_only": {
+      "flow_check": false,
+      "disable_layers": ["tool_allowlist", "contract_scope", "approval"],
+      "description": "Gateway transport and provenance envelope with strict argument schemas only."
+    },
+    "capability_no_approval": {
+      "flow_check": false,
+      "disable_layers": ["approval"],
+      "description": "Tool allowlist, strict schemas and contract scoping; no exact-argument approval."
+    }
+  },
+  "systems": {
+    "ablation_gateway_schema_only": {
+      "transport": "gateway", "gateway_variant": "schema_only", "agent_defenses": [],
+      "family": "ablation (A-027): gateway with argument schemas only"
+    },
+    "ablation_gateway_capability_no_approval": {
+      "transport": "gateway", "gateway_variant": "capability_no_approval", "agent_defenses": [],
+      "family": "ablation (A-027): capability gateway without exact-argument approval"
+    },
+    "ablation_directive_flow_v4_direct": {
+      "transport": "direct", "agent_defenses": ["directive_flow_v4"],
+      "family": "ablation (A-027): the frozen agent-side defense without the gateway"
+    }
+  },
+  "run": {
+    "rendering_from": "configs/frozen/selection.json data.selection_condition.attack_rendering",
+    "repetitions": 3,
+    "report_prefix": "tb036",
+    "lanes": 3,
+    "arms_to_run": ["ablation_gateway_schema_only", "ablation_gateway_capability_no_approval", "gateway_capability", "gateway_flow_block",
+                    "gateway_directive_flow_v3", "ablation_directive_flow_v4_direct"],
+    "frozen_arm": {"system": "gateway_directive_flow_v4", "report_from": "evidence/release-gate-dev.json report"}
+  },
+  "comparisons": [
+    {"id": "schema_validation", "component": "strict argument schemas at the gateway", "with": "ablation_gateway_schema_only", "without": "baseline"},
+    {"id": "allowlist_and_contract_scope", "component": "tool allowlist and contract-scoped arguments (TB-019/TB-021)", "with": "ablation_gateway_capability_no_approval", "without": "ablation_gateway_schema_only"},
+    {"id": "exact_argument_approval", "component": "exact-argument approval (TB-022)", "with": "gateway_capability", "without": "ablation_gateway_capability_no_approval"},
+    {"id": "directive_flow_on_gateway", "component": "directive-attributed flow defense v4 on top of the gateway", "with": "gateway_directive_flow_v4", "without": "gateway_capability"},
+    {"id": "sticky_denials", "component": "sticky denials of identical retried writes (v4 over v3)", "with": "gateway_directive_flow_v4", "without": "gateway_directive_flow_v3"},
+    {"id": "gateway_under_directive_flow", "component": "the gateway (with provenance envelope) under the directive-flow defense", "with": "gateway_directive_flow_v4", "without": "ablation_directive_flow_v4_direct"},
+    {"id": "blocking_flow_check", "component": "blocking provenance flow check (capability_plus_flow)", "with": "gateway_flow_block", "without": "gateway_capability"}
+  ],
+  "claims": [
+    {"claim": "Strict argument schemas reject malformed tool calls", "source": "configs/defended.yaml policy_layers; TB-021", "tested_by": ["schema_validation"]},
+    {"claim": "The tool allowlist and contract scoping block out-of-contract tools and resources", "source": "TB-019, TB-021", "tested_by": ["allowlist_and_contract_scope"]},
+    {"claim": "Exact-argument approval blocks unapproved or altered record updates", "source": "TB-022", "tested_by": ["exact_argument_approval"]},
+    {"claim": "The directive-flow defense blocks injected data in writes", "source": "A-014..A-017, TB-031 selection", "tested_by": ["directive_flow_on_gateway"]},
+    {"claim": "Sticky denials stop retried identical writes after a denial", "source": "A-017", "tested_by": ["sticky_denials"]},
+    {"claim": "Gateway provenance labels make the directive-flow defense more precise", "source": "TB-020, directive_flow untrusted_trust_levels", "tested_by": ["gateway_under_directive_flow"]},
+    {"claim": "The blocking flow check adds protection over the capability gateway", "source": "A-012 (downgraded to ablation)", "tested_by": ["blocking_flow_check"]},
+    {"claim": "Signed provenance envelopes detect tampered tool outputs", "source": "TB-020", "tested_by": [], "untested_reason": "No attack in the threat-model fixtures tampers with gateway envelopes; the mechanism is covered by tests/provenance only."},
+    {"claim": "Sessions and approvals survive a gateway restart", "source": "TB-026", "tested_by": [], "untested_reason": "Durability is a fault-tolerance property, exercised by tests/restart, not an attack-success component."},
+    {"claim": "Bounded retries with idempotency keys avoid duplicate writes", "source": "TB-025, TB-031 reliability sweep", "tested_by": [], "untested_reason": "Measured by the TB-031 reliability sweep and tests/recovery, not by a security ablation."},
+    {"claim": "Run budgets bound cost and steps", "source": "TB-018", "tested_by": [], "untested_reason": "Identical in every arm by design (same budget); covered by tests/budget."},
+    {"claim": "Human approval through the approval console", "source": "TB-022 approval_console", "tested_by": [], "untested_reason": "Live runs use the synthetic approval event; no human-in-the-loop run exists."}
+  ],
+  "outputs": {"csv": "reports/ablations.csv", "json": "evidence/tb036-ablations.json", "doc": "docs/ablations.md"}
+}

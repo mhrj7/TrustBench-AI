@@ -49,9 +49,14 @@ const promptProfile = flag("--prompt-profile", null); // null = the default regi
 const defendedConfig = JSON.parse(await readFile(path.join(root, "configs/defended.yaml"), "utf8"));
 const defensesRegistry = JSON.parse(await readFile(path.join(root, "configs/defenses.yaml"), "utf8"));
 const defendedSystemName = flag("--defended-system", defensesRegistry.default_system);
-const defendedSystem = defensesRegistry.systems[defendedSystemName];
-if (!defendedSystem) throw new Error(`--defended-system must be one of ${Object.keys(defensesRegistry.systems).join(", ")}`);
+// TB-036 (A-027): ablation-only systems and gateway variants come from configs/ablations.yaml, never overriding a name the
+// frozen registries define.
+const ablations = JSON.parse(await readFile(path.join(root, "configs/ablations.yaml"), "utf8"));
+const isAblation = !(defendedSystemName in defensesRegistry.systems) && defendedSystemName in ablations.systems;
+const defendedSystem = defensesRegistry.systems[defendedSystemName] ?? ablations.systems[defendedSystemName];
+if (!defendedSystem) throw new Error(`--defended-system must be one of ${[...Object.keys(defensesRegistry.systems), ...Object.keys(ablations.systems)].join(", ")}`);
 const defendedVariant = defendedSystem.transport === "gateway" ? defendedSystem.gateway_variant : "none";
+const variantSpec = defendedConfig.defended_variants[defendedVariant] ?? ablations.gateway_variants[defendedVariant] ?? {};
 const modelDefenses = new Set(Object.entries(defensesRegistry.defenses).filter(([, d]) => d.uses_model).map(([n]) => n));
 const needsDefenseModel = defendedSystem.agent_defenses.some((d) => modelDefenses.has(d));
 const work = path.resolve(root, flag("--work-dir", runConfig.default_work_dir)); // separate directories let provider lanes run in parallel
@@ -293,7 +298,7 @@ async function runArm(arm, testCase, fixture, rep) {
     const tag = `${testCase.case_id}-r${rep}`;
     const sessionFile = path.join(work, `session-${tag}.json`);
     auditFile = path.join(work, `audit-${tag}.jsonl`);
-    gatewayProcess = launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(defendedConfig.defended_variants[defendedVariant]?.flow_check ? ["--flow-check"] : [])], serviceEnv(defendedDb));
+    gatewayProcess = launch(["-m", "src.gateway.serve", "--fixture", testCase.fixture_id, "--episode", episodeId, "--session-file", sessionFile, "--port", String(port), "--audit-file", auditFile, ...(variantSpec.flow_check ? ["--flow-check"] : []), ...(variantSpec.disable_layers ?? []).flatMap((l) => ["--disable-layer", l])], serviceEnv(defendedDb));
     await waitFor(port);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}`,
@@ -373,7 +378,7 @@ const report = {
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
   ...(confirmatory ? { confirmatory_holdout: { intended_units: plan.length, attempted_units: runs.length, ended_early: endedEarly, comparison_valid: endedEarly === null, run_dir: path.relative(root, holdoutDir) } } : {}),
 };

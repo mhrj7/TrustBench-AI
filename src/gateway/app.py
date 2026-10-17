@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 import httpx2 as httpx
 from .provenance import digest, sign, wrap
 from pydantic import ValidationError
-from src.policy.capabilities import Capability, POLICY
+from src.policy.capabilities import Capability, POLICY, SCHEMAS
 from src.policy.approvals import ApprovalStore, execution_context
 from src.policy.flow import FlowGuard
 
@@ -22,8 +22,18 @@ class Binding:
     flow: FlowGuard | None = None
     signing_key: bytes = b''
 
+# TB-036 (A-027) ablation switches. The default (nothing disabled) is the full gateway; a layer is only ever disabled by a
+# named ablation variant in configs/ablations.yaml. Contract scoping is part of the capability check and needs the allowlist.
+ABLATABLE_LAYERS = frozenset({'tool_allowlist', 'contract_scope', 'approval'})
+
+
 class Gateway:
-    def __init__(self, backend, audit_path=None, flow_check=False, session_db=None, session_ttl_s=None):
+    def __init__(self, backend, audit_path=None, flow_check=False, session_db=None, session_ttl_s=None, disabled_layers=()):
+        self.disabled = frozenset(disabled_layers)
+        if not self.disabled <= ABLATABLE_LAYERS:
+            raise ValueError(f'unknown gateway layers: {sorted(self.disabled - ABLATABLE_LAYERS)}')
+        if 'tool_allowlist' in self.disabled and 'contract_scope' not in self.disabled:
+            raise ValueError('contract scoping cannot run without the tool allowlist')
         self.flow_check = flow_check
         self._session_db = session_db
         self._session_ttl_s = session_ttl_s
@@ -62,7 +72,7 @@ class Gateway:
             binding = self._bindings.get(token) or self._load_session(token)
             reason = ('missing_or_invalid_session' if binding is None else
                       'episode_mismatch' if binding.episode_id != episode_id else
-                      'tool_not_allowed' if tool_name not in binding.allowed_tools else None)
+                      'tool_not_allowed' if 'tool_allowlist' not in self.disabled and tool_name not in binding.allowed_tools else None)
             if reason:
                 self.audit.append(stamp({'episode_id': episode_id, 'tool': tool_name, 'decision': 'deny', 'reason': reason}))
                 return JSONResponse(status_code=403, content={'detail': reason})
@@ -75,7 +85,12 @@ class Gateway:
             except (ValueError, TypeError):
                 return JSONResponse(status_code=422, content={'detail': 'invalid_arguments'})
             try:
-                arguments = binding.capability.validate(tool_name, arguments)
+                if 'contract_scope' in self.disabled:  # ablation: strict argument schemas only
+                    if tool_name not in SCHEMAS:
+                        raise ValueError('operation_denied')
+                    arguments = SCHEMAS[tool_name].model_validate(arguments, strict=True).model_dump()
+                else:
+                    arguments = binding.capability.validate(tool_name, arguments)
             except (ValueError, ValidationError) as error:
                 reason = 'invalid_arguments' if isinstance(error, ValidationError) else str(error)
                 self.audit.append(stamp({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason}))
@@ -87,7 +102,7 @@ class Gateway:
                     self.audit.append(stamp({'episode_id':episode_id,'tool':tool_name,'decision':'deny','reason':reason,'flow':violation}))
                     return JSONResponse(status_code=403, content={'detail':reason})
             approval_id = None
-            if tool_name in POLICY['approval_required_tools']:
+            if tool_name in POLICY['approval_required_tools'] and 'approval' not in self.disabled:
                 try:
                     approval = self.approvals.request(binding.capability, tool_name, arguments)
                 except ValueError as error:
@@ -103,7 +118,9 @@ class Gateway:
             backend_t0 = time.perf_counter()
             async with self._lock:
                 authorization = {'capability':binding.capability,'arguments':arguments,'approval_request_id':approval_id}
-                context = execution_context.set(authorization)
+                # An ablated gateway runs the backend without its capability context (as the baseline service runs), so the
+                # backend does not re-impose the layers this variant switched off.
+                context = execution_context.set(None if self.disabled else authorization)
                 try:
                     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self._backend), base_url='http://internal') as client:
                         response = await client.post(f'/v1/episodes/{episode_id}/tools/{tool_name}', json=arguments)
