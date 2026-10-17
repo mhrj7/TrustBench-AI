@@ -19,3 +19,20 @@ Cluster bootstrap: 10000 resamples, seed 20261052, clusters (task, attack varian
 
 Scope: one development run of 3 repetitions. A PASS shows the frozen configuration did not regress on development data; it is not a confirmatory result. TB-038 adds CI wiring and injected-regression tests.
 
+
+## Standing release gate (TB-038, A-028)
+
+The record above is the A-025 gate run that preceded TB-032. Every later release goes through two tiers
+(`configs/release-gate.yaml`):
+
+| Tier | When | What blocks a release |
+| --- | --- | --- |
+| 1, `scripts/release-gate-scripted.py` | Every push and pull request (`.github/workflows/release-gate.yml`), and `npm run verify` | Fresh scripted runs of `gateway_capability` and `gateway_flow_block` and the scripted smoke suite compared, case by case, with the baselines **as committed on the base branch**: any defended-arm security or functional regression, any baseline-arm verdict change, a changed case set, a new parity failure, or a smoke-suite difference |
+| 2, `scripts/release-gate.py live --label <commit>` | On demand per release candidate (workflow input `live`, `NVIDIA_API_KEY` secret) | A-025 unchanged: an invariant fails, T1 or T2 fails (FAIL), or the T1 interval reaches zero (INCONCLUSIVE). One attempt per candidate; a second only with a defect note written before its outcome is read; never a third (`evidence/release-gate-ledger.json`) |
+
+Acceptance evidence (`tests/release/test_injected_regressions.py`): an unmodified candidate passes, and each injected bug
+blocks the release with the right classification: removing the contract resource check or the argument binding (security),
+an email tool that drops the draft body, and a gateway that over-blocks research notes (functional). A candidate that also
+rewrites its own baseline file still fails, because baselines are read from the base branch's history. The same CI steps
+(`scripts/ci.sh`) passed in a clean Linux container. Deterministic Tier 1 cannot be noisy; the live Tier 2 treats
+INCONCLUSIVE as blocking and caps reruns, so a noisy model result can neither pass silently nor be rerun until it passes.
