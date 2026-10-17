@@ -45,7 +45,7 @@ def _from_file(path) -> Optional[str]:
 
 def _from_dotenv(name: str) -> Optional[str]:
     env = ROOT / '.env'
-    if not env.exists():
+    if os.environ.get('TRUSTBENCH_NO_DOTENV') == '1' or not env.exists():  # tests and CI read no local keys
         return None
     for line in env.read_text().splitlines():
         if '=' in line and line.split('=', 1)[0].strip() == name:
