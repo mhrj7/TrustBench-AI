@@ -68,3 +68,15 @@ docker run --rm -p 8080:8080 --env-file .env trustbench-live
 ```
 
 Locally without Docker: `npm run service` (API on port 8080) and `npm run web:dev` (the site, proxying `/api`).
+
+## Verification (`evidence/live-service-verification.json`)
+
+- Local service and site: a scripted run, a hosted live run (frozen system, 2 pairs) and an own-key run (a dummy key: every
+  pair invalid with code `authentication`, explained in plain words, and the project key not used) through the browser;
+  `trustbench remote` against the same service.
+- The deployable container, built from a clean clone: without a project key it serves the site and the published data,
+  reports hosted mode as unavailable and still runs scripted and own-key runs; with the key as a host secret it completes a
+  hosted live run, and no file in its service data contains the key.
+- Tests: `tests/service`, `tests/cli` and `web/tests/live.spec.ts` (desktop, tablet, mobile), all in `npm run verify`.
+
+Not done here: the public deployment and link (TB-041), the hardening in TB-039/TB-040, and external agents (phase 10).

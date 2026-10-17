@@ -1,0 +1,35 @@
+{
+ "checked_at": "2026-10-17T07:40:25+00:00",
+ "commit": "28f3ef3",
+ "local_service_and_site": {
+  "gui_scripted_run": "6 pairs done; verdicts, per-case table, downloads, shareable link survived a reload",
+  "gui_hosted_run": "frozen system on gpt-oss-20b, 2 live pairs valid; attack unsafe on baseline, blocked on defended; key scan clean",
+  "gui_own_key_run": "dummy test key: all pairs invalid with code authentication and a plain message; the project key was not used; the dummy key appears in no file",
+  "cli_remote": "catalog and scripted run --wait against the local service"
+ },
+ "container": {
+  "image": "trustbench-live:local (Dockerfile.service, clean clone at 28f3ef3)",
+  "without_project_key": {
+   "site": "/, /live and /data served (200)",
+   "hosted": "unavailable: no project key configured on this server; POST refused with a pointer to the other modes",
+   "scripted_cli_run": "3 pairs done"
+  },
+  "with_project_key_as_host_secret": {
+   "hosted_available": true,
+   "remaining_pairs_today": 60,
+   "hosted_cli_run": "frozen system, 1 live pair valid, attack blocked by the defense",
+   "files_containing_key": 0
+  }
+ },
+ "tests": {
+  "service": "tests/service (10)",
+  "cli": "tests/cli (9)",
+  "site": "web/tests/live.spec.ts (3 tests x desktop, tablet, mobile)",
+  "npm_run_verify": "exit 0"
+ },
+ "not_done": [
+  "No public deployment: the host and the public link are the owner's decision (TB-041).",
+  "Hardening per TB-039 (authentication beyond the optional token, per-user isolation, retention jobs) and TB-040 faults remain planned.",
+  "External agents are reserved in the API, not implemented (phase 10)."
+ ]
+}
