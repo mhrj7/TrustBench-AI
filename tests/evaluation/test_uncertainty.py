@@ -56,3 +56,12 @@ def test_repeatability_block_comes_from_the_tb028_evaluator():
     a = un.analyse('dev', [REPORT], 'test')
     sec = next(iter(a['repeatability'].values()))['attack_security']
     assert {'baseline', 'defended'} == set(sec['arms']) and 'intra_cluster_correlation' in sec['arms']['defended']
+
+
+def test_published_uncertainty_reproduces_from_the_hashed_reports():
+    """TB-034 acceptance: rerunning the seeded analysis reproduces every published interval."""
+    published = json.loads((ROOT / un.CFG['outputs']['json']).read_text())
+    assert published['bootstrap']['seed'] == un.SEED and published['bootstrap']['resamples'] == un.B
+    fresh = {a['analysis']: a for a in un.analyse_all()}
+    for a in published['analyses']:
+        assert fresh[a['analysis']]['endpoints'] == a['endpoints'], a['analysis']

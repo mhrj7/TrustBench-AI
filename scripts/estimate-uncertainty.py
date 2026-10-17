@@ -29,6 +29,7 @@ SEED = REG['pair_order_seed'] + CFG['seed_offset']
 LEVEL = CFG['confidence_level']
 SPLITS = json.loads((ROOT / 'data/splits.json').read_text())
 WORKFLOW = {f['fixture_id']: f['workflow'] for f in map(json.loads, filter(str.strip, (ROOT / 'data/benign.jsonl').read_text().splitlines()))}
+FAMILY_STATUS = {fid: g['family_status'] for g in SPLITS['groups'] if g['split'] == 'holdout2' for fid in g['fixture_ids']}
 GROUP_FAMILIES = {fid: sorted(g.get('attack_family_ids', []) + g.get('reused_attack_family_ids', [])) for g in SPLITS['groups'] for fid in g['fixture_ids']}
 
 OUTCOME = {
@@ -87,7 +88,7 @@ def endpoint(pairs, spec):
                                 'note': None if len(by) >= 2 else 'fewer than two clusters: no between-cluster interval'}
     b = sum(f(c['baseline']['evaluation']) and not f(c['defended']['evaluation']) for c in rows)
     d = sum(not f(c['baseline']['evaluation']) and f(c['defended']['evaluation']) for c in rows)
-    out['mcnemar_exact'] = {'baseline_only': b, 'defended_only': d, 'p_value': round(float(binomtest(min(b, d), b + d, 0.5).pvalue), 6) if b + d else None,
+    out['mcnemar_exact'] = {'baseline_only': b, 'defended_only': d, 'p_value': float(f"{binomtest(min(b, d), b + d, 0.5).pvalue:.3g}") if b + d else None,
                             'note': 'Supporting only: repetitions within a cluster are not independent, so the interval above is the inferential result.'}
     return out
 
@@ -119,6 +120,9 @@ def analyse(label, reports, role):
                                for a in attack_ids}
     out['per_workflow_slice'] = {w: {k: endpoint([c for c in valid if WORKFLOW[c['fixture_id'].split('--')[0]] == w], spec) for k, spec in CFG['endpoints'].items()}
                                  for w in sorted({WORKFLOW[c['fixture_id'].split('--')[0]] for c in valid})}
+    statuses = sorted({FAMILY_STATUS.get(a, 'holdout1_attack') for a in attack_ids})
+    out['per_family_status_slice'] = {st: {k: endpoint([c for c in valid if c['kind'] == 'attack' and FAMILY_STATUS.get(c['attack_id'], 'holdout1_attack') == st], CFG['endpoints'][k])
+                                           for k in ('unsafe_committed_effect', 'attacker_goal_achieved', 'secure_and_useful_under_attack')} for st in statuses}
     out['slices_note'] = 'Slices are exploratory except where A-026 pre-declared them; each attack is one cluster, so per-attack rows carry no between-cluster interval.'
     out['descriptive'] = descriptive(valid)
     rep = repeatability(load_runs(reports))
@@ -143,17 +147,28 @@ def holdout2_reports():
     return [(r, reps, role[r]) for r, reps in by.items()]
 
 
-def main():
-    primary = json.loads((ROOT / 'configs/frozen/selection.json').read_text())['data']['selection_condition']['attack_rendering']
+PRIMARY = json.loads((ROOT / 'configs/frozen/selection.json').read_text())['data']['selection_condition']['attack_rendering']
+
+
+def analyse_all():
+    """Every registered analysis: holdout-1 and holdout-2 per rendering, then the pre-declared primary pool."""
+    primary = PRIMARY
     analyses = [analyse(f'holdout1/{r}', reps, role) for r, reps, role in holdout1_reports()]
-    if '--holdout1-only' in sys.argv:
-        print(json.dumps({a['analysis']: a['endpoints']['unsafe_committed_effect']['paired_difference'] for a in analyses}))
-        return analyses
     h2 = holdout2_reports()
     analyses += [analyse(f'holdout2/{r}', reps, role) for r, reps, role in h2]
     h1p = next(reps for r, reps, _ in holdout1_reports() if r == primary)
     h2p = next(reps for r, reps, _ in h2 if r == primary)
     analyses.append(analyse(f'pooled holdout1+holdout2/{primary}', h1p + h2p, 'primary (pre-declared pool, A-026)'))
+    return analyses
+
+
+def main():
+    primary = PRIMARY
+    if '--holdout1-only' in sys.argv:
+        analyses = [analyse(f'holdout1/{r}', reps, role) for r, reps, role in holdout1_reports()]
+        print(json.dumps({a['analysis']: a['endpoints']['unsafe_committed_effect']['paired_difference'] for a in analyses}))
+        return analyses
+    analyses = analyse_all()
     out = {'task_id': 'TB-034', 'rule': 'protocol/preregister.md (uncertainty); A-025; A-026', 'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
            'bootstrap': {'resamples': B, 'seed': SEED, 'cluster': REG['uncertainty']['bootstrap_cluster'], 'interval': 'percentile', 'level': LEVEL},
            'cost': CFG['cost_note'], 'analyses': analyses}
@@ -189,6 +204,12 @@ def write_doc(out, primary):
         L.append(f"- **{a['analysis']}**: unsafe difference {pp(u['point'])} {ci(u['cluster_bootstrap95'])} — the interval {'excludes' if sec else 'does not exclude'} zero; "
                  f"benign utility difference {pp(b['point'])} {ci(b['cluster_bootstrap95'])} — the lower bound is {'above' if util_lo is not None and util_lo >= -REG['utility_noninferiority_margin_percentage_points'] / 100 else 'below'} "
                  f"the −{REG['utility_noninferiority_margin_percentage_points']} pp margin.")
+    L += ['', '## Family-status slices (pre-declared for holdout-2, A-026; holdout-1 attacks shown as their own group)', '',
+          '| Analysis | Family status | Clusters | Unsafe baseline | Unsafe defended | Paired difference | 95% cluster bootstrap |', '| --- | --- | --- | --- | --- | --- | --- |']
+    for a in out['analyses']:
+        for st, s in a['per_family_status_slice'].items():
+            e = s['unsafe_committed_effect']
+            L.append(f"| {a['analysis']} | {st} | {e['clusters']} | {rt(e['baseline'])} | {rt(e['defended'])} | {pp(e['paired_difference']['point'])} | {ci(e['paired_difference']['cluster_bootstrap95'])} |")
     L += ['', '## Per-attack slices (exploratory unless pre-declared; one cluster each)', '', '| Analysis | Attack | Workflow | Families of its group | Unsafe baseline | Unsafe defended | McNemar p |', '| --- | --- | --- | --- | --- | --- | --- |']
     for a in out['analyses']:
         if a['analysis'].startswith('pooled'):
@@ -202,7 +223,7 @@ def write_doc(out, primary):
             if not d['n']:
                 continue
             L.append(f"| {a['analysis']} | {m} | {d['baseline']['p50']} / {d['baseline']['p95']} | {d['defended']['p50']} / {d['defended']['p95']} | {d['paired_difference_mean']} | "
-                     f"{d['paired_difference_mean_cluster_bootstrap95'] or '—'} | {d['paired_difference_median']} |")
+                     f"{'—' if not d['paired_difference_mean_cluster_bootstrap95'] else '[{:.1f}, {:.1f}]'.format(*d['paired_difference_mean_cluster_bootstrap95'])} | {d['paired_difference_median']} |")
     L += ['', f"Cost: {out['cost']}", '', '## Repeatability (TB-028 measures over 5 repetitions)', '',
           '| Analysis | Measure | Arm | Mean success frequency | All-repeats success | Clusters with mixed outcomes | ICC |', '| --- | --- | --- | --- | --- | --- | --- |']
     for a in out['analyses']:
