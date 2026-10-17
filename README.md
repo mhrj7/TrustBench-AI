@@ -9,7 +9,8 @@ This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://e
 The TrustBench website has a **Run it live** page (`/live`): run the paired benchmark from the browser with the project's
 free-tier key, with your own free-tier key, or instantly with no model at all, then read the verdicts and download the
 report. The same runs work from a terminal with `sh bin/trustbench remote run --url <site> ...`. Keys stay server-side or
-in memory for one run; sealed holdouts are never offered. Details, limits and deployment: [`docs/live-service.md`](docs/live-service.md).
+in memory for one run; sealed holdouts are never offered. Details and limits: [`docs/live-service.md`](docs/live-service.md); deploying
+and checking the public demo: [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
 <!-- Public link: added at deployment (TB-041). -->
 

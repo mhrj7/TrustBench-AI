@@ -1,0 +1,97 @@
+{
+ "task_id": "TB-041",
+ "recorded_at": "2026-10-17T11:19:00+00:00",
+ "commit": "9e51255",
+ "staging": {
+  "compose": {
+   "file": "deploy/compose.yaml",
+   "image": "trustbench-live:demo sha256:3d750f43b008",
+   "hardening": [
+    "read-only root filesystem",
+    "cap_drop ALL",
+    "no-new-privileges",
+    "pids 512, 3 GB, 2 CPUs",
+    "loopback bind",
+    "secrets as files"
+   ],
+   "profiles": {
+    "public-demo": {
+     "task_id": "TB-041",
+     "url": "http://localhost:18080",
+     "checked_at": "2026-10-17T11:06:01+00:00",
+     "live": true,
+     "exhaust": false,
+     "passed": 20,
+     "failed": 0,
+     "checks": null
+    },
+    "staging-tiny-budget": {
+     "task_id": "TB-041",
+     "url": "http://localhost:18081",
+     "checked_at": "2026-10-17T11:09:20+00:00",
+     "live": false,
+     "exhaust": true,
+     "passed": 20,
+     "failed": 0,
+     "checks": null
+    }
+   }
+  },
+  "space_image": {
+   "built_from": "scripts/deploy-hf-space.py --stage-only (git archive of 9e51255, Dockerfile.service as Dockerfile, public-demo profile)",
+   "image": "trustbench-space:9e51255 sha256:ca8400c4309c",
+   "run_as": "uid 1000, secrets as environment variables, no extra hardening (as a Space runs it)",
+   "result": {
+    "task_id": "TB-041",
+    "url": "http://localhost:18082",
+    "checked_at": "2026-10-17T11:14:24+00:00",
+    "live": true,
+    "exhaust": false,
+    "passed": 20,
+    "failed": 0,
+    "checks": null
+   }
+  }
+ },
+ "secret_scans": {
+  "compose image filesystem": {
+   "project key": 0,
+   "operator token": 0
+  },
+  "space image filesystem": {
+   "project key": 0
+  },
+  "space container run data and logs after live runs": {
+   "project key": 0
+  },
+  "finding": "The first compose build copied deploy/secrets/ into the local image because .dockerignore did not exclude it; the image was deleted before it was run or pushed, .dockerignore now excludes deploy/secrets and every .env variant, and tests/deploy asserts it."
+ },
+ "browser": {
+  "site": "http://localhost:18082 (space image)",
+  "live_run_project_key": {
+   "pairs": 2,
+   "valid": 2,
+   "response_model": "openai/gpt-oss-20b",
+   "key": "project",
+   "screenshot": "evidence/tb041/gui-live-run-project-key.jpg"
+  },
+  "budget_exhausted": {
+   "how": "the shared budget record set to the daily cap (the code path an exhausted day takes)",
+   "page": "mode preselected: Instant; message: \"Live, our key: today's shared budget is used up\"",
+   "instant_run": {
+    "pairs": 6,
+    "valid": 6
+   },
+   "screenshot": "evidence/tb041/gui-budget-exhausted-falls-back-to-instant.jpg"
+  }
+ },
+ "public_deployment": {
+  "status": "not deployed",
+  "blocked_on": [
+   "a public GitHub repository for the README link (none exists for this project yet: no git remote, no repository under the gh account)",
+   "a hosting account owned by the project owner (recommended: a Hugging Face Space, Docker SDK, free CPU) and its write token, set by the owner",
+   "the owner setting the Space secrets (scripts/deploy-hf-space.py --set-secrets, run by the owner)"
+  ],
+  "then": "scripts/check-deployment.py --url https://<user>-<space>.hf.space --live, and the README link"
+ }
+}

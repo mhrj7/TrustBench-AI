@@ -11,6 +11,9 @@ installing anything. It is built for a reviewer with no time and possibly no API
 | Live, your key (`own_key`) | NVIDIA or Gemini free tier | The visitor's, sent once with the request | Always | 16 paired runs per run, 6 runs per visitor per hour |
 | Instant (`scripted`) | None: scripted trajectories | None | Always | 34 paired runs per run |
 
+These are the service's base limits; the public demo runs under the tighter `public-demo` profile (2 pairs per hosted run,
+40 shared pairs a day), see [`deployment-runbook.md`](deployment-runbook.md).
+
 If the project key is missing or the day's budget is spent, the page says so and offers the other two modes. If the API
 itself is unreachable (a static-only copy of the site), the page says so and links the published results; the command
 line runs everything locally from a checkout.
