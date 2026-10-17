@@ -148,8 +148,11 @@ test('links: every internal link resolves to a page with a heading', async ({ pa
 test('keyboard: skip link and visible focus', async ({ page }, info) => {
   test.skip(info.project.name === 'mobile', 'no hardware keyboard');
   await page.goto('/');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await skip.waitFor({ state: 'attached' }); // the app renders client-side: press Tab only once the link exists (slow CI runners)
+  await page.bringToFront();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+  await expect(skip).toBeFocused();
   await page.keyboard.press('Tab');
   const outline = await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle);
   expect(outline).not.toBe('none');
