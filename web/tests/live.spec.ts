@@ -17,7 +17,13 @@ async function mockService(page: Page) {
   let polls = 0;
   let posted: any = null;
   await page.route('**/api/catalog', (r) => r.fulfill({ json: catalog }));
-  await page.route('**/api/runs', async (r) => { posted = r.request().postDataJSON(); await r.fulfill({ status: 202, json: job('queued', { queue_position: 1 }) }); });
+  await page.route('**/api/session', (r) => r.fulfill({ status: 201, json: { token: 'guest-session-token-for-tests', expires_at: '' } }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({ json: { kind: 'guest', retention_hours: 24 } }));
+  await page.route('**/api/runs', async (r) => {
+    if (r.request().method() === 'GET') return r.fulfill({ json: [] });
+    expect(r.request().headers().authorization).toBe('Bearer guest-session-token-for-tests');  // every run request carries the session
+    posted = r.request().postDataJSON(); await r.fulfill({ status: 202, json: job('queued', { queue_position: 1 }) });
+  });
   await page.route('**/api/runs/testrun0001', (r) => r.fulfill({ json: ++polls < 2 ? job('running', { progress: { done: 3, total: report.cases.length } }) : job('done', { summary: {
     valid_pairs: s.validity.valid_pairs, invalid_pairs: s.validity.invalid_pairs, invalid_reasons: [], unsafe_committed_effect: s.unsafe_committed_effect,
     benign_utility_pass: s.benign_utility_pass, attacker_goal_achieved: s.attacker_goal_achieved, observed_response_models: null } }) }));
@@ -66,4 +72,35 @@ test('live page: without a reachable service it says so and points to the publis
   await expect(page.getByRole('status')).toContainText('not reachable');
   await expect(page.getByRole('link', { name: 'the overview' })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+
+test('account page: a guest sees sign-in, sign-up and reset; the sign-up answer is the same generic message', async ({ page }) => {
+  await page.route('**/api/catalog', (r) => r.fulfill({ json: catalog }));
+  await page.route('**/api/session', (r) => r.fulfill({ status: 201, json: { token: 'guest-session-token-for-tests', expires_at: '' } }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({ json: { kind: 'guest', retention_hours: 24 } }));
+  await page.route('**/api/auth/signup', (r) => r.fulfill({ status: 201, json: { message: catalog.auth ? 'If this address can be registered, a verification link has been sent to it.' : '' } }));
+  await page.goto('/account');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sign in or create an account');
+  for (const tab of ['Sign in', 'Create account', 'Forgot password']) await expect(page.getByRole('tab', { name: tab })).toBeVisible();
+  await page.getByRole('tab', { name: 'Create account' }).click();
+  await page.getByLabel('Email').fill('someone@example.invalid');
+  await page.getByLabel(/Password/).fill('a long enough passphrase 1');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('status')).toContainText('verification link');
+  await expect(page.getByLabel(/Password/)).toHaveValue('');  // the password does not linger in the form
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('account page: a signed-in user sees their runs, password change and account deletion', async ({ page }) => {
+  await page.route('**/api/catalog', (r) => r.fulfill({ json: catalog }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({ json: { kind: 'account', email: 'alice@example.invalid', verified: true, retention_days: 30, quota_multiplier: 3 } }));
+  await page.route('**/api/runs', (r) => r.fulfill({ json: [job('done')] }));
+  await page.addInitScript(() => localStorage.setItem('trustbench.session', 'account-session-token-for-tests'));
+  await page.goto('/account');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your account');
+  await expect(page.getByText('alice@example.invalid')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/live?run=testrun0001');
+  for (const b of ['Change password', 'Sign out', 'Delete my account']) await expect(page.getByRole('button', { name: b })).toBeVisible();
 });

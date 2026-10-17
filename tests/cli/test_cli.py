@@ -71,6 +71,7 @@ def test_evaluate_reports_metrics_and_intervals(tmp_path):
 
 
 def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
+    monkeypatch.setenv('TRUSTBENCH_CLI_HOME', str(tmp_path / 'cli-home'))
     """`trustbench remote` drives the same API as the website (here in-process, a scripted run)."""
     import os
     from urllib.parse import urlparse
@@ -78,10 +79,8 @@ def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from src.service.app import Service, create_app
     api = TestClient(create_app(Service(data_dir=tmp_path)))
-    session = api.post('/api/session').json()['token']
-
     def http(method, url, body=None, token=None, headers=None):
-        r = api.request(method, urlparse(url).path, json=body, headers={'Authorization': f'Bearer {session}', **(headers or {})})
+        r = api.request(method, urlparse(url).path, json=body, headers=headers or {})
         assert r.status_code < 400, r.text
         return r.json()
     monkeypatch.setattr(cli, 'http', http)
@@ -96,3 +95,31 @@ def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
 def test_remote_own_key_reads_the_key_from_an_environment_variable_only(monkeypatch):
     r = runner.invoke(cli.app, ['remote', 'run', '--url', 'http://svc', '--mode', 'own_key', '--model', 'nvidia:openai/gpt-oss-20b'])
     assert r.exit_code == 2 and '--key-env' in r.output
+
+
+
+def test_remote_account_flow_and_private_session_file(tmp_path, monkeypatch):
+    """signup -> verify (from the emailed link) -> whoami -> runs -> logout, through the CLI against the real service."""
+    import os, stat
+    from urllib.parse import urlparse
+    monkeypatch.setenv('TRUSTBENCH_CLI_HOME', str(tmp_path / 'cli-home'))
+    monkeypatch.setenv('TB_TEST_PASSWORD', 'a strong cli passphrase 9')
+    os.environ['TRUSTBENCH_SERVICE_NO_AUTOSTART'] = '1'
+    from fastapi.testclient import TestClient
+    from src.service.app import CFG as SCFG, Service, create_app
+    svc = Service(data_dir=tmp_path / 'svc')
+    api = TestClient(create_app(svc))
+    monkeypatch.setattr(cli, 'http', lambda method, url, body=None, token=None, headers=None: (lambda r: (r.status_code < 400 or (_ for _ in ()).throw(AssertionError(r.text))) and r.json())(
+        api.request(method, urlparse(url).path, json=body, headers=headers or {})))
+    url = ['--url', 'http://svc']
+    assert runner.invoke(cli.app, ['remote', 'run', *url, '--mode', 'scripted', '--cases', 'doc-benign', '--wait']).exit_code == 0
+    assert runner.invoke(cli.app, ['remote', 'signup', *url, '--email', 'cli@example.invalid', '--password-env', 'TB_TEST_PASSWORD']).exit_code == 0
+    mail = [json.loads(p.read_text()) for p in sorted((tmp_path / 'svc' / SCFG['accounts']['mail']['outbox_dir']).glob('*.json'))][-1]
+    link = next(w for w in mail['body'].split() if '#token=' in w)
+    r = runner.invoke(cli.app, ['remote', 'verify', *url, '--link', link])
+    assert r.exit_code == 0 and json.loads(r.output)['claimed_runs'] == 1
+    assert json.loads(runner.invoke(cli.app, ['remote', 'whoami', *url]).output)['email'] == 'cli@example.invalid'
+    assert len(json.loads(runner.invoke(cli.app, ['remote', 'runs', *url]).output)) == 1
+    f = tmp_path / 'cli-home' / 'sessions.json'
+    assert stat.S_IMODE(f.stat().st_mode) == 0o600 and 'a strong cli passphrase 9' not in f.read_text()
+    assert runner.invoke(cli.app, ['remote', 'logout', *url]).exit_code == 0 and json.loads(f.read_text()) == {}

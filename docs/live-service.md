@@ -46,6 +46,44 @@ Sealed holdouts are never listed, accepted or run.
 - Hardening tracked in the roadmap: TB-039 (authentication, per-user isolation, quotas, retention jobs), TB-040 (faults and
   resource exhaustion), TB-041 (constrained public deployment with spend caps).
 
+## Sessions, accounts and access (TB-039)
+
+| Who | How | What they can do | Kept for |
+| --- | --- | --- | --- |
+| Guest (default, no sign-up) | The website or CLI asks for an anonymous session on first use | Every mode; see, share and delete their own runs | 24 hours, in that browser or CLI |
+| Account | Sign up with email and password, then open the emailed verification link (it signs you in) | The same, on every device; a verified account gets 3× the run limits | 30 days |
+| Anyone with a share link | `/live?run=<id>#share=<token>` (the token is in the fragment, so it never reaches server logs) | Read that one run; never change, re-share or delete it | Until the owner revokes it or deletes the run |
+| Operator | `TRUSTBENCH_ADMIN_TOKEN` from the secrets manager | List and delete any run; trigger the retention sweep | — |
+
+- **Isolation.** A run is visible only to its owner (the guest session, or the account across its sessions), a holder of
+  its share token, or the operator. Anything else gets the same 404 as a run that does not exist, so ids cannot be probed.
+- **Accounts.** Passwords: scrypt with a per-password salt, 12 characters minimum, never stored or logged. Five wrong
+  passwords lock the account for 15 minutes. Sign-up, sign-in, reset and verification resends answer identically whether
+  or not an address is registered (the owner of an existing address is told by email). Verification and reset links are
+  single-use and short-lived (48 hours, 1 hour). A password reset signs the account out everywhere; a password change signs
+  out every other device. Signing up or in from a guest session moves its runs to the account.
+- **Deletion.** Deleting a run removes its record, report, evaluation, spans, policy traces and logs (a running run is
+  stopped first). A guest deleting its session, or an account deleting itself (password required), removes every run it
+  owns. A retention sweep every 10 minutes deletes guest runs after 24 hours and account runs after 30 days, and expired
+  sessions with their guest runs.
+- **Quotas.** New sessions per address per hour; runs per address and per session (so neither a new session nor a new
+  address escapes the other limit); sign-in and account requests per address per hour; the shared daily budget for the
+  project key.
+- **Secrets.** `src/service/secrets.py` reads the provider key, operator token, access token and SMTP credentials from the
+  environment, a `NAME_FILE` path or `/run/secrets/<name>` (how hosts mount secrets), or the local `.env`; a log filter
+  redacts every known secret value. Session, share, verification and reset tokens are stored only as SHA-256 hashes.
+- **HTTP.** A strict Content-Security-Policy, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `nosniff`, HSTS,
+  `Cache-Control: no-store` on the API, and an 8 KB request limit.
+- **Email.** Accounts need outgoing mail: set the SMTP secrets in `.env.example`. Without them, emails go to the
+  service's local outbox (development and tests), accounts cannot be verified, and visitors use the site as guests.
+- **CLI.** `trustbench remote signup|verify|login|logout|whoami|runs|share|delete`; the session is kept in
+  `~/.config/trustbench/sessions.json` (mode 0600), and passwords come from a hidden prompt or `--password-env`, never a flag.
+- **Tests.** `tests/api-security/` (28 multi-user tests: isolation, sharing, deletion and retention, accounts and lockout,
+  enumeration resistance, quotas, headers, and keys, passwords and tokens never reaching storage, logs or responses).
+
+Not built here: sign-in with Google or GitHub (needs OAuth apps registered for the deployment) and multi-factor
+authentication.
+
 ## Connecting your own agent (planned, phase 10)
 
 The API already takes an `agent` field. Today only `trustbench_baseline` is available; `external_mcp` and `langgraph_http`

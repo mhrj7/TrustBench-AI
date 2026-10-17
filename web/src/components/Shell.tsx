@@ -7,7 +7,7 @@ import type { Run } from '../lib/aggregate';
 import { runPath, useDataset } from '../lib/data';
 import { short } from '../lib/format';
 
-const LINKS = [['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution']] as const;
+const LINKS = [['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution'], ['/account', 'Account']] as const;
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);

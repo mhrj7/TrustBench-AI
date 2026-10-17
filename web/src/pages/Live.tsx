@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { API_BASE, type Catalog, type Job, evaluationUrl, getCatalog, getJob, getReport, reportUrl, submitRun } from '../lib/live';
+import { API_BASE, type Catalog, type Job, type Me, deleteRun, download, ensureSession, getCatalog, getJob, getReport, me, myRuns, shareFromHash, shareRun, submitRun } from '../lib/live';
 import { ci, pct, short } from '../lib/format';
 import { Reveal } from '../components/Motion';
 import { PageHead } from './Common';
@@ -14,8 +14,11 @@ export default function Live() {
   const [tab, setTab] = useState<'browser' | 'cli'>(params.get('tab') === 'cli' ? 'cli' : 'browser');
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
+  const [who, setWho] = useState<Me | null>(null);
   const runId = params.get('run');
-  useEffect(() => { getCatalog().then(setCatalog, (e) => setOffline(String(e.message ?? e))); }, []);
+  useEffect(() => {
+    getCatalog().then((c) => { setCatalog(c); return ensureSession().then(me).then(setWho); }).catch((e) => setOffline(String(e.message ?? e)));
+  }, []);
   const origin = API_BASE || (typeof window !== 'undefined' ? window.location.origin : '');
   return (
     <>
@@ -35,7 +38,10 @@ export default function Live() {
               To run it yourself, use the command line tab with the project checkout.</p>
           </div>
         )}
-        {tab === 'browser' && catalog && (runId ? <Result id={runId} onNew={() => setParams({})} /> : <RunForm catalog={catalog} onStarted={(id) => setParams({ run: id })} />)}
+        {tab === 'browser' && catalog && who && <SessionNote who={who} catalog={catalog} />}
+        {tab === 'browser' && catalog && who && (runId ? <Result id={runId} onNew={() => setParams({})} /> : (
+          <><RunForm catalog={catalog} onStarted={(id) => setParams({ run: id })} /><History onOpen={(id) => setParams({ run: id })} /></>
+        ))}
         {tab === 'cli' && <CliGuide origin={origin} catalog={catalog} />}
       </section>
     </>
@@ -108,13 +114,13 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
           <select className="select" value={reps} onChange={(e) => setReps(Number(e.target.value))}>{Array.from({ length: info.limits.max_repetitions }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
       </div>
       {mode === 'own_key' && (
-        <label className="field"><span>Your {selectedModel?.provider ?? ''} API key ({selectedModel?.key_env})</span>
-          <input className="select" type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)} placeholder="used for this run only, never stored" />
+        <label className="field live-key"><span>Your {selectedModel?.provider ?? ''} API key ({selectedModel?.key_env})</span>
+          <input className="input" type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)} placeholder="used for this run only, never stored" />
           <span className="small ink-2">Sent once to this service, passed to the runner for this run, then dropped. It is not saved, logged or shown again.</span>
         </label>
       )}
       {catalog.access_token_required && (
-        <label className="field"><span>Access token</span><input className="select" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} /></label>
+        <label className="field"><span>Access token</span><input className="input" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} /></label>
       )}
       <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
         <legend><span>Cases ({cases.length} selected · {pairs} paired runs of at most {maxPairs})</span></legend>
@@ -137,6 +143,33 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
   );
 }
 
+function SessionNote({ who, catalog }: { who: Me; catalog: Catalog }) {
+  return who.kind === 'account'
+    ? <p className="small ink-2">Signed in as {who.email}. Your runs are kept for {who.retention_days} days. <Link to="/account">Account</Link></p>
+    : <p className="small ink-2">You are a guest: no sign-up needed. Runs are kept for {catalog.auth?.retention_hours ?? who.retention_hours} hours in this browser.{' '}
+        <Link to="/account">Create an account</Link> to keep them for {catalog.auth?.accounts.retention_days ?? 30} days on any device.</p>;
+}
+
+function History({ onOpen }: { onOpen: (id: string) => void }) {
+  const [runs, setRuns] = useState<Job[]>([]);
+  const load = () => myRuns().then(setRuns).catch(() => setRuns([]));
+  useEffect(() => { load(); }, []);
+  if (!runs.length) return null;
+  return (
+    <div className="stack-8">
+      <h2 className="headline" style={{ fontSize: 28 }}>Your recent runs</h2>
+      <div className="table-wrap"><table>
+        <thead><tr><th>Started</th><th>Status</th><th>Defense</th><th>Model</th><th>Pairs</th><th /></tr></thead>
+        <tbody>{runs.slice(0, 10).map((j) => (
+          <tr key={j.id}><td>{j.created_at.replace('T', ' ').slice(0, 16)}</td><td>{j.status}</td><td>{j.system}</td><td>{j.model ? short(j.model.id) : 'scripted'}</td><td>{j.pairs}</td>
+            <td><div className="row" style={{ gap: 8 }}><button className="btn btn-secondary btn-sm" onClick={() => onOpen(j.id)}>Open</button>
+              <button className="btn btn-secondary btn-sm" onClick={async () => { await deleteRun(j.id); load(); }}>Delete</button></div></td></tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
+}
+
 function Result({ id, onNew }: { id: string; onNew: () => void }) {
   const [job, setJob] = useState<Job | null>(null);
   const [report, setReport] = useState<any>(null);
@@ -155,7 +188,14 @@ function Result({ id, onNew }: { id: string; onNew: () => void }) {
     tick();
     return () => { stop = true; };
   }, [id]);
-  const share = typeof window !== 'undefined' ? window.location.href : '';
+  const [note, setNote] = useState<string | null>(null);
+  const shared = Boolean(shareFromHash());
+  const copyShare = async () => {
+    const { share_token } = await shareRun(id);
+    const link = `${window.location.origin}/live?run=${id}#share=${share_token}`;
+    await navigator.clipboard?.writeText(link).catch(() => undefined);
+    setNote(`Share link copied. Anyone with it can read this run (not change or delete it): ${link}`);
+  };
   if (error) return <div className="panel"><p className="body">{error}</p><button className="btn btn-secondary" onClick={onNew}>Start a new run</button></div>;
   if (!job) return <p className="body ink-2" aria-live="polite">Loading the run…</p>;
   const s = job.summary;
@@ -192,10 +232,12 @@ function Result({ id, onNew }: { id: string; onNew: () => void }) {
           <p className="small ink-2">Rates with Wilson 95% intervals. One small live run is a demonstration, not an estimate: the study's numbers are on <Link to="/">the overview</Link>.</p>
         </>
       )}
+      {note && <p className="small" role="status" style={{ overflowWrap: 'anywhere' }}>{note}</p>}
       <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-        {s && <a className="btn btn-secondary" href={reportUrl(id)} download>Download report JSON</a>}
-        {s && <a className="btn btn-secondary" href={evaluationUrl(id)} target="_blank" rel="noreferrer">Metrics and intervals</a>}
-        <button className="btn btn-secondary" onClick={() => navigator.clipboard?.writeText(share)}>Copy link to this run</button>
+        {s && <button className="btn btn-secondary" onClick={() => download(id, 'report').catch((e) => setNote(String(e.message)))}>Download report JSON</button>}
+        {s && <button className="btn btn-secondary" onClick={() => download(id, 'evaluation').catch((e) => setNote(String(e.message)))}>Download metrics and intervals</button>}
+        {!shared && <button className="btn btn-secondary" onClick={() => copyShare().catch((e) => setNote(String(e.message)))}>Copy share link</button>}
+        {!shared && <button className="btn btn-secondary" onClick={async () => { await deleteRun(id); onNew(); }}>Delete run</button>}
         <button className="btn btn-primary" onClick={onNew}>New run</button>
       </div>
     </div>

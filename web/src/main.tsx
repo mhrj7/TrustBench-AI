@@ -15,6 +15,9 @@ const Policy = lazy(() => import('./pages/Policy').then((m) => ({ default: m.Pol
 const Outcomes = lazy(() => import('./pages/Policy').then((m) => ({ default: m.Outcomes })));
 const Attribution = lazy(() => import('./pages/Attribution').then((m) => ({ default: m.Attribution })));
 const Live = lazy(() => import('./pages/Live'));
+const Account = lazy(() => import('./pages/Account'));
+const Verify = lazy(() => import('./pages/Account').then((m) => ({ default: m.Verify })));
+const Reset = lazy(() => import('./pages/Account').then((m) => ({ default: m.Reset })));
 const Method = lazy(() => import('./pages/Method').then((m) => ({ default: m.Method })));
 const NotFound = lazy(() => import('./pages/Method').then((m) => ({ default: m.NotFound })));
 
@@ -39,6 +42,9 @@ createRoot(document.getElementById('root')!).render(
         <Route element={<Layout />}>
           <Route index element={<Overview />} />
           <Route path="live" element={<Live />} />
+          <Route path="account" element={<Account />} />
+          <Route path="account/verify" element={<Verify />} />
+          <Route path="account/reset" element={<Reset />} />
           <Route path="compare" element={<Compare />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<Run />} />
