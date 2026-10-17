@@ -1,0 +1,168 @@
+{
+ "task_id": "TB-042",
+ "generated_at": "2026-10-17T17:13:12+00:00",
+ "commit": "2b12391",
+ "config_rollback": {
+  "release": "release-tb041",
+  "release_commit": "453f7789d1c4",
+  "bad_change": {
+   "file": "configs/policy.yaml",
+   "path": [
+    "approval_required_tools"
+   ],
+   "value": [],
+   "description": "approval requirement dropped from the policy (apply_record_update no longer needs an approval)",
+   "value_before": [
+    "apply_record_update"
+   ]
+  },
+  "detect": {
+   "outcome": "FAIL",
+   "blocking": [
+    "gateway_capability: 4 policy permissive changes",
+    "gateway_flow_block: 4 policy permissive changes"
+   ],
+   "seconds": 14.45
+  },
+  "rollback": {
+   "configs_equal_release": true,
+   "seconds": 0.26
+  },
+  "verify": {
+   "outcome": "PASS",
+   "blocking": [],
+   "smoke_suite_matches": true,
+   "seconds": 18.51
+  },
+  "audit_trail": {
+   "gateway_capability": {
+    "decisions_release": 56,
+    "decisions_after_rollback": 56,
+    "identical": true,
+    "decisions_changed_by_bad_change": 18
+   },
+   "gateway_flow_block": {
+    "decisions_release": 56,
+    "decisions_after_rollback": 56,
+    "identical": true,
+    "decisions_changed_by_bad_change": 18
+   }
+  },
+  "recovery_seconds": 18.77,
+  "ok": true
+ },
+ "data_restore": {
+  "state": {
+   "runs": 3,
+   "guest_sessions": 1,
+   "verified_accounts": 1,
+   "share_links": 1,
+   "audit_files": 21
+  },
+  "backup": {
+   "action": "backup",
+   "files": 25,
+   "databases": 2,
+   "bytes": 225189,
+   "seconds": 0.06,
+   "backup": "/var/folders/x4/7cnmhqlj6v7fdk1p59_1cpp40000gn/T/tb042-8bwblegv/data/backup",
+   "taken_while_service_running": true
+  },
+  "damaged_backup": {
+   "altered": "jobs/039fc263cd661d1e34106197/out/policy-traces.jsonl",
+   "refused": "backup failed verification",
+   "problems": [
+    "hash mismatch: jobs/039fc263cd661d1e34106197/out/policy-traces.jsonl"
+   ],
+   "nothing_restored": true
+  },
+  "restore": {
+   "ok": true,
+   "files": 25,
+   "seconds": 0.008,
+   "service_ready_seconds": 0.21,
+   "recovery_seconds_restore_to_serving": 0.25
+  },
+  "after_restore": {
+   "same_runs_and_artifacts": true,
+   "account_login_status": 200,
+   "guest_session_still_valid": true,
+   "share_link_status": 200,
+   "audit_files_identical": true,
+   "new_run_after_restore": "done"
+  },
+  "ok": true
+ },
+ "deployment_rollback": {
+  "images": {
+   "previous": {
+    "ref": "release-tb041",
+    "tag": "trustbench-live:release-tb041",
+    "id": "sha256:071354079ac7"
+   },
+   "current": {
+    "ref": "HEAD",
+    "tag": "trustbench-live:2b12391",
+    "id": "sha256:a07c6e6dc4d0"
+   }
+  },
+  "first_start_seconds": 7.23,
+  "rollback": {
+   "image": "trustbench-live:release-tb041",
+   "run_still_listed": true,
+   "report_identical": true,
+   "quick_check": {
+    "passed": 12,
+    "failed": 0
+   },
+   "seconds_to_healthy": 6.03
+  },
+  "roll_forward": {
+   "image": "trustbench-live:2b12391",
+   "report_identical": true,
+   "quick_check": {
+    "passed": 12,
+    "failed": 0
+   },
+   "seconds_to_healthy": 5.9
+  },
+  "recovery_seconds": 6.03,
+  "ok": true,
+  "note": "Staging stack with its own volume; the public demo was not touched."
+ },
+ "run_store_restore": {
+  "ok": true,
+  "test": "tests/rollback/run-store.test.ts",
+  "records": [
+   {
+    "tool": "read_document",
+    "status": "succeeded",
+    "error": null,
+    "unknown": false
+   },
+   {
+    "tool": "save_research_note",
+    "status": "succeeded",
+    "error": null,
+    "unknown": false
+   }
+  ],
+  "notes": 1,
+  "matches_control": true,
+  "backup_seconds": 0.014,
+  "restore_seconds": 0.002,
+  "recovery_ms_to_finished": 227,
+  "control_recovery_ms": 141,
+  "note": "A run killed before a write request leaves that write as outcome-unknown on resume (TB-026: never repeat a write whose effect is uncertain); a restored store keeps that behaviour too, because the intent log is restored with it."
+ },
+ "backup_of_public_demo": {
+  "backup": "backups/demo-20261017T170922Z (on the project drive, not committed)",
+  "created_at": "2026-10-17T17:09:23+00:00",
+  "files": 325,
+  "databases": 2,
+  "bytes": 2982557,
+  "taken_while_demo_running": true,
+  "verify": "ok (scripts/backup.py verify)",
+  "command": "sh deploy/backup-demo.sh"
+ }
+}

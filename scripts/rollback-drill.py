@@ -190,7 +190,11 @@ def data_drill(work: Path) -> dict:
     damaged = work / 'backup-damaged'
     shutil.copytree(backup_dir, damaged)
     target = next(p for p in sorted((damaged / 'data/jobs').rglob('policy-traces.jsonl')))
-    target.write_bytes(target.read_bytes().replace(b'"deny"', b'"allow"', 1) or target.read_bytes() + b' ')
+    original = target.read_bytes()
+    # flip one recorded decision (deny -> allow, or allow -> deny): the kind of edit a backup must never let through
+    altered = original.replace(b'"deny"', b'"allow"', 1) if b'"deny"' in original else original.replace(b'"allow"', b'"deny"', 1)
+    assert altered != original, 'the drill could not alter the audit record'
+    target.write_bytes(altered)
     refused = json.loads(sh(PY, ROOT / 'scripts/backup.py', 'restore', '--backup', damaged, '--dest', work / 'never', check=False).stdout)
     t0 = time.perf_counter()
     restored = json.loads(sh(PY, ROOT / 'scripts/backup.py', 'restore', '--backup', backup_dir, '--dest', data).stdout)

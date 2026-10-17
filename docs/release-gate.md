@@ -36,3 +36,14 @@ an email tool that drops the draft body, and a gateway that over-blocks research
 rewrites its own baseline file still fails, because baselines are read from the base branch's history. The same CI steps
 (`scripts/ci.sh`) passed in a clean Linux container; the Tier 1 record of that check is `evidence/release-gate-scripted-tb038.json`. Deterministic Tier 1 cannot be noisy; the live Tier 2 treats
 INCONCLUSIVE as blocking and caps reruns, so a noisy model result can neither pass silently nor be rerun until it passes.
+
+## Policy audit trail (added in TB-042)
+
+The TB-042 rollback drill found that a configuration change dropping the approval requirement for record updates passed
+Tier 1: record updates ran without their approval pause, but no outcome verdict moved, and the gate compared only verdicts.
+Tier 1 now also compares each gated system's policy traces with the committed ones (`*-policy-traces.jsonl` at the baseline
+ref). Per case, repetition and tool it counts executed calls, approval pauses and denials; a tool that executes more often,
+or is paused or denied less often, than in the baseline is a **policy permissive change** and blocks the release, even with
+no verdict change. Stricter decisions are listed (`policy_stricter_changes`) for review without blocking. Scripted runs are
+deterministic, so any difference is real. `tests/release/test_injected_regressions.py` injects the approval drop.
+

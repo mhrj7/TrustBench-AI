@@ -180,7 +180,22 @@ filesystem, nor in the run data or logs after live runs.
   `"hosted": {"enabled": false}`; to close run creation entirely, set `TRUSTBENCH_DEMO_TOKEN`.
 - **Abuse or a leaked key:** rotate the NVIDIA key at the provider, update the secret, restart; `GET /api/admin/runs` and
   `DELETE /api/runs/<id>` with the operator token list and remove runs.
-- **Updating:** commit, rerun `scripts/deploy-hf-space.py` (or `docker compose up -d --build`), then `check-deployment.py`.
-  Rollback and backup restore are TB-042.
+- **Updating:** commit, tag the release (`git tag -a release-<name>`), build the image from the committed tree
+  (`git archive HEAD | docker build -f Dockerfile.service -t trustbench-live:<sha> -`), `up -d --no-build`, then `check-deployment.py`.
+
+### Backup and rollback (TB-042, measured in `reports/rollback-drill.md`)
+
+- **Back up the demo's data** (online, the demo keeps serving): `sh deploy/backup-demo.sh` writes a verified backup to
+  `backups/` on the project drive (gitignored). `scripts/backup.py verify --backup backups/<name>` re-checks one.
+- **Restore it:** stop the demo, restore into the volume, start it:
+  `docker compose -f deploy/compose.yaml stop`, then
+  `docker run --rm -v trustbench-demo_service-data:/data -v "$PWD/backups:/in:ro" --entrypoint .venv-tools/bin/python trustbench-live:demo scripts/backup.py restore --backup /in/<name> --dest /data/restored`
+  and move the restored tree into place (the restore never deletes what it replaces), then `up -d`. A backup that fails
+  its manifest is refused.
+- **Roll the deployment back:** `TRUSTBENCH_IMAGE=trustbench-live:<previous release> TRUSTBENCH_DEMO_PORT=8088 docker compose -f deploy/compose.yaml up -d --no-build`
+  (same data volume; measured 6 s to healthy on staging).
+- **Roll configuration back:** `git checkout <release> -- configs`, then the Tier 1 gate against that release
+  (`scripts/release-gate-scripted.py --baseline-ref <release>`), which now also blocks a policy audit trail that became
+  more permissive.
 - **Sign-in with Google or GitHub:** deferred until the site is public and the remaining phases are done; email accounts
   need `TRUSTBENCH_SMTP_*` secrets, otherwise visitors use guest sessions (TB-039).
