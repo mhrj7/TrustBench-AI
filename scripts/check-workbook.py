@@ -19,6 +19,15 @@ ERRORS = ("#REF!", "#VALUE!", "#NAME?", "#DIV/0!", "#N/A", "#NUM!", "#NULL!")
 ID_COL, STATUS_COL, EVIDENCE_COL = 1, 4, 19  # A, D, S
 
 
+def resolve(path: str) -> Path:
+    """Evidence paths are recorded relative to the repository or as absolute paths of the original checkout; both are
+    checked inside this checkout, so the check works in any clone (CI included)."""
+    marker = f"/{ROOT.name}/"
+    if path.startswith("/") and marker in path:
+        return ROOT / path.split(marker, 1)[1]
+    return Path(path) if path.startswith("/") else ROOT / path
+
+
 def main() -> int:
     formulas = openpyxl.load_workbook(WORKBOOK)
     values = openpyxl.load_workbook(WORKBOOK, data_only=True)
@@ -52,7 +61,7 @@ def main() -> int:
             if not evidence:
                 problems.append(f"{task}: Completed without evidence paths")
             for p in evidence:
-                if not Path(p).exists():
+                if not resolve(p).exists():
                     problems.append(f"{task}: evidence path missing on disk: {p}")
     print(f"{WORKBOOK.name}: {formula_cells} formula cells checked, {len(problems)} problem(s)")
     for p in problems:
