@@ -11,7 +11,7 @@ revocable share token, or to the operator; owners can delete a run or their whol
 deletes expired runs and sessions. Secrets come from src/service/secrets.py, which also redacts them from logs.
 
 Run locally:  .venv-tools/bin/python -m uvicorn src.service.app:app --port 8080"""
-import importlib.util, json, os, queue, re, secrets, shutil, subprocess, sys, threading, time
+import importlib.util, json, os, queue, re, secrets, shutil, sqlite3, subprocess, sys, threading, time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,7 +122,6 @@ class RunRequest(BaseModel):
 class Service:
     def __init__(self, data_dir: Optional[Path] = None, runner: Optional[list[str]] = None, start_workers: bool = True):
         self.data = Path(data_dir or os.environ.get(CFG['data_dir_env']) or ROOT / CFG['default_data_dir'])
-        (self.data / 'jobs').mkdir(parents=True, exist_ok=True)
         self.runner = runner or ['node', '--experimental-strip-types', '--no-warnings', 'scripts/run-arm-smoke.mjs']
         self.jobs: dict[str, dict[str, Any]] = {}
         self.secrets: dict[str, str] = {}  # job id -> visitor key, in memory only, removed when the run ends
@@ -131,10 +130,18 @@ class Service:
         self.order = {lane: deque() for lane in CFG['workers']}
         self.hits: dict[tuple[str, str], deque] = defaultdict(deque)
         self.procs: dict[str, subprocess.Popen] = {}
-        self.sessions = SessionStore(self.data / 'sessions.sqlite', AUTH['session_ttl_hours'] * 3600, AUTH['token_bytes'])
-        self.accounts = Accounts(self.data / 'accounts.sqlite', ACC)
-        self.mailer = Mailer(ACC['mail'], self.data / ACC['mail']['outbox_dir'])
-        self._load_jobs()
+        # TB-040: if the data volume cannot be written (read-only, full or failed disk) the service still starts and serves
+        # the site, the catalog and the published results; everything that needs storage answers 503 storage_unavailable.
+        self.storage_error: Optional[str] = None
+        self.mailer = Mailer(ACC['mail'], self.data / ACC['mail']['outbox_dir'])  # writes only when a message is sent
+        try:
+            (self.data / 'jobs').mkdir(parents=True, exist_ok=True)
+            self.sessions = SessionStore(self.data / 'sessions.sqlite', AUTH['session_ttl_hours'] * 3600, AUTH['token_bytes'])
+            self.accounts = Accounts(self.data / 'accounts.sqlite', ACC)
+            self._load_jobs()
+        except (OSError, sqlite3.Error) as error:
+            self.storage_error = type(error).__name__
+            start_workers = False
         if start_workers:
             for lane, n in CFG['workers'].items():
                 for _ in range(n):
@@ -167,13 +174,16 @@ class Service:
         modes = {}
         for name, spec in CFG['modes'].items():
             limits = {k: v for k, v in spec.items() if k.startswith(('max_', 'per_client', 'daily'))}
+            available, reason = (hosted['available'], hosted['reason']) if name == 'hosted' else (True, None)
+            if self.storage_error:
+                available, reason = False, CFG['storage_unavailable_reason']
             modes[name] = {'label': spec['label'], 'live': spec['live'], 'limits': limits, 'models': self.models(name) if spec['live'] else [],
-                           'available': hosted['available'] if name == 'hosted' else True, 'reason': hosted['reason'] if name == 'hosted' else None,
+                           'available': available, 'reason': reason,
                            **({'remaining_pairs_today': hosted['remaining_pairs_today']} if name == 'hosted' else {})}
         cases = [{'id': c['case_id'], 'kind': c['kind'], 'workflow': WORKFLOW[c['fixture_id'].split('--')[0]], 'scripted_only': bool(c.get('scripted_only'))} for c in SUITE['cases']]
         return {'modes': modes, 'systems': [{'id': k, **v} for k, v in CFG['systems'].items()], 'renderings': renderings, 'default_rendering': CFG['default_rendering'],
                 'cases': cases, 'agents': CFG['agents'], 'frozen': {'system': HC['defended_system']['system'], 'model': HC['model'], 'prompt_profile': HC['prompt_profile']},
-                'holdouts': 'sealed; never offered or run by this service', 'access_token_required': bool(sec.get(CFG['access_token_env'])),
+                'holdouts': 'sealed; never offered or run by this service', 'storage': 'unavailable' if self.storage_error else 'ok', 'access_token_required': bool(sec.get(CFG['access_token_env'])),
                 'auth': {'session': 'POST /api/session (anonymous, no account)', 'retention_hours': CFG['retention_hours'], 'session_ttl_hours': AUTH['session_ttl_hours'],
                          'accounts': {'signup': 'POST /api/auth/signup', 'retention_days': ACC['account_retention_days'], 'verified_quota_multiplier': ACC['verified_quota_multiplier'],
                                       'email_delivery': self.mailer.mode, 'password_min_length': ACC['password_policy']['min_length']}}}
@@ -568,6 +578,9 @@ def bearer(request: Request) -> Optional[str]:
     return value[7:].strip() if value.lower().startswith('bearer ') else None
 
 
+STORAGE_FREE_PATHS = {'/api/health', '/api/catalog', '/api/docs', '/api/openapi.json'}  # what still works without the data volume
+
+
 def create_app(service: Optional[Service] = None) -> FastAPI:
     svc = service or Service()
     sec.install_log_redaction()
@@ -609,7 +622,10 @@ def create_app(service: Optional[Service] = None) -> FastAPI:
     async def limit_body(request: Request, call_next):
         if int(request.headers.get('content-length') or 0) > CFG['max_request_bytes']:
             return JSONResponse(status_code=413, content={'detail': 'request too large'})
-        response = await call_next(request)
+        if svc.storage_error and request.url.path.startswith('/api/') and request.url.path not in STORAGE_FREE_PATHS:
+            response = JSONResponse(status_code=503, content={'detail': 'storage_unavailable: the service cannot record sessions or runs right now; published results are still available'})
+        else:
+            response = await call_next(request)
         for name, value in CFG['security_headers'].items():
             if not (name == 'Content-Security-Policy' and request.url.path.startswith('/api/docs')):  # the API docs page loads its own assets
                 response.headers.setdefault(name, value)
@@ -619,7 +635,7 @@ def create_app(service: Optional[Service] = None) -> FastAPI:
 
     @api.get('/api/health')
     def health():
-        return {'ok': True, 'jobs': len(svc.jobs)}
+        return {'ok': svc.storage_error is None, 'storage': 'unavailable' if svc.storage_error else 'ok', 'jobs': len(svc.jobs)}
 
     @api.get('/api/catalog')
     def catalog():

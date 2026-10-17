@@ -95,3 +95,29 @@ def test_a_runner_that_ignores_sigterm_is_killed_with_its_children(tmp_path):
     assert len(group_members(pgid)) == 2
     svc_mod.stop_group(proc, grace_s=1)
     assert group_members(pgid) == []
+
+
+def test_a_read_only_data_volume_degrades_the_service_instead_of_stopping_it(tmp_path):
+    """The whole data volume is read-only (a failed or full disk): the service still starts and serves the catalog and the
+    published results; sessions and runs answer 503 storage_unavailable, and every mode reports why it is unavailable."""
+    from fastapi.testclient import TestClient
+    from src.service.app import create_app
+    data = tmp_path / 'ro'
+    data.mkdir()
+    os.chmod(data, 0o500)
+    try:
+        if os.access(data, os.W_OK):
+            pytest.skip('running as a user that ignores directory permissions')
+        svc = Service(data_dir=data)
+        client = TestClient(create_app(svc))
+        cat = client.get('/api/catalog')
+        health = client.get('/api/health').json()
+        session = client.post('/api/session')
+        run = client.post('/api/runs', json={'mode': 'scripted', 'system': 'gateway_capability', 'cases': ['doc-benign']})
+    finally:
+        os.chmod(data, 0o700)
+    assert svc.storage_error and cat.status_code == 200 and cat.json()['storage'] == 'unavailable'
+    assert all(not m['available'] and m['reason'] == CFG['storage_unavailable_reason'] for m in cat.json()['modes'].values())
+    assert health == {'ok': False, 'storage': 'unavailable', 'jobs': 0}
+    assert session.status_code == 503 and run.status_code == 503 and 'storage_unavailable' in run.json()['detail']
+    measure('read-only-volume', {'catalog': cat.status_code, 'session': session.status_code, 'run': run.status_code})

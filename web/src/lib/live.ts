@@ -17,7 +17,7 @@ export type Catalog = {
   cases: { id: string; kind: 'benign' | 'attack'; workflow: string; scripted_only: boolean }[];
   agents: Record<string, { status: string; label: string; tasks?: string }>;
   frozen: { system: string; model: string; prompt_profile: string };
-  holdouts: string; access_token_required: boolean;
+  holdouts: string; access_token_required: boolean; storage?: 'ok' | 'unavailable';
   auth?: { retention_hours: number; accounts: { retention_days: number; verified_quota_multiplier: number; email_delivery: string; password_min_length: number } };
 };
 export type Job = {

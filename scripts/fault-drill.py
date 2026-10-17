@@ -151,18 +151,26 @@ def sensitivity() -> dict:
 def staging(image: str) -> dict:
     """Container drills against the live-service image: no network for a live run, a run cancelled mid-flight, and a
     read-only service data volume."""
-    import urllib.request
+    # Requests are made from inside the container (docker exec), so the drill also works with --network none, where a
+    # published port is unreachable from the host.
+    client = ("import json, sys, urllib.request, urllib.error\n"
+              "m, path, body, token = json.loads(sys.argv[1])\n"
+              "req = urllib.request.Request('http://127.0.0.1:8080' + path, method=m, data=None if body is None else json.dumps(body).encode(),"
+              " headers={'content-type': 'application/json', **({'authorization': 'Bearer ' + token} if token else {})})\n"
+              "try:\n    r = urllib.request.urlopen(req, timeout=30); print(json.dumps([r.status, json.loads(r.read() or b'{}')]))\n"
+              "except urllib.error.HTTPError as e:\n    print(json.dumps([e.code, json.loads(e.read() or b'{}')]))\n")
+    current = {}
     def http(port, method, path, body=None, token=None):
-        req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', method=method, data=json.dumps(body).encode() if body is not None else None,
-                                     headers={'content-type': 'application/json', **({'authorization': f'Bearer {token}'} if token else {})})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                return r.status, json.loads(r.read() or b'{}')
-        except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read() or b'{}')
+        out = subprocess.run(['docker', 'exec', current['name'], '.venv-tools/bin/python', '-c', client, json.dumps([method, path, body, token])],
+                             capture_output=True, text=True)
+        if out.returncode:
+            raise RuntimeError(out.stderr[-400:])
+        code, payload = json.loads(out.stdout)
+        return code, payload
     def up(name, port, extra):
         subprocess.run(['docker', 'rm', '-f', name], capture_output=True)
-        subprocess.run(['docker', 'run', '-d', '--name', name, '-p', f'127.0.0.1:{port}:8080', *extra, image], check=True, capture_output=True)
+        subprocess.run(['docker', 'run', '-d', '--name', name, *extra, image], check=True, capture_output=True)
+        current['name'] = name
         for _ in range(120):
             try:
                 if http(port, 'GET', '/api/catalog')[0] == 200:

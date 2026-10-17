@@ -83,5 +83,11 @@ cover arbitrary recipients, Unicode forms and arbitrary JSON arguments. The gate
 fails closed (HTTP 502 `malformed_tool_output`) on non-JSON, NaN or non-object error
 output. Run `npm run test:policy` (report: `reports/policy-tests.xml`).
 
+TB-040 adds two more fail-closed paths: a tool backend that raises gives HTTP 502
+`tool_backend_error` with `executed: false` in the audit record, and every allowed call is
+written (fsynced) to `<audit>.intent` before the tool runs, so if the audit store cannot be
+written the call is denied with HTTP 503 `audit_unavailable` and nothing executes. Drills:
+`npm run test:faults`; report: `reports/fault-drill.md`.
+
 These are synthetic fixtures and randomized probes: passing them does not prove security
 against all attacks, only that the declared invariants hold on the exercised inputs.

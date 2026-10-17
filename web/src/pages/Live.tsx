@@ -17,7 +17,7 @@ export default function Live() {
   const [who, setWho] = useState<Me | null>(null);
   const runId = params.get('run');
   useEffect(() => {
-    getCatalog().then((c) => { setCatalog(c); return ensureSession().then(me).then(setWho); }).catch((e) => setOffline(String(e.message ?? e)));
+    getCatalog().then((c) => { setCatalog(c); return c.storage === 'unavailable' ? undefined : ensureSession().then(me).then(setWho); }).catch((e) => setOffline(String(e.message ?? e)));
   }, []);
   const origin = API_BASE || (typeof window !== 'undefined' ? window.location.origin : '');
   return (
@@ -31,6 +31,12 @@ export default function Live() {
           <button role="tab" aria-selected={tab === 'browser'} aria-pressed={tab === 'browser'} onClick={() => setTab('browser')}>In the browser</button>
           <button role="tab" aria-selected={tab === 'cli'} aria-pressed={tab === 'cli'} onClick={() => setTab('cli')}>From the command line</button>
         </div>
+        {catalog?.storage === 'unavailable' && tab === 'browser' && (
+          <div className="panel stack-8" role="status">
+            <p className="body">Live runs are paused on this server: {catalog.modes.scripted.reason}.</p>
+            <p className="small ink-2">The published results are all here: start at <Link to="/">the overview</Link> or <Link to="/method">the evidence index</Link>.</p>
+          </div>
+        )}
         {offline && tab === 'browser' && (
           <div className="panel stack-8" role="status">
             <p className="body">The live-test service is not reachable from this copy of the site ({offline}).</p>
