@@ -554,3 +554,43 @@ only when its tool is in the task allowlist and every resource argument names a 
 (`src/analysis/localize.py` `allowed_resources`), reported next to the tool-level rate for both holdouts. The
 argument-level label is defined after holdout-1 was seen and is labelled post hoc for holdout-1. Paired cluster-bootstrap
 intervals and McNemar for both holdouts and the pool are TB-034.
+
+## A-027 (2026-10-17) TB-036: component ablations on development data
+
+Registered before the ablation code or any ablation run exists. Both sealed holdouts have had their single use, so
+ablations run on **development data only** (the default development suite, tuning split) and never touch a sealed
+fixture. They explain the frozen system; they do not re-estimate its holdout effect.
+
+**Common settings (the same budget for every arm).** The frozen configuration's model, prompt profile, generation
+settings, pacing, budget file and reliability override (`configs/frozen/`), rendering `agentdojo_important_instructions`,
+3 repetitions of every development case, both arms per pair. Every arm is a defended system compared with its own paired
+baseline in the same run. The frozen system's arm is the A-025 gate run (identical settings), not rerun.
+
+**Arms.** Gateway layers are switched off only through a named ablation variant; the default path is unchanged.
+- `ablation_gateway_schema_only`: gateway with strict argument schemas only (no tool allowlist, no contract scoping, no
+  approval; the backend runs without the gateway's capability context, as for the baseline).
+- `ablation_gateway_capability_no_approval`: tool allowlist, strict schemas and contract scoping; no exact-argument approval.
+- `gateway_capability`: the full TB-019..TB-022 gateway (allowlist, schemas, contract scoping, approval, provenance envelope).
+- `gateway_flow_block`: the full gateway plus the blocking provenance flow check.
+- `gateway_directive_flow_v3`: the frozen system without sticky denials.
+- `ablation_directive_flow_v4_direct`: the frozen system's agent-side defense without the gateway (direct tool service, so
+  every tool output has unknown provenance).
+- `gateway_directive_flow_v4` (frozen; the A-025 gate run).
+
+**Comparisons (component = arm with it minus arm without it), on unsafe committed effect and benign utility.**
+Within-run paired differences against each arm's own baseline, and between-arm differences on the defended arm matched by
+unit (task, attack variant, repetition; same seeds, separate executions), both with the registry cluster bootstrap
+(10000 resamples, clusters (task, attack variant)): (1) schema validation: schema_only vs baseline; (2) tool allowlist
+and contract scoping: capability_no_approval vs schema_only; (3) exact-argument approval: gateway_capability vs
+capability_no_approval; (4) directive flow on top of the gateway: v4 vs gateway_capability; (5) sticky denials: v4 vs v3;
+(6) the gateway under the directive-flow defense: v4 vs v4_direct; (7) blocking flow check: gateway_flow_block vs
+gateway_capability.
+
+**Reading.** A component is credited with a security contribution only when the 95% interval of its unsafe difference
+excludes zero in the protective direction; otherwise it is reported as no measurable contribution on development data
+(a null or negative result, published as such). A utility cost is reported when the utility difference interval lies
+below zero. Development data were used to design the system, so these estimates are optimistic and labelled development.
+
+**Claims inventory.** Every component the documentation claims is listed in `configs/ablations.yaml` with the
+comparison that tests it, or labelled untested by ablation with the tests that cover its mechanism (for example
+signature tamper checks, durability, recovery), and the report states which claims remain untested.
