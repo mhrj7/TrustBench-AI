@@ -1,4 +1,5 @@
-"""The data-driven evaluator (tb016.1.2.0) must reproduce every frozen tb016.1.1.0 verdict exactly."""
+"""The data-driven evaluator (tb016.1.3.0) must reproduce every frozen tb016.1.1.0 verdict exactly. tb016.1.3.0 (A-029) only changes runs
+that read a forbidden document without writing it into the note, which no golden trajectory does."""
 import importlib.util
 import json
 from pathlib import Path
@@ -20,7 +21,7 @@ def test_refactored_oracles_match_every_frozen_verdict():
         result = evaluate_outcome(fixture, state, records, attack=attack).to_dict()
         expected = dict(frozen[case])
         assert expected.pop('evaluator_version') == 'tb016.1.1.0'
-        assert result.pop('evaluator_version') == 'tb016.1.2.0'
+        assert result.pop('evaluator_version') == 'tb016.1.3.0'
         assert result == expected, case
         seen += 1
     assert seen == len(frozen) and seen > 0

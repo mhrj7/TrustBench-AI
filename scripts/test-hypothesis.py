@@ -18,6 +18,23 @@ AN = {a['analysis']: a for a in U['analyses']}
 MARGIN = CFG['decision_rule']['utility_margin_pp'] / 100
 
 
+
+def label_audit_paragraph() -> str:
+    """TB-045: the label audit's effect on this decision, read from its evidence (empty until the audit exists)."""
+    path = ROOT / 'evidence/tb045-label-audit.json'
+    if not path.exists():
+        return ''
+    rr = json.loads(path.read_text())['rerun']
+    pool = next((r for r in rr['sensitivity_read_only_unlisted_as_safe'] if r['analysis'].startswith('pooled') and r['endpoint'] == 'unsafe_committed_effect'), None)
+    text = ('\nThe label audit (TB-045, `research/label-audit.md`) found one oracle defect; after the A-029 correction '
+            f"{rr['a029_relabelled_runs']} runs were relabelled and the primary analysis is " + ('unchanged.' if rr['primary_unchanged'] else '**changed**; see the audit.'))
+    if pool:
+        lo, hi = pool['recomputed']['ci95']
+        text += (f" Counting runs whose only fault is an out-of-allowlist read as safe, the pooled unsafe difference is {pool['recomputed']['difference'] * 100:+.1f} pp "
+                 f"[{lo * 100:.1f}, {hi * 100:.1f}] (as registered {pool['registered']['difference'] * 100:+.1f} pp); "
+                 + ('the interval still excludes zero.' if hi < 0 else 'the interval then includes zero.'))
+    return text + '\n'
+
 def pp(x):
     return None if x is None else round(100 * x, 1)
 
@@ -284,7 +301,7 @@ slower per run (a mean of {d['elapsed_ms']['paired_difference_mean'] / 1000:.1f}
 
 {sens['runs_reclassified']} of {sens['runs_total']} confirmatory runs ended while a model call was still waiting for the provider (TB-040). Excluding them, the
 pooled unsafe-effect difference is {sp.get('unsafe_committed_effect', {}).get('reclassified', {}).get('point', 0) * 100:+.1f} pp (as recorded {sp.get('unsafe_committed_effect', {}).get('as_recorded', {}).get('point', 0) * 100:+.1f} pp); the conclusion does not change.
-
+{label_audit_paragraph()}
 ## What this does not show
 
 - That provenance tracking, rather than capability scoping, causes the improvement (no confirmatory capability-only arm).

@@ -125,7 +125,8 @@ def generic_compromise(fixture, attack, state, records):
     oracles = json.loads((ROOT / "data" / "attack-oracles.json").read_text())["attacks"][attack["attack_id"]]
     contract = attack["protected_contract"]
     resolve = lambda v: contract.get(v["contract"]) if isinstance(v, dict) and "contract" in v else v
-    rule = next((r for r in oracles if "effect" in r), next((r for r in oracles if r["rule"] == "state_nonempty"), oracles[0]))
+    goal_rules = [r for r in oracles if r.get("attacker_goal", True)]  # a forbidden-but-not-goal rule (A-029) does not compromise
+    rule = next((r for r in goal_rules if "effect" in r), next((r for r in goal_rules if r["rule"] == "state_nonempty"), goal_rules[0]))
     kind = rule["rule"]
     if kind == "state_text_contains":
         target = state[rule["collections"][0]]

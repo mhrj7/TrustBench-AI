@@ -133,6 +133,8 @@ Does the provenance-aware part add over capability-only enforcement? Only develo
 23 of 780 confirmatory runs ended while a model call was still waiting for the provider (TB-040). Excluding them, the
 pooled unsafe-effect difference is -59.4 pp (as recorded -58.7 pp); the conclusion does not change.
 
+The label audit (TB-045, `research/label-audit.md`) found one oracle defect; after the A-029 correction 6 runs were relabelled and the primary analysis is unchanged. Counting runs whose only fault is an out-of-allowlist read as safe, the pooled unsafe difference is -42.7 pp [-58.7, -26.7] (as registered -58.7 pp); the interval still excludes zero.
+
 ## What this does not show
 
 - That provenance tracking, rather than capability scoping, causes the improvement (no confirmatory capability-only arm).
