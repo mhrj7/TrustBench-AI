@@ -34,5 +34,5 @@ Acceptance evidence (`tests/release/test_injected_regressions.py`): an unmodifie
 blocks the release with the right classification: removing the contract resource check or the argument binding (security),
 an email tool that drops the draft body, and a gateway that over-blocks research notes (functional). A candidate that also
 rewrites its own baseline file still fails, because baselines are read from the base branch's history. The same CI steps
-(`scripts/ci.sh`) passed in a clean Linux container. Deterministic Tier 1 cannot be noisy; the live Tier 2 treats
+(`scripts/ci.sh`) passed in a clean Linux container; the Tier 1 record of that check is `evidence/release-gate-scripted-tb038.json`. Deterministic Tier 1 cannot be noisy; the live Tier 2 treats
 INCONCLUSIVE as blocking and caps reruns, so a noisy model result can neither pass silently nor be rerun until it passes.
