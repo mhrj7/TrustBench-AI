@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "note": "Live-test service (src/service/app.py): the API behind the website's Live page and `trustbench remote`. Three modes so a visitor can always run something: scripted (no model, no key), hosted (the project's own free-tier key, held server-side, budget-capped) and own_key (the visitor's free-tier key, used for that run only and never stored or logged). Only the development suite is offered; sealed holdouts are excluded by the runner and never listed. Every limit is here. JSON content (valid YAML).",
+  "note": "Live-test service (src/service/app.py): the API behind the website's Live page and `trustbench remote`. Three modes so a visitor can always run something: scripted (no model, no key), hosted (the project's own free-tier key, held server-side, budget-capped) and own_key (the visitor's free-tier key, used for that run only and never stored or logged). Only the development suite is offered; sealed holdouts are excluded by the runner and never listed. Every limit is here; sessions, ownership and deletion are under auth (TB-039). JSON content (valid YAML).",
   "suite": "tests/arms/smoke-cases.json",
   "modes": {
     "scripted": {
@@ -127,5 +127,69 @@
     "server": "The provider returned a server error. Try again later.",
     "network": "The service could not reach the provider. Try again later.",
     "default": "The model provider failed for these runs, so they are invalid and not counted."
+  },
+  "auth": {
+    "note": "TB-039. Anonymous sessions: the website asks for one on first visit, the CLI on first use; no account. Runs belong to the session that created them; others get 404. A share token (sent in a request header, carried in the URL fragment by the website so it never reaches server logs) grants read access to one run until revoked. An operator token (from the secrets manager) can list and delete any run for abuse handling.",
+    "session_ttl_hours": 24,
+    "token_bytes": 32,
+    "sessions_per_client_per_hour": 20,
+    "per_session_runs_per_hour": 10,
+    "session_header": "Authorization",
+    "share_header": "X-TrustBench-Share",
+    "admin_token_secret": "TRUSTBENCH_ADMIN_TOKEN",
+    "sweep_interval_s": 600
+  },
+  "accounts": {
+    "note": "TB-039 accounts (src/service/accounts.py). Optional: guests can do everything without one. An account keeps runs for account_retention_days across sessions and devices; a verified account gets verified_quota_multiplier times the per-client and per-session run limits. Tokens in emailed links travel in the URL fragment (#token=), so they never reach server logs. An account becomes usable from its emailed verification link (which signs it in), so sign-up answers identically whether or not the address is registered; a deployment needs SMTP (accounts.mail) for accounts to be usable, while guests never need it.",
+    "session_ttl_days": 30,
+    "account_retention_days": 30,
+    "verified_quota_multiplier": 3,
+    "password_policy": {
+      "min_length": 12,
+      "max_length": 256,
+      "min_distinct_characters": 6
+    },
+    "scrypt": {
+      "n": 16384,
+      "r": 8,
+      "p": 1,
+      "maxmem": 67108864
+    },
+    "lockout": {
+      "max_failed": 5,
+      "minutes": 15
+    },
+    "auth_attempts_per_client_per_hour": 30,
+    "token_ttl_minutes": {
+      "verify": 2880,
+      "reset": 60
+    },
+    "public_url_secret": "TRUSTBENCH_PUBLIC_URL",
+    "links": {
+      "verify": "/account/verify#token={token}",
+      "reset": "/account/reset#token={token}"
+    },
+    "mail": {
+      "smtp_host_secret": "TRUSTBENCH_SMTP_HOST",
+      "smtp_port_secret": "TRUSTBENCH_SMTP_PORT",
+      "smtp_user_secret": "TRUSTBENCH_SMTP_USER",
+      "smtp_password_secret": "TRUSTBENCH_SMTP_PASSWORD",
+      "from_secret": "TRUSTBENCH_MAIL_FROM",
+      "default_from": "TrustBench <no-reply@trustbench.invalid>",
+      "default_smtp_port": 587,
+      "outbox_dir": "outbox"
+    },
+    "messages": {
+      "signup": "If this address can be registered, a verification link has been sent to it.",
+      "forgot": "If an account uses this address, a password reset link has been sent to it."
+    }
+  },
+  "security_headers": {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
   }
 }

@@ -23,9 +23,16 @@ def wait(client, job_id, timeout=240):
     raise AssertionError('run did not finish')
 
 
+class Authed(TestClient):
+    """A client that holds an anonymous session, as the website and the CLI do (TB-039)."""
+    def __init__(self, app):
+        super().__init__(app)
+        self.headers['Authorization'] = 'Bearer ' + self.post('/api/session').json()['token']
+
+
 @pytest.fixture()
 def client(tmp_path):
-    return TestClient(create_app(Service(data_dir=tmp_path)))
+    return Authed(create_app(Service(data_dir=tmp_path)))
 
 
 def test_catalog_offers_every_mode_and_never_a_sealed_case(client):
@@ -72,11 +79,11 @@ def test_rate_limit_per_client(tmp_path, monkeypatch):
     monkeypatch.setitem(CFG['modes']['scripted'], 'per_client_runs_per_hour', 2)
     svc = Service(data_dir=tmp_path, start_workers=False)
     req = RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign'])
-    svc.submit(req, 'a'); svc.submit(req, 'a')
+    svc.submit(req, 'a', 'o1'); svc.submit(req, 'a', 'o2')
     with pytest.raises(Exception) as e:
-        svc.submit(req, 'a')
+        svc.submit(req, 'a', 'o3')
     assert '429' in repr(e.value) or 'rate limit' in str(e.value.detail)
-    svc.submit(req, 'b')  # another client is unaffected
+    svc.submit(req, 'b', 'o4')  # another client is unaffected
 
 
 def test_hosted_budget_is_reserved_at_submission(tmp_path, monkeypatch):
@@ -84,17 +91,17 @@ def test_hosted_budget_is_reserved_at_submission(tmp_path, monkeypatch):
     monkeypatch.setattr(svc_mod, 'env_value', lambda name: 'server-key-not-real-0000' if name else None)
     svc = Service(data_dir=tmp_path, start_workers=False)
     req = RunRequest(mode='hosted', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign', 'doc-attack'])
-    svc.submit(req, 'a')
+    svc.submit(req, 'a', 'o1')
     assert svc.hosted_state()['remaining_pairs_today'] == 1
     with pytest.raises(Exception) as e:
-        svc.submit(RunRequest(mode='hosted', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign', 'doc-attack']), 'b')
+        svc.submit(RunRequest(mode='hosted', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign', 'doc-attack']), 'b', 'o2')
     assert e.value.status_code == 429
 
 
 def test_own_key_is_passed_only_to_its_run_and_never_persisted(tmp_path, monkeypatch):
     monkeypatch.setattr(svc_mod, 'env_value', lambda name: 'server-key-not-real-0000' if name else None)
     svc = Service(data_dir=tmp_path, start_workers=False)
-    job = svc.submit(RunRequest(mode='own_key', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign'], api_key=VISITOR_KEY), 'a')
+    job = svc.submit(RunRequest(mode='own_key', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign'], api_key=VISITOR_KEY), 'a', 'o1')
     args, env = svc.command(svc.jobs[job['id']])
     assert env['NVIDIA_API_KEY'] == VISITOR_KEY and env['TRUSTBENCH_NO_DOTENV'] == '1'
     assert VISITOR_KEY not in ' '.join(args)
@@ -102,9 +109,9 @@ def test_own_key_is_passed_only_to_its_run_and_never_persisted(tmp_path, monkeyp
         if f.is_file():
             assert VISITOR_KEY not in f.read_text(errors='ignore')
     assert VISITOR_KEY not in json.dumps(svc.public(job['id']))
-    hosted = svc.submit(RunRequest(mode='hosted', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign']), 'b')
+    hosted = svc.submit(RunRequest(mode='hosted', system='gateway_capability', model='nvidia:openai/gpt-oss-20b', cases=['doc-benign']), 'b', 'o2')
     assert svc.command(svc.jobs[hosted['id']])[1]['NVIDIA_API_KEY'] == 'server-key-not-real-0000'
-    scripted = svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign']), 'c')
+    scripted = svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign']), 'c', 'o3')
     assert 'NVIDIA_API_KEY' not in svc.command(svc.jobs[scripted['id']])[1]
 
 
@@ -113,7 +120,7 @@ def test_a_key_that_reaches_run_output_deletes_the_artifacts(tmp_path):
     leak.write_text("import os,sys,json,pathlib\nout=pathlib.Path(sys.argv[sys.argv.index('--out-dir')+1]); out.mkdir(parents=True,exist_ok=True)\n"
                     "(out/'report.json').write_text(json.dumps({'leak': os.environ.get('NVIDIA_API_KEY')}))\n")
     svc = Service(data_dir=tmp_path / 'data', runner=[sys.executable, str(leak)])
-    c = TestClient(create_app(svc))
+    c = Authed(create_app(svc))
     r = c.post('/api/runs', json={'mode': 'own_key', 'system': 'gateway_capability', 'model': 'nvidia:openai/gpt-oss-20b', 'cases': ['doc-benign'], 'api_key': VISITOR_KEY})
     s = wait(c, r.json()['id'])
     assert s['status'] == 'failed' and 'key appeared' in s['error']
@@ -125,6 +132,7 @@ def test_access_token_when_the_deployment_sets_one(client, monkeypatch):
     monkeypatch.setenv(CFG['access_token_env'], 'demo-token-123')
     body = {'mode': 'scripted', 'system': 'gateway_capability', 'cases': ['doc-benign']}
     assert client.post('/api/runs', json=body).status_code == 401
+    assert client.post('/api/session').status_code == 401
     assert client.post('/api/runs', json=body, headers={'X-TrustBench-Token': 'demo-token-123'}).status_code == 202
 
 
@@ -138,5 +146,5 @@ def test_invalid_runs_are_explained_in_plain_words():
 
 def test_run_ids_are_unguessable_and_safe_as_cli_arguments(tmp_path):
     svc = Service(data_dir=tmp_path, start_workers=False)
-    ids = [svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign']), f'c{i}')['id'] for i in range(20)]
+    ids = [svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign']), f'c{i}', f'o{i}')['id'] for i in range(20)]
     assert all(len(i) == 24 and not i.startswith('-') for i in ids) and len(set(ids)) == 20

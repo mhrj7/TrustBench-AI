@@ -78,9 +78,10 @@ def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from src.service.app import Service, create_app
     api = TestClient(create_app(Service(data_dir=tmp_path)))
+    session = api.post('/api/session').json()['token']
 
-    def http(method, url, body=None, token=None):
-        r = api.request(method, urlparse(url).path, json=body)
+    def http(method, url, body=None, token=None, headers=None):
+        r = api.request(method, urlparse(url).path, json=body, headers={'Authorization': f'Bearer {session}', **(headers or {})})
         assert r.status_code < 400, r.text
         return r.json()
     monkeypatch.setattr(cli, 'http', http)
