@@ -167,3 +167,25 @@ def test_a_live_run_without_a_model_uses_the_frozen_model(tmp_path, monkeypatch)
     svc = Service(data_dir=tmp_path, start_workers=False)
     job = svc.submit(RunRequest(mode='hosted', system='gateway_capability'), 'c', 'o')
     assert job['model']['id'] == HC['model']
+
+
+def test_a_run_deleted_while_its_runner_is_starting_leaves_nothing(tmp_path, monkeypatch):
+    """The race CI found: delete() runs after the worker decided to start the run but before the runner process is
+    registered, so delete() has no process to stop. The worker must notice, stop it, and remove the run's directory."""
+    import subprocess as sp
+    svc = Service(data_dir=tmp_path)
+    real_popen, started = sp.Popen, {}
+    def popen_then_delete(*args, **kwargs):
+        job_id = next(iter(svc.jobs))
+        svc.delete(job_id, 'owner')  # the owner deletes it in the window
+        started['proc'] = real_popen(*args, **kwargs)
+        return started['proc']
+    monkeypatch.setattr(svc_mod.subprocess, 'Popen', popen_then_delete)
+    job = svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign', 'doc-attack']), 'c', 'owner')
+    deadline = time.time() + 60
+    while time.time() < deadline and ('proc' not in started or started['proc'].poll() is None):
+        time.sleep(0.2)
+    time.sleep(2)
+    assert started['proc'].poll() is not None, 'the runner was stopped'
+    assert not (tmp_path / 'jobs' / job['id']).exists(), 'no file of the deleted run remains'
+    assert job['id'] not in svc.jobs

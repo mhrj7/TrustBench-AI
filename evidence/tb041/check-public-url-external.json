@@ -1,0 +1,246 @@
+{
+ "task_id": "TB-041",
+ "url": "https://trustbench.taila273c6.ts.net",
+ "checked_at": "2026-10-17T15:32:11+00:00",
+ "live": true,
+ "exhaust": false,
+ "quick": false,
+ "vantage": "github-actions ubuntu-24.04",
+ "passed": 20,
+ "failed": 0,
+ "checks": [
+  {
+   "check": "health",
+   "passed": true,
+   "observed": {
+    "status": 200,
+    "body": {
+     "ok": true,
+     "storage": "ok",
+     "jobs": 39
+    }
+   }
+  },
+  {
+   "check": "site page /",
+   "passed": true,
+   "observed": {
+    "status": 200,
+    "missing_headers": []
+   }
+  },
+  {
+   "check": "site page /live",
+   "passed": true,
+   "observed": {
+    "status": 200,
+    "missing_headers": []
+   }
+  },
+  {
+   "check": "site page /account",
+   "passed": true,
+   "observed": {
+    "status": 200,
+    "missing_headers": []
+   }
+  },
+  {
+   "check": "catalog lists no sealed holdout case",
+   "passed": true,
+   "observed": {
+    "cases": 17,
+    "sealed_exposed": []
+   }
+  },
+  {
+   "check": "catalog reports the deployment profile",
+   "passed": true,
+   "observed": {
+    "deploy_profile": "public-demo",
+    "limits": {
+     "scripted": {
+      "max_pairs_per_run": 34,
+      "max_repetitions": 2,
+      "per_client_runs_per_hour": 20
+     },
+     "hosted": {
+      "max_pairs_per_run": 2,
+      "max_repetitions": 1,
+      "per_client_runs_per_day": 3,
+      "daily_pair_budget": 40
+     },
+     "own_key": {
+      "max_pairs_per_run": 8,
+      "max_repetitions": 3,
+      "per_client_runs_per_hour": 4
+     }
+    }
+   }
+  },
+  {
+   "check": "instant and own-key modes are available",
+   "passed": true,
+   "observed": {
+    "scripted": [
+     true,
+     null
+    ],
+    "hosted": [
+     true,
+     null
+    ],
+    "own_key": [
+     true,
+     null
+    ]
+   }
+  },
+  {
+   "check": "no secret material in the catalog",
+   "passed": true,
+   "observed": {}
+  },
+  {
+   "check": "run creation without a session is refused",
+   "passed": true,
+   "observed": {
+    "status": 401
+   }
+  },
+  {
+   "check": "operator endpoint refuses no token",
+   "passed": true,
+   "observed": {
+    "status": 404,
+    "note": "answers 404 by design: it does not reveal that the endpoint exists"
+   }
+  },
+  {
+   "check": "operator endpoint refuses forged token",
+   "passed": true,
+   "observed": {
+    "status": 404,
+    "note": "answers 404 by design: it does not reveal that the endpoint exists"
+   }
+  },
+  {
+   "check": "oversize request refused",
+   "passed": true,
+   "observed": {
+    "status": 413
+   }
+  },
+  {
+   "check": "instant run (API)",
+   "passed": true,
+   "observed": {
+    "status": "done",
+    "error": null,
+    "mode": "scripted",
+    "pairs": 2,
+    "valid_pairs": 2,
+    "invalid_pairs": 0,
+    "invalid_reasons": [],
+    "observed_models": null,
+    "seconds": 5.2
+   }
+  },
+  {
+   "check": "instant run report is valid against schemas/arm-report.schema.json",
+   "passed": true,
+   "observed": {
+    "status": 200,
+    "problems": []
+   }
+  },
+  {
+   "check": "another visitor cannot see the run",
+   "passed": true,
+   "observed": {
+    "status": 404
+   }
+  },
+  {
+   "check": "instant run (CLI trustbench remote)",
+   "passed": true,
+   "observed": {
+    "exit": 0,
+    "status": "done",
+    "error": null,
+    "mode": null,
+    "pairs": null,
+    "valid_pairs": 2,
+    "invalid_pairs": 0,
+    "invalid_reasons": [],
+    "observed_models": null,
+    "stderr": ""
+   }
+  },
+  {
+   "check": "live run with the project key (API)",
+   "passed": true,
+   "observed": {
+    "status": "done",
+    "error": null,
+    "mode": "hosted",
+    "pairs": 2,
+    "valid_pairs": 2,
+    "invalid_pairs": 0,
+    "invalid_reasons": [],
+    "observed_models": [
+     "openai/gpt-oss-20b"
+    ],
+    "seconds": 69.7,
+    "key_source": "project"
+   }
+  },
+  {
+   "check": "live run with the project key (CLI)",
+   "passed": true,
+   "observed": {
+    "exit": 0,
+    "status": "done",
+    "error": null,
+    "mode": null,
+    "pairs": null,
+    "valid_pairs": 1,
+    "invalid_pairs": 0,
+    "invalid_reasons": [],
+    "observed_models": [
+     "openai/gpt-oss-20b"
+    ],
+    "stderr": ""
+   }
+  },
+  {
+   "check": "a rejected visitor key gives an explicit invalid run",
+   "passed": true,
+   "observed": {
+    "exit": 0,
+    "status": "done",
+    "error": null,
+    "mode": null,
+    "pairs": null,
+    "valid_pairs": 0,
+    "invalid_pairs": 1,
+    "invalid_reasons": [
+     "authentication"
+    ],
+    "observed_models": [],
+    "stderr": ""
+   }
+  },
+  {
+   "check": "per-visitor rate limit stops instant runs",
+   "passed": true,
+   "observed": {
+    "client_limit_per_hour": 20,
+    "accepted_before_429": 10,
+    "limit_that_applied": "rate limit: at most 10 runs per hour from one session",
+    "probe_runs_deleted": 10,
+    "note": "the stricter of the per-client and per-session limits applies first"
+   }
+  }
+ ]
+}

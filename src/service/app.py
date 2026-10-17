@@ -527,10 +527,10 @@ class Service:
         while True:
             job_id = self.queues[lane].get()
             job = self.jobs.get(job_id)
-            if not job or job.get('_deleted'):
-                self.queues[lane].task_done()
-                continue
-            with self.lock:
+            with self.lock:  # the same lock delete() takes, so a run is either deleted before it starts or seen running
+                if not job or job.get('_deleted'):
+                    self.queues[lane].task_done()
+                    continue
                 if job_id in self.order[lane]:
                     self.order[lane].remove(job_id)
                 job.update(status='running', started_at=now())
@@ -541,7 +541,11 @@ class Service:
                 with open(d / 'runner.log', 'w') as log:
                     # TB-040: its own process group, so stopping a run also stops the gateway and tool services the runner started
                     proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=log, start_new_session=True)
-                    self.procs[job_id] = proc
+                    with self.lock:
+                        self.procs[job_id] = proc
+                        deleted_meanwhile = job.get('_deleted')
+                    if deleted_meanwhile:  # deleted while it was starting: delete() found no process to stop, so stop it here
+                        stop_group(proc)
                     code = proc.wait()
                 if not job.get('_deleted'):
                     self._finish(job, code)
@@ -550,7 +554,7 @@ class Service:
             finally:
                 sec.forget(self.secrets.pop(job_id, None))
                 self.procs.pop(job_id, None)
-                shutil.rmtree(d / 'work', ignore_errors=True)
+                shutil.rmtree(d if job.get('_deleted') else d / 'work', ignore_errors=True)  # a deleted run leaves nothing behind
                 self._save(job)
             self.queues[lane].task_done()
 
