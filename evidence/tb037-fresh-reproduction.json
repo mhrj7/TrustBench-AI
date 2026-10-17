@@ -1,0 +1,83 @@
+{
+ "task_id": "TB-037",
+ "checked_at": "2026-10-17T07:00:10+00:00",
+ "commit": "9b47287",
+ "fresh_clone": {
+  "path": "/Volumes/MHRJ/tb037-fresh2/TrustBench-AI (git clone of the repository; no node_modules, .venv-tools or data/vendor)",
+  "steps": [
+   "cp .env.example .env",
+   "npm ci",
+   "npm run setup",
+   "sh bin/trustbench fetch-data",
+   "sh bin/trustbench validate",
+   "sh bin/trustbench smoke --check",
+   "sh bin/trustbench manifest",
+   "sh bin/trustbench report --check",
+   "npm run verify"
+  ],
+  "validate": {
+   "ok": true,
+   "steps": 8,
+   "skipped": []
+  },
+  "smoke": {
+   "ok": true,
+   "steps": [
+    {
+     "step": "environment",
+     "ok": true
+    },
+    {
+     "step": "smoke_suite",
+     "ok": true,
+     "matches_committed": true,
+     "ignored_volatile_keys": [
+      "checked_at"
+     ]
+    },
+    {
+     "step": "arm_smoke",
+     "ok": true,
+     "matches_committed": true,
+     "ignored_volatile_keys": [
+      "checked_at",
+      "elapsed_ms",
+      "median_elapsed_ms",
+      "request_id"
+     ],
+     "schema": "schemas/arm-report.schema.json",
+     "schema_errors": []
+    }
+   ]
+  },
+  "manifest": {
+   "ok": true,
+   "files": 18,
+   "changed": []
+  },
+  "report_check_tests_passed": 55,
+  "npm_run_verify_exit": 0
+ },
+ "first_attempt_defect": {
+  "clone": "/Volumes/MHRJ/tb037-fresh/TrustBench-AI at 879a395",
+  "finding": "npm run verify failed at the review-site typecheck (web/node_modules missing: the quickstart installed root dependencies only)",
+  "fix": "9b47287: npm run setup = setup:python + setup:web (npm --prefix web ci); README updated; second fresh clone passes"
+ },
+ "container": {
+  "image": "trustbench-bench:tb037",
+  "image_id": "sha256:cfa11bf3f6470dea7a306b64a6aae00b44df161d95bab72621e292b1637c5e11",
+  "built_from": "clean git clone at 9b47287, Dockerfile.bench",
+  "versions": {
+   "node": "v26.5.0",
+   "npm": "12.0.0",
+   "python": "3.14.0"
+  },
+  "default_command_exit": 0,
+  "smoke_outputs_matching_committed": 2,
+  "report_check_tests_passed": 55,
+  "note": "The container runs the CLI checks; the review-site browser tests need an installed Google Chrome and run in the fresh-clone npm run verify instead. The vendored AgentDojo check is skipped unless fetch-data is run."
+ },
+ "not_covered": [
+  "Live benchmark runs (trustbench benchmark) need a provider key and quota; only --dry-run is exercised here."
+ ]
+}
