@@ -60,14 +60,17 @@ function normalizeError(provider: string, error: unknown): NormalizedProviderErr
   if (error instanceof NormalizedProviderError) return error;
   const value = error !== null && typeof error === "object" ? error as Record<string, unknown> : {};
   const status = typeof value.status === "number" ? value.status : null;
-  const nativeCode = typeof value.code === "string" ? value.code : "";
+  // Node's fetch (undici) reports the system error on error.cause (e.g. cause.code === "ECONNREFUSED"); TB-040 found that
+  // reading only error.code classified every network failure as "unknown" and non-retryable.
+  const cause = value.cause !== null && typeof value.cause === "object" ? value.cause as Record<string, unknown> : {};
+  const nativeCode = typeof value.code === "string" ? value.code : typeof cause.code === "string" ? cause.code : "";
   const message = error instanceof Error ? error.message : "Unknown provider failure";
   if (status === 401 || status === 403) return new NormalizedProviderError(provider, "authentication", false, message, status);
   if (status === 429) return new NormalizedProviderError(provider, "rate_limit", true, message, status);
-  if (status === 408 || value.name === "AbortError" || nativeCode === "timeout") return new NormalizedProviderError(provider, "timeout", true, message, status);
+  if (status === 408 || value.name === "AbortError" || value.name === "TimeoutError" || ["timeout", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ETIMEDOUT"].includes(nativeCode)) return new NormalizedProviderError(provider, "timeout", true, message, status);
   if (status !== null && status >= 400 && status < 500) return new NormalizedProviderError(provider, "invalid_request", false, message, status);
   if (status !== null && status >= 500) return new NormalizedProviderError(provider, "server", true, message, status);
-  if (["ECONNRESET", "ENOTFOUND", "ECONNREFUSED"].includes(nativeCode)) return new NormalizedProviderError(provider, "network", true, message, status);
+  if (["ECONNRESET", "ENOTFOUND", "ECONNREFUSED", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(nativeCode)) return new NormalizedProviderError(provider, "network", true, message, status);
   return new NormalizedProviderError(provider, "unknown", false, message, status);
 }
 

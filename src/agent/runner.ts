@@ -2,7 +2,7 @@ import { BudgetController, BudgetExhaustedError, type BudgetConfig } from "../..
 import { canonicalJson } from "../../schemas/trace.ts";
 import { RecoveryManager, type RecoveryPolicy, type Sleep } from "./recovery.ts";
 import type { AgentDefenses } from "./defenses.ts";
-import type { RunStore, RunCheckpoint } from "./run-store.ts";
+import { CHECKPOINT_CORRUPT, type RunStore, type RunCheckpoint } from "./run-store.ts";
 import type { ModelAdapter, ModelRequest } from "../models/contracts.ts";
 import {
   AgentRunConfigSchema, type AgentFailure, type AgentNode, type AgentRunConfig, type AgentToolRegistry,
@@ -52,7 +52,7 @@ export async function runBaselineAgent(input: {
 }): Promise<BaselineAgentResult> {
   const config = AgentRunConfigSchema.parse(input.config);
   const durable = input.durability ?? null;
-  const prior = durable ? durable.store.load(config.run_id) : { final: null, checkpoint: null };
+  const prior = durable ? durable.store.load(config.run_id) : { final: null, checkpoint: null, corrupt: null };
   if (prior.final) return prior.final; // the run already ended: never produce a second outcome
   const restored: RunCheckpoint | null = prior.checkpoint;
   const budget = restored ? BudgetController.restore(input.budgetConfig, restored.budget as any) : new BudgetController(input.budgetConfig);
@@ -75,6 +75,7 @@ export async function runBaselineAgent(input: {
   let steps = restored?.steps ?? 0;
 
   let finished: BaselineAgentResult | null = null;
+  let modelInFlight = false;
   const terminate = (outcome: BaselineAgentResult["outcome"]): BaselineAgentResult => {
     if (finished) return finished;
     transitions.push({ step: steps, node: "termination", detail: outcome });
@@ -121,6 +122,11 @@ export async function runBaselineAgent(input: {
   let pendingCalls: RunCheckpoint["pending_calls"] = restored ? structuredClone(restored.pending_calls) : [];
   let pendingText = restored?.response_text ?? "";
   const execute = async (): Promise<BaselineAgentResult> => {
+    // TB-040: a damaged or altered checkpoint is never resumed: the run ends with an explicit failure and runs no tool.
+    if (prior.corrupt) {
+      failures.push({ node: "termination", code: CHECKPOINT_CORRUPT, message: prior.corrupt, call_id: null });
+      return terminate("failure");
+    }
     try {
       if (defenses && !restored) {
         const chosen = await defenses.filterTools(config, runController.signal);
@@ -141,9 +147,10 @@ export async function runBaselineAgent(input: {
           tools: structuredClone(config.tools),
           settings: structuredClone(config.generation_settings),
         };
-        const response = manager
-          ? await manager.callModel("generate", (signal) => input.adapter.generate(modelRequest, { signal }))
-          : await input.adapter.generate(modelRequest, { signal: runController.signal });
+        modelInFlight = true;
+        const response = await (manager
+          ? manager.callModel("generate", (signal) => input.adapter.generate(modelRequest, { signal }))
+          : input.adapter.generate(modelRequest, { signal: runController.signal })).finally(() => { modelInFlight = false; });
         if (controller.signal.aborted) throw new AgentTimeoutError();
         budget.recordModelUsage(response.usage.input_tokens, response.usage.output_tokens);
         if (response.output_text) messages.push({ role: "assistant", content: response.output_text });
@@ -234,7 +241,11 @@ export async function runBaselineAgent(input: {
     timer = setTimeout(() => {
       controller.abort(new AgentTimeoutError());
       runController.abort(new AgentTimeoutError());
-      failures.push(failure(transitions.at(-1)?.node ?? "termination", new AgentTimeoutError()));
+      // TB-040: if the provider was still holding a model call when the run timed out, the provider did not answer; that is
+      // a provider timeout on the model node (a provider fault, so the run is invalid), not an agent outcome.
+      failures.push(modelInFlight
+        ? { node: "model", code: "timeout", message: "the run timeout was reached while a model call was still waiting for the provider", call_id: null }
+        : failure(transitions.at(-1)?.node ?? "termination", new AgentTimeoutError()));
       resolve(terminate("timeout"));
     }, config.timeout_ms);
   });

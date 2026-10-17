@@ -53,6 +53,29 @@ ACC = CFG['accounts']
 ADMIN = '__operator__'
 
 
+def stop_group(proc: subprocess.Popen, grace_s: float = 10) -> None:
+    """Stop a run's whole process group (the runner and every service it started): SIGTERM, then SIGKILL after the grace
+    period. Children that outlive the runner are reaped too, so a cancelled run leaves no process behind (TB-040)."""
+    import signal
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        deadline = time.time() + grace_s
+        while time.time() < deadline:
+            proc.poll()
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):  # macOS reports EPERM once only exited (zombie) members remain
+                return
+            time.sleep(0.1)
+
+
 def env_value(name: Optional[str]) -> Optional[str]:
     """A server-side secret (src/service/secrets.py: env, mounted secret file, .env); never returned to a client."""
     return sec.get(name)
@@ -132,9 +155,10 @@ class Service:
     def hosted_state(self) -> dict[str, Any]:
         spec = CFG['modes']['hosted']
         keys = {p: env_value(PROVIDERS[p].get('api_key_env')) is not None for p in spec['providers']}
-        used = self._budget()['pairs']
-        remaining = max(0, spec['daily_pair_budget'] - used)
-        reason = None if any(keys.values()) and remaining > 0 else ('no project key configured on this server' if not any(keys.values()) else "today's shared budget is used up")
+        budget = self._budget()
+        remaining = max(0, spec['daily_pair_budget'] - budget['pairs'])
+        reason = None if any(keys.values()) and remaining > 0 else ('no project key configured on this server' if not any(keys.values())
+                  else "the shared budget record cannot be read, so the shared key is paused" if budget.get('unreadable') else "today's shared budget is used up")
         return {'available': reason is None, 'reason': reason, 'remaining_pairs_today': remaining, 'providers_with_key': [p for p, k in keys.items() if k]}
 
     def catalog(self) -> dict[str, Any]:
@@ -264,12 +288,8 @@ class Service:
             for lane in self.order.values():
                 if job_id in lane:
                     lane.remove(job_id)
-        if proc and proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+        if proc:
+            stop_group(proc)
         d = self._dir(job_id)
         files = sum(1 for f in d.rglob('*') if f.is_file()) if d.exists() else 0
         shutil.rmtree(d, ignore_errors=True)
@@ -356,12 +376,20 @@ class Service:
     def _budget(self) -> dict[str, Any]:
         p = self.data / CFG['modes']['hosted']['budget_file']
         today = datetime.now(timezone.utc).date().isoformat()
-        b = json.loads(p.read_text()) if p.exists() else {}
+        try:
+            b = json.loads(p.read_text()) if p.exists() else {}
+            if not isinstance(b, dict) or not isinstance(b.get('pairs', 0), int):
+                raise ValueError
+        except (OSError, ValueError):
+            # TB-040: an unreadable or damaged spend record fails closed: the shared budget counts as spent for today
+            # (visitors can still bring their own key or run scripted), never as unspent.
+            return {'date': today, 'pairs': CFG['modes']['hosted']['daily_pair_budget'], 'unreadable': True}
         return b if b.get('date') == today else {'date': today, 'pairs': 0}
 
     def _spend(self, pairs: int):
         with self.lock:
             b = self._budget()
+            b.pop('unreadable', None)
             b['pairs'] += pairs
             (self.data / CFG['modes']['hosted']['budget_file']).write_text(json.dumps(b))
 
@@ -369,12 +397,17 @@ class Service:
     def submit(self, req: RunRequest, client: str, owner: str, multiplier: int = 1) -> dict[str, Any]:
         spec = self.validate(req)
         self.rate_limit(client, req.mode, owner, multiplier)
-        if req.mode == 'hosted':
-            self._spend(spec['pairs'])  # reserved at submission so concurrent visitors cannot overspend the shared budget
         job_id = secrets.token_hex(12)  # hex: unguessable, and never starts with '-' (a CLI argument must not look like a flag)
         job = {'id': job_id, 'status': 'queued', 'created_at': now(), 'started_at': None, 'finished_at': None, **spec,
                'key_source': {'scripted': None, 'hosted': 'project', 'own_key': 'visitor'}[req.mode], 'progress': {'done': 0, 'total': spec['pairs']}, 'error': None,
                '_owner': owner}
+        try:
+            self._save(job)  # TB-040: a run that cannot be recorded is refused up front, before any budget is reserved
+        except OSError:
+            shutil.rmtree(self.data / 'jobs' / job_id, ignore_errors=True)
+            raise HTTPException(503, 'storage_unavailable: the service cannot record runs right now; nothing was started')
+        if req.mode == 'hosted':
+            self._spend(spec['pairs'])  # reserved at submission so concurrent visitors cannot overspend the shared budget
         lane = 'live' if CFG['modes'][req.mode]['live'] else 'scripted'
         with self.lock:
             self.jobs[job_id] = job
@@ -454,7 +487,8 @@ class Service:
             try:
                 args, env = self.command(job)
                 with open(d / 'runner.log', 'w') as log:
-                    proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=log)
+                    # TB-040: its own process group, so stopping a run also stops the gateway and tool services the runner started
+                    proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=log, start_new_session=True)
                     self.procs[job_id] = proc
                     code = proc.wait()
                 if not job.get('_deleted'):

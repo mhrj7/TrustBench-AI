@@ -1,6 +1,7 @@
 """Agent-facing gateway; raw ASGI tools have no listener in this deployment."""
 import asyncio
 import json
+import os
 import time
 import secrets
 from dataclasses import dataclass
@@ -53,11 +54,12 @@ class Gateway:
         async def flush_policy_decisions(request: Request, call_next):
             # Host-only JSONL trace of policy decisions; contains argument hashes, never tokens.
             response = await call_next(request)
-            if self._audit_path is not None:
-                with open(self._audit_path, 'a', encoding='utf-8') as sink:
-                    while self._flushed < len(self.audit):
-                        sink.write(json.dumps({'seq': self._flushed, **self.audit[self._flushed]}, sort_keys=True) + '\n')
-                        self._flushed += 1
+            try:
+                self.flush_audit()
+            except OSError:
+                # The decision was already persisted write-ahead (record_intent) before any effect; a failed final flush
+                # loses only the outcome fields, and the next request retries the flush.
+                pass
             return response
 
         @self.app.post('/v1/episodes/{episode_id}/tools/{tool_name}')
@@ -115,6 +117,9 @@ class Gateway:
             record = {'episode_id': episode_id, 'tool': tool_name, 'decision': 'allow',
                       'arguments_sha256': digest(arguments), 'executed': False}
             self.audit.append(stamp(record))
+            if not self.record_intent(record):
+                record.update(decision='deny', reason='audit_unavailable')
+                return JSONResponse(status_code=503, content={'detail': 'audit_unavailable'})
             backend_t0 = time.perf_counter()
             async with self._lock:
                 authorization = {'capability':binding.capability,'arguments':arguments,'approval_request_id':approval_id}
@@ -124,6 +129,10 @@ class Gateway:
                 try:
                     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self._backend), base_url='http://internal') as client:
                         response = await client.post(f'/v1/episodes/{episode_id}/tools/{tool_name}', json=arguments)
+                except Exception as error:  # noqa: BLE001 - TB-040: a crashed tool is an explicit failure, never a silent success
+                    record.update(backend_ms=round((time.perf_counter() - backend_t0) * 1000, 3), status=502, executed=False,
+                                  backend_error=type(error).__name__)
+                    return JSONResponse(status_code=502, content={'detail': 'tool_backend_error'})
                 finally:
                     execution_context.reset(context)
             record.update(backend_ms=round((time.perf_counter() - backend_t0) * 1000, 3))
@@ -156,6 +165,28 @@ class Gateway:
             if binding.flow is not None:
                 binding.flow.observe(envelope)
             return envelope
+
+    def flush_audit(self):
+        if self._audit_path is None:
+            return
+        with open(self._audit_path, 'a', encoding='utf-8') as sink:
+            while self._flushed < len(self.audit):
+                sink.write(json.dumps({'seq': self._flushed, **self.audit[self._flushed]}, sort_keys=True) + '\n')
+                self._flushed += 1
+
+    def record_intent(self, record: dict) -> bool:
+        """TB-040 write-ahead audit: an allow decision is made durable before the tool runs. With no audit store configured
+        there is nothing to fail; otherwise a failed write means the call must not run (fail closed)."""
+        if self._audit_path is None:
+            return True
+        try:
+            with open(f'{self._audit_path}.intent', 'a', encoding='utf-8') as sink:
+                sink.write(json.dumps({'seq': len(self.audit) - 1, **record}, sort_keys=True) + '\n')
+                sink.flush()
+                os.fsync(sink.fileno())
+            return True
+        except OSError:
+            return False
 
     def bind(self, episode_id: str, allowed_tools: list[str], user_id: str | None = None) -> str:
         """Trusted host setup only; no HTTP registration/reset endpoint exists."""

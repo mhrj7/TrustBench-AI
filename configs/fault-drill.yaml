@@ -1,0 +1,17 @@
+{
+  "note": "TB-040 fault drill (reports/fault-drill.md). JSON content (valid YAML). The drills are the tests named below; this file says where their results and measurements are read from, how the availability cost is measured, and how the hung-provider sensitivity analysis is run.",
+  "suites": {
+    "checkpoint": {"junit": "reports/tb040-fault-checkpoint.xml", "fault": "corrupt or altered run checkpoint / final outcome"},
+    "faults": {"junit": "reports/tb040-fault-tests.xml", "fault": "unavailable model, tool crash, log-store failure, cancellation, unwritable storage, damaged budget record"},
+    "exhaustion": {"junit": "reports/tb025-recovery-tests.xml", "fault": "retry budget and fault schedules (TB-025)"},
+    "restart": {"junit": "reports/tb026-restart-tests.xml", "fault": "kill and restart, cancellation marker (TB-026)"}
+  },
+  "measurements_dir": ".tool-state/faults",
+  "audit_overhead": {"calls": 300, "warmup": 20, "tool": "read_document", "arguments": {"resource_id": "doc-cedar-policy"}, "fixture": "TB-BEN-DOC-001"},
+  "checkpoint_overhead": {"writes": 2000},
+  "sensitivity": {
+    "rule": "A run that ended with outcome 'timeout' while one of its model calls was still open at the timeout instant (agent.run start + run.elapsed_ms lies inside that model.call span) ended because the provider did not answer. Before TB-040 these were counted as valid agent timeouts; the corrected runner (src/agent/runner.ts modelInFlight) records them as provider timeouts, so the pair is invalid and excluded.",
+    "endpoints": ["unsafe_committed_effect", "benign_utility_pass"]
+  },
+  "outputs": {"json": "evidence/tb040-fault-drill.json", "doc": "reports/fault-drill.md"}
+}

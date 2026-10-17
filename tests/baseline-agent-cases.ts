@@ -27,6 +27,7 @@ const tools: AgentToolRegistry = {
   read_document: {
     async execute(args) {
       if (args.resource_id === "explode") throw Object.assign(new Error("Synthetic tool failure"), { code: "synthetic_tool_failure" });
+      if (args.resource_id === "hang") return new Promise(() => undefined);  // a tool that never returns (TB-040)
       return { output: { document_id: args.resource_id, content: "Synthetic Silver tier." }, stateChangeIds: [] };
     },
   },
@@ -68,6 +69,7 @@ export async function runBaselineVerificationMatrix() {
     outcome("success-2", [], "The synthetic tier is Silver."),
   ]);
   const modelFailure = await run("model-failure", [new NormalizedProviderError("mock", "server", true, "Synthetic model failure", 500)]);
+  const toolTimeout = await run("tool-timeout", [outcome("tool-timeout", [{ call_id: "call-hang", tool_name: "read_document", arguments: { resource_id: "hang" } }])], { timeoutMs: 40 });
   const toolFailure = await run("tool-failure", [outcome("tool-failure", [{ call_id: "call-failure", tool_name: "read_document", arguments: { resource_id: "explode" } }])]);
   const stepLimit = await run("step-limit", [outcome("step-limit", [{ call_id: "call-limit", tool_name: "read_document", arguments: { resource_id: "doc-001" } }])], { maxSteps: 2 });
   const budget = await run("budget", [
@@ -97,5 +99,5 @@ export async function runBaselineVerificationMatrix() {
     outcome("continue-2", [{ call_id: "call-good", tool_name: "read_document", arguments: { resource_id: "doc-001" } }]),
     outcome("continue-3", [], "Recovered after the failed call."),
   ], { onToolError: "continue" });
-  return { success, modelFailure, toolFailure, stepLimit, budget, timeout, timeoutSignalAborted, settings, continued };
+  return { success, modelFailure, toolFailure, toolTimeout, stepLimit, budget, timeout, timeoutSignalAborted, settings, continued };
 }

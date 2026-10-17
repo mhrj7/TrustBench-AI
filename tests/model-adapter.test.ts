@@ -197,3 +197,13 @@ test("hosted adapters require a key and tag their provider", async () => {
   assert.equal(seen[0]!.url, "https://integrate.api.nvidia.com/v1/chat/completions");
   assert.equal(seen[0]!.auth, "Bearer test-key-value");
 });
+
+test("chat-completions adapter classifies fetch failures from their cause (TB-040): refused is network and retryable", async () => {
+  const { createAdapterFromSpec } = await import("../src/models/chat-completions.ts");
+  const failing = (code: string) => (async () => { throw Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) }); }) as unknown as typeof fetch;
+  const spec = { base_url: "http://127.0.0.1:9/v1", loopback_only: false, api_key_env: null, reduced_schemas: false, omit_settings: [], send_reasoning_effort: false } as any;
+  for (const [native, expected] of [["ECONNREFUSED", "network"], ["UND_ERR_SOCKET", "network"], ["UND_ERR_HEADERS_TIMEOUT", "timeout"]] as const) {
+    const adapter = createAdapterFromSpec("drill", spec, "drill-model", {}, failing(native));
+    await assert.rejects(() => adapter.generate(request()), (e: unknown) => e instanceof NormalizedProviderError && e.code === expected && e.retryable === true);
+  }
+});

@@ -73,7 +73,12 @@ const positiveControl = renderingRegistry.renderings[rendering].kind === "positi
 // TRUSTBENCH_NO_DOTENV=1 (live-test service jobs): use only the key passed in the environment, never the project .env.
 if (live && provider.api_key_env && process.env.TRUSTBENCH_NO_DOTENV !== "1") { try { process.loadEnvFile(path.join(root, ".env")); } catch { /* key may come from the shell */ } }
 
-const makeLiveAdapter = () => createAdapterFromSpec(providerName, provider, modelId, process.env);
+// TB-040 fault drills: TRUSTBENCH_DRILL_MODEL_BASE_URL points the live model at a loopback stub (refused, failing or hanging)
+// to exercise an unavailable model. Loopback only, never in the confirmatory holdout mode, and recorded in the report.
+const drillModelUrl = live ? process.env.TRUSTBENCH_DRILL_MODEL_BASE_URL ?? null : null;
+if (drillModelUrl && !["127.0.0.1", "localhost", "[::1]"].includes(new URL(drillModelUrl).hostname)) throw new Error("TRUSTBENCH_DRILL_MODEL_BASE_URL must be a loopback URL");
+const modelSpec = drillModelUrl ? { ...provider, base_url: drillModelUrl } : provider;
+const makeLiveAdapter = () => createAdapterFromSpec(providerName, modelSpec, modelId, process.env);
 const budgetFile = live ? provider.budget_file : runConfig.scripted_budget_file;
 // TB-031 reliability sweep: --reliability <file> sets the step limit, the run timeout and the retry policy for both arms
 // of every pair (identically), and is recorded in the report. Without it the registered values apply.
@@ -148,6 +153,7 @@ if (confirmatory) {
   if (schedule && schedule.repetitions !== registry.repetitions_per_pair) problems.push(`schedule repetitions must be ${registry.repetitions_per_pair}`);
   const frozen = await new Promise((resolve) => execFile(python, ["scripts/verify-frozen.py"], { cwd: root }, (error) => resolve(!error)));
   if (!frozen) problems.push("scripts/verify-frozen.py failed: live settings differ from configs/frozen");
+  if (drillModelUrl) problems.push("a fault-drill model URL is set (TRUSTBENCH_DRILL_MODEL_BASE_URL)");
   if (problems.length) throw new Error(`--confirmatory-holdout refused:\n- ${problems.join("\n- ")}`);
   const runBase = h2Suite ? path.join(root, h2.confirmatory_run_dir, h2Suite) : path.join(root, registry.holdout.confirmatory_run_dir);
   await mkdir(runBase, { recursive: true });
@@ -388,6 +394,7 @@ const report = {
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
   ...(endedEarly && !confirmatory ? { ended_early: endedEarly } : {}),
+  ...(drillModelUrl ? { fault_drill: { model_base_url: drillModelUrl } } : {}),
   ...(confirmatory ? { confirmatory_holdout: { intended_units: plan.length, attempted_units: runs.length, ended_early: endedEarly, comparison_valid: endedEarly === null, run_dir: path.relative(root, runOutDir) } } : {}),
 };
 const traces = [];

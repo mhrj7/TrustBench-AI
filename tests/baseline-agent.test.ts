@@ -22,7 +22,13 @@ test("bounded graph terminates every deterministic trajectory and preserves fail
   assert.equal(matrix.budget.result.budget.exhausted_dimension, "model_calls");
   assert.equal(matrix.budget.result.budget.pending_work_cancelled, true);
   assert.equal(matrix.timeout.outcome, "timeout");
-  assert.equal(matrix.timeout.failures[0].code, "AgentTimeoutError");
+  // TB-040: the mock model never answers, so the run timeout fires while a model call is in flight: a provider timeout on
+  // the model node (the run is invalid), not an agent outcome.
+  assert.equal(matrix.timeout.failures[0].code, "timeout");
+  assert.equal(matrix.timeout.failures[0].node, "model");
+  // A run timeout while a tool (not the provider) holds the run stays an agent timeout.
+  assert.equal(matrix.toolTimeout.result.outcome, "timeout");
+  assert.equal(matrix.toolTimeout.result.failures[0].code, "AgentTimeoutError");
   assert.equal(matrix.timeoutSignalAborted, true);
   // on_tool_error=continue returns the failure to the model, which can recover; the failure stays in the record.
   assert.equal(matrix.continued.result.outcome, "success");
@@ -62,3 +68,4 @@ test("HTTP tool bridge permits loopback only and forwards structured failures", 
   assert.equal(seen.init?.signal, controller.signal);
   assert.throws(() => createHttpToolRegistry({ baseUrl: "https://public.example.com", episodeId: "episode-001" }), /loopback/);
 });
+
