@@ -15,12 +15,21 @@ export function Nav() {
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
   useEffect(() => {
+    // While the menu sheet is open the page behind it does not scroll, and Escape closes it.
+    if (!open) return;
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.documentElement.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [open]);
+  useEffect(() => {
     const on = () => setScrolled(window.scrollY > 8);
     on(); window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
   }, []);
   return (
-    <header className="nav" data-scrolled={scrolled || open} data-open={open}>
+    <header className="nav" data-scrolled={scrolled || open} data-open={open} data-lenis-prevent={open || undefined}>
       <div className="wrap">
         <Link to="/" className="wordmark" aria-label="TrustBench, home"><span className="wordmark-mark" aria-hidden="true" />TrustBench</Link>
         <nav className="nav-links" aria-label="Main">

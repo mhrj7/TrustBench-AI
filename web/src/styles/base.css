@@ -59,10 +59,13 @@ code, .mono { font-family: var(--font-mono); font-size: var(--size-mono); font-w
 @media (max-width: 1180px) {
   .nav-links, .nav .btn { display: none; }
   .nav-toggle { display: inline-flex; align-items: center; }
-  .nav[data-open='true'] { background: var(--tone-1); height: auto; padding-bottom: 16px; }
-  .nav[data-open='true'] .wrap { flex-wrap: wrap; height: auto; min-height: var(--nav-h); }
-  .nav[data-open='true'] .nav-links { display: flex; flex-direction: column; gap: 0; width: 100%; margin: 0; }
-  .nav[data-open='true'] .nav-links a { padding: 14px 0; font-size: 20px; color: var(--ink); }
+  /* Open: a full-screen sheet under the bar. Only the mobile list is shown (the desktop list stays hidden), the bar keeps the
+     wordmark and Close on one row, and the sheet scrolls on its own when the links are taller than the screen. */
+  .nav[data-open='true'] { background: var(--tone-1); height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+  .nav[data-open='true'] .wrap { flex-wrap: wrap; align-content: flex-start; height: auto; min-height: var(--nav-h); }
+  .nav[data-open='true'] .wordmark, .nav[data-open='true'] .nav-toggle { height: var(--nav-h); }
+  .nav[data-open='true'] #mobile-nav { display: flex; flex-direction: column; gap: 0; width: 100%; margin: 0; padding-bottom: 24px; }
+  .nav[data-open='true'] #mobile-nav a { padding: 14px 0; font-size: 20px; color: var(--ink); border-top: 1px solid var(--tone-2); }
 }
 
 /* Buttons */

@@ -166,3 +166,16 @@ test('reduced motion: content is present without travel', async ({ browser }) =>
   await expect(page.locator('.morph-bars li').first()).toBeVisible();
   await ctx.close();
 });
+
+test('menu: on narrow screens it opens one list on an opaque sheet that fits the screen', async ({ page }, info) => {
+  test.skip(info.project.name === 'desktop', 'the menu button only exists below the collapse breakpoint');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const visibleLists = await page.locator('header .nav-links').evaluateAll((ns) => ns.filter((n) => getComputedStyle(n).display !== 'none').length);
+  expect(visibleLists).toBe(1); // the desktop list stays hidden: no duplicated links
+  const sheet = await page.locator('header.nav').boundingBox();
+  expect(sheet!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1); // fits the screen, scrolls inside if needed
+  await expect(page.getByRole('button', { name: 'Close' })).toBeInViewport();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#mobile-nav')).toHaveCount(0);
+});
