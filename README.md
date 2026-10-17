@@ -13,10 +13,12 @@ Requirements: Node.js 26.5.0 with npm 12.0.0 (`package.json` engines), [uv](http
 ```bash
 cp .env.example .env
 npm ci
-npm run setup:python
+npm run setup
 ```
 
-`setup:python` creates `.venv-tools` from the hash-pinned locks (`src/tools/requirements.lock`, `requirements/analysis.lock`).
+`setup` runs `setup:python`, which creates `.venv-tools` from the hash-pinned locks (`src/tools/requirements.lock`,
+`requirements/analysis.lock`), and `setup:web`, which installs the review site's locked dependencies (`web/package-lock.json`).
+The full `npm run verify` also runs the site's browser tests, which use an installed Google Chrome.
 Then the CLI (`bin/trustbench`, also `npm run trustbench -- <command>`), configured by `configs/cli/trustbench.yaml`:
 
 ```bash
