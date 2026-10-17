@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """TB-041: publish the constrained demo to a Hugging Face Space (Docker SDK, free CPU hardware).
 
-Run by the project owner, with their own Hugging Face token (never stored in the repository):
+Two ways. Without any token: --stage-only DIR --from-github OWNER/REPO writes a two-file Space (README and a Dockerfile
+that clones the public repository at the current commit), to paste into a Space created in the browser. Or with the owner's
+own Hugging Face token (never stored in the repository):
 
   HF_TOKEN=... uv run --with huggingface_hub==0.30.2 python scripts/deploy-hf-space.py --space <user>/<name> [--set-secrets]
 
@@ -52,12 +54,34 @@ def stage(dest: Path) -> str:
     return commit
 
 
+def space_from_github(dest: Path, repo: str, commit: str) -> None:
+    """A Space that holds only its README and a Dockerfile: the Dockerfile is Dockerfile.service with the local
+    'COPY . .' replaced by a clone of the public GitHub repository pinned to one commit, so no token or upload is needed
+    and the Space builds exactly that commit."""
+    dockerfile = (ROOT / 'Dockerfile.service').read_text()
+    copy = 'COPY . .'
+    assert dockerfile.count(copy) == 1 and 'EXPOSE 8080' in dockerfile
+    clone = (f'# Built from the public repository at one pinned commit (scripts/deploy-hf-space.py --from-github)\n'
+             f'RUN git clone https://github.com/{repo}.git . && git checkout --detach {commit} && rm -rf .git')
+    dockerfile = dockerfile.replace(copy, clone, 1).replace('EXPOSE 8080', f'ENV TRUSTBENCH_DEPLOY_PROFILE={PROFILE} TRUSTBENCH_DEPLOYED_COMMIT={commit}\nEXPOSE 8080', 1)
+    dest.mkdir(parents=True, exist_ok=False)
+    (dest / 'Dockerfile').write_text(dockerfile)
+    (dest / 'README.md').write_text(FRONT + f'# TrustBench live demo\n\nSource, method and results: https://github.com/{repo} (commit `{commit[:7]}`).\n'
+                                    'Runbook: docs/deployment-runbook.md in that repository.\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--space', required=True, help='<user or org>/<space name>')
     ap.add_argument('--set-secrets', action='store_true')
     ap.add_argument('--stage-only', help='write the staged tree to this directory and stop (no upload)')
+    ap.add_argument('--from-github', metavar='OWNER/REPO', help='with --stage-only: write a Space (README + Dockerfile) that builds from this public repository')
     a = ap.parse_args()
+    if a.stage_only and a.from_github:
+        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        space_from_github(Path(a.stage_only), a.from_github, commit)
+        print('Space files for', a.from_github, commit[:7], 'in', a.stage_only)
+        return
     if a.stage_only:
         out = Path(a.stage_only)
         out.mkdir(parents=True, exist_ok=False)

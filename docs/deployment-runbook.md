@@ -73,6 +73,13 @@ account or credentials, which this project never holds:
 
 5. Replace `<!-- Public link: added at deployment (TB-041). -->` in `README.md` with the URL.
 
+**Without a Hugging Face token** (how the public demo was set up): create the Space in the browser (Docker SDK, blank,
+free CPU, public), then add two files made by
+`python3 scripts/deploy-hf-space.py --space <user>/<space> --stage-only <dir> --from-github <owner>/<repo>`: a README with
+the Space metadata and a `Dockerfile` that is `Dockerfile.service` with `COPY . .` replaced by a clone of the public
+repository pinned to one commit. Add `NVIDIA_API_KEY` (and optionally `TRUSTBENCH_ADMIN_TOKEN`) under the Space's
+Settings → Variables and secrets. To update, regenerate the Dockerfile at the new commit and replace it in the Space.
+
 Space limits to know: a free Space sleeps after 48 hours without visits and wakes on the next visit (the first page load
 then waits for the container to start); its disk is ephemeral, so a restart clears sessions, runs and the day's budget
 record (the provider's own free-tier limits still apply); compose's read-only and capability settings are not available
