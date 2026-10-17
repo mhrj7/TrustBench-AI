@@ -74,10 +74,37 @@ docker run --rm --dns 1.1.1.1 --entrypoint sh trustbench-live:demo -c \
   ".venv-tools/bin/python scripts/check-deployment.py --url https://<machine>.<tailnet>.ts.net --live"
 ```
 
-To keep it up unattended (machine settings the owner sets): no sleep (System Settings → Energy), start up after a power
-failure, Docker Desktop "Start when you sign in", Tailscale as a login item. The container restarts itself
-(`restart: unless-stopped`). Availability is best effort: a power, network or OS-update outage takes the demo down, and the
-README says so.
+Checking it from a machine that is not the host: `.github/workflows/public-demo-check.yml` runs on GitHub's runners, a
+quick check every 6 hours (no runs, no quota) and, on demand, the full live check plus the browser path
+(`scripts/check-deployment-gui.mjs`). From the host itself the public relay route stopped answering ("hairpin"), while
+outside clients and the tailnet route work; host-side checks therefore use the tailnet route and say so in their evidence.
+
+### Restart behaviour
+
+| Event | What brings the demo back | Tested |
+| --- | --- | --- |
+| The server process crashes | `init: true` (a real PID 1) exits with it, `restart: unless-stopped` restarts the container | SIGKILL of the server: healthy again in 8 s |
+| Docker Desktop restarts | Docker restarts `unless-stopped` containers | quit and reopen: healthy 36 s after start |
+| The container is stopped, or Funnel is reset | the watchdog LaunchAgent (every 5 minutes, `deploy/install-watchdog.sh`) | both broken at once: repaired in 21 s |
+| Login after a reboot | Docker Desktop `AutoStart`, Tailscale as a login item, then the two rows above | not rebooted during testing |
+| Power failure | needs "Start up automatically after a power failure" (System Settings → Energy), set by the owner | — |
+
+`docker stop` is now clean (the server is exec'd, so it receives SIGTERM). The watchdog does not read the project drive
+(background jobs cannot read external volumes without a macOS privacy grant), so it is embedded in the LaunchAgent and
+logs to the system log as `trustbench-watchdog`. Availability is still best effort: a network outage or a machine that is
+off takes the demo down, and the README says so.
+
+### Keeping the host's files private
+
+- Docker Desktop's file sharing is limited to `/Volumes/MHRJ/TrustBench-AI` (setting `FilesharingDirectories`): a
+  container cannot mount the home folder, other folders on the drive or `/private/tmp` (tested; Docker refuses with "not
+  shared from the host"). The demo mounts only its two secret files and its own data volume.
+- The demo container runs read-only as uid 1000 with no capabilities; Funnel publishes only its port, nothing else on the
+  machine is reachable from the internet, and Funnel replaces any client-sent `X-Forwarded-For` (tested).
+- Docker's disk image lives on the project drive (`DataFolder` = `/Volumes/MHRJ/DockerData`), not the internal disk.
+- No personal name in the public address: the tailnet machine is named `trustbench`. Committed test reports carry
+  `hostname="redacted"` (root `conftest.py`). The earlier machine name remains in the public certificate-transparency log,
+  which cannot be edited.
 
 ## Hosting options (checked 2026-10-17)
 

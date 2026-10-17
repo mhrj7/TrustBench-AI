@@ -86,13 +86,83 @@
   }
  },
  "public_deployment": {
-  "status": "not deployed",
-  "blocked_on": [
-   "a public GitHub repository for the README link (none exists for this project yet: no git remote, no repository under the gh account)",
-   "a hosting account owned by the project owner (recommended: a Hugging Face Space, Docker SDK, free CPU) and its write token, set by the owner",
-   "the owner setting the Space secrets (scripts/deploy-hf-space.py --set-secrets, run by the owner)"
-  ],
-  "then": "scripts/check-deployment.py --url https://<user>-<space>.hf.space --live, and the README link"
+  "status": "public",
+  "url": "https://trustbench.taila273c6.ts.net",
+  "live_page": "https://trustbench.taila273c6.ts.net/live",
+  "host": "compose deployment (deploy/compose.yaml, public-demo profile) on the project owner's machine, published with Tailscale Funnel",
+  "image": "trustbench-live:demo built from git archive of the deployed commit; project key and operator token absent from the image filesystem; no personal strings in it",
+  "checks": {
+   "external_fetch": "a fetch from outside servers (not this machine) returned /api/health ok and /api/catalog with deploy_profile public-demo and all three modes available",
+   "over_public_relay_earlier_build": "20/20 with --live, run in a container resolving through 1.1.1.1 (requests via the Tailscale public relay), plus the browser path and the exhausted-budget degradation, before the rename",
+   "current_build_tailnet_route": {
+    "checker": {
+     "passed": 20,
+     "failed": 0,
+     "vantage": "this Mac over the tailnet route (same Tailscale TLS front end; the public relay hairpin from this Mac times out)"
+    },
+    "browser_path": {
+     "url": "https://trustbench.taila273c6.ts.net",
+     "vantage": "this Mac over the tailnet route",
+     "ok": true,
+     "runs": {
+      "instant": {
+       "seconds": 5,
+       "header": "Done \u00b7 gateway_capability \u00b7 scripted \u00b7 agentdojo important instructions \u00b7 2 paired runs \u00b7 key: none",
+       "valid": "2",
+       "invalid": "0"
+      },
+      "live_project_key": {
+       "seconds": 85,
+       "header": "Done \u00b7 gateway_directive_flow_v4 \u00b7 gpt-oss-20b \u00b7 agentdojo important instructions \u00b7 2 paired runs \u00b7 key: project",
+       "valid": "2",
+       "invalid": "0"
+      }
+     }
+    },
+    "exhausted_budget": {
+     "hosted_available": false,
+     "reason": "today's shared budget is used up",
+     "hosted_submit": 429,
+     "hosted_detail": "today's shared budget has 0 pairs left: use fewer cases, scripted mode or your own key",
+     "instant_available": true,
+     "own_key_available": true,
+     "instant_submit": 202
+    }
+   },
+   "readme_cli_command": {
+    "status": "done",
+    "mode": null,
+    "pairs": null,
+    "cases": null,
+    "model": null,
+    "valid": 2
+   },
+   "forwarded_client_address": "Funnel sets X-Forwarded-For to the visitor address and drops a client-supplied one (tested with a forged header)",
+   "from_github": "pending: .github/workflows/public-demo-check.yml runs once the commits are on GitHub"
+  },
+  "restart": {
+   "server_crash_recovery_s": 8,
+   "docker_restart_recovery_s": 36,
+   "watchdog_repair_s": 21,
+   "clean_stop": "SIGTERM reaches the server (exec); exit 143 immediately"
+  },
+  "host_privacy": {
+   "docker_file_sharing": [
+    "/Volumes/MHRJ/TrustBench-AI"
+   ],
+   "refused_mounts_tested": [
+    "home folder",
+    "Documents",
+    "/Volumes/MHRJ (outside the project)",
+    "/private/tmp"
+   ],
+   "docker_data_folder": "/Volumes/MHRJ/DockerData (24.5 GB moved off the internal disk; the old image is in the Trash)",
+   "tailnet_machine_name": "trustbench",
+   "junit_hostname": "redacted"
+  },
+  "owner_settings_unchanged": [
+   "Start up automatically after a power failure (System Settings, Energy)"
+  ]
  },
  "hosting_findings": {
   "checked_on": "2026-10-17",
