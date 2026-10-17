@@ -38,3 +38,17 @@ def test_every_claim_is_tested_or_labelled_untested_with_a_reason():
         assert set(cl['tested_by']) <= ids
         assert cl['tested_by'] or cl.get('untested_reason')
     assert {c['with'] for c in ab.AB['comparisons']} | {c['without'] for c in ab.AB['comparisons']} - {'baseline'} <= set(ab.AB['run']['arms_to_run']) | {ab.AB['run']['frozen_arm']['system']}
+
+
+def test_published_ablations_reproduce_from_the_hashed_reports():
+    import hashlib
+    out = json.loads((ROOT / ab.AB['outputs']['json']).read_text())
+    reps = ab.reports()
+    for system, arm in out['arms'].items():
+        assert hashlib.sha256((ROOT / arm['report']).read_bytes()).hexdigest() == arm['sha256']
+    for c in out['comparisons']:
+        for k, spec in ab.ENDPOINTS.items():
+            fresh = (ab.between(reps[c['with']][1], reps[c['without']][1], spec) if c['without'] != 'baseline' else None)
+            if fresh:
+                assert fresh['point'] == c['results'][k]['point'] and fresh['cluster_bootstrap95'] == c['results'][k]['cluster_bootstrap95']
+    assert {cl['claim'] for cl in out['claims']} == {cl['claim'] for cl in ab.AB['claims']}

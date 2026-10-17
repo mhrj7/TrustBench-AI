@@ -57,3 +57,11 @@ production isolation, durable auditing, or protection against all attacks.
 Run `npm run test:gateway` and `npm run test:provenance`. Tests include bypass
 attempts, episode/token tampering, revocation, permitted writes, all nine tool
 transports, missing labels and serialized/combined lineage.
+
+## Measured contribution of each layer (TB-036)
+
+`docs/ablations.md` (A-027, development data) reports what each layer adds. The tool allowlist with contract-scoped
+arguments carries the measured protection; strict schemas alone, exact-argument approval (contract scoping already binds
+the exact update arguments), sticky denials and the blocking flow check show no measurable security contribution on those
+fixtures, and the blocking flow check costs benign utility. Approval remains in the frozen design as defence in depth;
+it is not claimed as an independent protection.

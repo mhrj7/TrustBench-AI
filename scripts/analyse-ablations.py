@@ -12,7 +12,7 @@ A-025 gate run, checks that every arm ran with identical settings, and computes:
     either tested by a comparison or labelled untested with its reason.
 Writes reports/ablations.csv, evidence/tb036-ablations.json and docs/ablations.md."""
 import glob, hashlib, importlib.util, json, sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -83,7 +83,8 @@ def main():
         pairs = list(valid(r).values())
         e = {k: UN.endpoint(pairs, spec) for k, spec in ENDPOINTS.items()}
         arms[system] = {'report': path, 'sha256': hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), 'pairs': len(r['cases']), 'valid_pairs': len(pairs),
-                        'ablation': r.get('ablation'), 'endpoints': e, 'observed_response_models': r['model_revision']['observed_response_models']}
+                        'ablation': r.get('ablation'), 'endpoints': e,
+                        'gateway_decisions': dict(Counter(d['decision'] for c in r['cases'] for d in c['defended']['policy_decisions'])), 'observed_response_models': r['model_revision']['observed_response_models']}
         for k, x in e.items():
             rows.append({'kind': 'arm', 'id': system, 'endpoint': k, 'with': system, 'without': 'its paired baseline', 'baseline_rate': x['baseline']['rate'],
                          'defended_rate': x['defended']['rate'], 'numerator_defended': x['defended']['numerator'], 'denominator': x['defended']['denominator'],
@@ -98,9 +99,13 @@ def main():
                 res[k] = {'matched_units': p['pairs'], 'clusters': p['clusters'], 'point': p['paired_difference']['point'], 'cluster_bootstrap95': p['paired_difference']['cluster_bootstrap95']}
             else:
                 res[k] = between(reps[c['with']][1], reps[c['without']][1], spec)
+        if c['without'] != 'baseline':
+            a, b = valid(reps[c['with']][1]), valid(reps[c['without']][1])
+            trace = lambda x: json.dumps([(t['tool'], t['args']) for t in x['defended']['tool_trace']])
+            res['identical_defended_trajectories'] = {'units': len(set(a) & set(b)), 'identical': sum(trace(a[u]) == trace(b[u]) for u in set(a) & set(b))}
         sec, cost = reading(res['unsafe_committed_effect'], res['benign_utility_pass'])
         comps.append({**c, 'results': res, 'security_reading': sec, 'utility_reading': cost})
-        for k, x in res.items():
+        for k, x in ((k, v) for k, v in res.items() if k in ENDPOINTS):
             rows.append({'kind': 'comparison', 'id': c['id'], 'endpoint': k, 'with': c['with'], 'without': c['without'], 'baseline_rate': None, 'defended_rate': None,
                          'numerator_defended': None, 'denominator': x['matched_units'], 'difference': x['point'], 'ci95_low': (x['cluster_bootstrap95'] or [None, None])[0],
                          'ci95_high': (x['cluster_bootstrap95'] or [None, None])[1], 'clusters': x['clusters'], 'reading': sec if k == 'unsafe_committed_effect' else cost})
@@ -140,8 +145,14 @@ def write_doc(out):
         u, b = c['results']['unsafe_committed_effect'], c['results']['benign_utility_pass']
         L.append(f"| {c['component']} | {c['with']} | {c['without']} | {pp(u['point'])} | {ci(u['cluster_bootstrap95'])} | {pp(b['point'])} | {ci(b['cluster_bootstrap95'])} | "
                  f"{c['security_reading']}; {c['utility_reading']} |")
-    L += ['', 'Between-arm differences compare the defended arms of two separate runs on the same units and seeds; each run also has its own baseline, so baseline drift '
-          'between runs is visible in the arms table.', '', '## Claims inventory', '', '| Claim | Source | Status | Verdict or reason |', '| --- | --- | --- | --- |']
+    base = [a['endpoints']['unsafe_committed_effect']['baseline']['rate'] for a in out['arms'].values()]
+    L += ['', 'Between-arm differences compare the defended arms of two separate runs on the same units and seeds; each run also has its own baseline. The same baseline '
+          f"configuration ranged from {min(base) * 100:.1f}% to {max(base) * 100:.1f}% unsafe across these runs, so run-to-run variation is large relative to some component differences.", '',
+          '## Layer activity checks', '', '| Arm | Gateway decisions on the defended arm |', '| --- | --- |']
+    L += [f"| {s} | {', '.join(f'{k} {v}' for k, v in sorted(a['gateway_decisions'].items())) or 'none (direct transport)'} |" for s, a in out['arms'].items()]
+    L += ['', '| Comparison | Units with identical defended trajectories |', '| --- | --- |']
+    L += [f"| {c['id']} | {c['results']['identical_defended_trajectories']['identical']}/{c['results']['identical_defended_trajectories']['units']} |" for c in out['comparisons'] if 'identical_defended_trajectories' in c['results']]
+    L += ['', 'A zero difference with differing trajectories means the component changed behaviour but not committed effects on these fixtures.', '', '## Claims inventory', '', '| Claim | Source | Status | Verdict or reason |', '| --- | --- | --- | --- |']
     for cl in out['claims']:
         L.append(f"| {cl['claim']} | {cl['source']} | {cl['status']} | {cl['verdict']} |")
     L += ['', 'A null or negative component result is reported as it is; no claim in the documentation may rest on a component this table does not credit, unless it is labelled untested.', '']
