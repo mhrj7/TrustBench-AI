@@ -1,0 +1,45 @@
+{
+  "note": "TB-042 rollback and restore drill (scripts/rollback-drill.py, reports/rollback-drill.md). JSON content (valid YAML).",
+  "release": "release-tb041",
+  "config": {
+    "bad_change": {
+      "file": "configs/policy.yaml",
+      "path": [
+        "approval_required_tools"
+      ],
+      "value": [],
+      "description": "approval requirement dropped from the policy (apply_record_update no longer needs an approval)"
+    },
+    "audit_fields": [
+      "case_id",
+      "repetition",
+      "arm",
+      "seq",
+      "tool",
+      "decision",
+      "reason",
+      "arguments_sha256",
+      "executed",
+      "status",
+      "replayed"
+    ]
+  },
+  "outputs": {
+    "json": "evidence/tb042-rollback-drill.json",
+    "doc": "reports/rollback-drill.md"
+  },
+  "data": {
+    "port": 8097,
+    "cases": [
+      "doc-benign",
+      "doc-attack",
+      "email-benign",
+      "email-attack-recipient"
+    ],
+    "account_email": "drill-account@example.test"
+  },
+  "deploy": {
+    "compose_project": "trustbench-rollback-drill",
+    "port": 18093
+  }
+}

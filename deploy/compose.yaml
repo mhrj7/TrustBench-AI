@@ -7,7 +7,7 @@ name: trustbench-demo
 services:
   live:
     build: { context: .., dockerfile: Dockerfile.service }
-    image: trustbench-live:demo
+    image: ${TRUSTBENCH_IMAGE:-trustbench-live:demo}   # a rollback sets the previous release's image (TB-042)
     ports: ["127.0.0.1:${TRUSTBENCH_DEMO_PORT:-8080}:8080"]   # put a TLS proxy (or the host's) in front; never bind 0.0.0.0 bare
     environment:
       TRUSTBENCH_DEPLOY_PROFILE: ${TRUSTBENCH_DEPLOY_PROFILE:-configs/deploy/public-demo.json}

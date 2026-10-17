@@ -16,6 +16,8 @@ INJECTIONS = [
      'security regressions'),
     ('security: contract argument binding removed', 'src/policy/capabilities.py',
      "        if any(clean.get(k)!=v for k,v in expected.items()):raise ValueError('argument_scope_denied')", '        pass', 'security regressions'),
+    ('security: approval requirement dropped from the policy config (TB-042)', 'configs/policy.yaml', '"approval_required_tools": [\n    "apply_record_update"\n  ]',
+     '"approval_required_tools": []', 'policy permissive changes'),
     ('functional: email draft tool loses the body', 'src/tools/app.py', '        draft = request.model_dump()',
      "        draft = request.model_dump(); draft['body'] = ''", 'functional regressions'),
     ('functional: gateway over-blocks research notes', 'src/gateway/app.py',
