@@ -95,6 +95,7 @@ def main():
     ap.add_argument('--url', required=True)
     ap.add_argument('--live', action='store_true', help='also run hosted and own-key checks (uses the deployment\'s free-tier quota)')
     ap.add_argument('--exhaust', action='store_true', help='staging only: spend the (tiny) hosted budget and check the degradation')
+    ap.add_argument('--quick', action='store_true', help='health, pages, headers, catalog and authentication only: no runs (for scheduled monitoring)')
     ap.add_argument('--out')
     a = ap.parse_args()
     site, c = Site(a.url), Checks()
@@ -126,6 +127,9 @@ def main():
         c.check(f'operator endpoint refuses {label}', code in (401, 403, 404), {'status': code, 'note': 'answers 404 by design: it does not reveal that the endpoint exists'})
     code, _, _ = site.call('POST', '/api/runs', b'{"pad": "' + b'x' * 70000 + b'"}', token=site.session())
     c.check('oversize request refused', code == 413, {'status': code})
+
+    if a.quick:
+        return finish(a, c)
 
     # instant run from the API (the website's path)
     token = site.session()
@@ -201,7 +205,12 @@ def main():
             {'client_limit_per_hour': limit, 'accepted_before_429': codes.count(202), 'limit_that_applied': detail, 'probe_runs_deleted': len(deleted),
              'note': 'the stricter of the per-client and per-session limits applies first'})
 
+    finish(a, c)
+
+
+def finish(a, c):
     out = {'task_id': 'TB-041', 'url': a.url, 'checked_at': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'live': a.live, 'exhaust': a.exhaust,
+           'quick': a.quick, 'vantage': os.environ.get('TRUSTBENCH_CHECK_VANTAGE', 'unspecified'),
            'passed': sum(r['passed'] for r in c.rows), 'failed': sum(not r['passed'] for r in c.rows), 'checks': c.rows}
     if a.out:
         Path(a.out).write_text(json.dumps(out, indent=1) + '\n')

@@ -93,5 +93,31 @@
    "the owner setting the Space secrets (scripts/deploy-hf-space.py --set-secrets, run by the owner)"
   ],
   "then": "scripts/check-deployment.py --url https://<user>-<space>.hf.space --live, and the README link"
+ },
+ "hosting_findings": {
+  "checked_on": "2026-10-17",
+  "github": {
+   "repository": "https://github.com/mhrj7/TrustBench-AI",
+   "visibility": "public",
+   "pushed_commit": "6c6a471",
+   "history_scan": "no API key or token pattern, no .env value and no file over 20 MB in 106 commits"
+  },
+  "hugging_face_spaces": "The new-Space page (signed in to the project owner's account) states that Gradio and Docker Spaces require a paid plan (PRO); only static Spaces are free, and a static Space cannot run the live-test service. The Space built from the public repository (scripts/deploy-hf-space.py --from-github) was test-built locally: image trustbench-space-gh:6c6a471 builds, carries the pinned commit and no .git.",
+  "small_free_container (512 MB, 0.1 vCPU, as Render free)": {
+   "how": "the Space image run locally with --memory 512m --cpus 0.1",
+   "default_server_start_wait_20s": "every run fails: the gateway server does not start within 20 s",
+   "with TRUSTBENCH_SERVER_START_TIMEOUT_MS=300000": {
+    "instant_run_2_pairs_s": 248.3,
+    "live_run_2_pairs_s": 466.3,
+    "live_run_valid_pairs": 1,
+    "live_run_invalid": "timeout (model call starved of CPU)",
+    "peak_memory_mib": 443.5
+   },
+   "reference_2_vcpu": {
+    "instant_run_2_pairs_s": 4.0,
+    "live_run_2_pairs_s": 72.4
+   }
+  },
+  "vercel": "Serves the static site and published results for free, but cannot run the live-test service (no containers or long-running processes; runs take minutes and start child servers)."
  }
 }

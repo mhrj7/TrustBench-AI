@@ -1,0 +1,68 @@
+# TB-041: check the public demo from outside (GitHub's runners), as a reviewer reaches it.
+# Every 6 hours: a quick check (health, pages, headers, catalog, authentication; no runs, no quota used).
+# On demand: the full check with live runs on the project key, plus the browser path (instant and live runs in Chrome).
+# The URL comes from configs/deploy/public-demo.json (public_url).
+name: public-demo-check
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Full check with live runs and the browser path (uses the demo's shared free-tier quota)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-demo-check
+  cancel-in-progress: false
+
+env:
+  TRUSTBENCH_STORAGE_ROOT: ${{ github.workspace }}/..
+  npm_config_cache: ${{ github.workspace }}/../.cache/npm
+  TRUSTBENCH_CHECK_VANTAGE: github-actions ubuntu-24.04
+
+jobs:
+  quick:
+    if: github.event_name == 'schedule' || !inputs.live
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Quick check of the public demo
+        run: |
+          url=$(python3 -c "import json;print(json.load(open('configs/deploy/public-demo.json'))['public_url'])")
+          python3 scripts/check-deployment.py --url "$url" --quick --out public-demo-quick.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: public-demo-quick, path: public-demo-quick.json, if-no-files-found: warn }
+
+  full:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 26.5.0 }
+      - uses: astral-sh/setup-uv@v6
+        with: { version: 0.11.28 }
+      - run: npm install -g npm@12.0.0
+      - run: sh scripts/ci.sh setup
+      - name: Full check with live runs (API and CLI)
+        run: |
+          url=$(python3 -c "import json;print(json.load(open('configs/deploy/public-demo.json'))['public_url'])")
+          mkdir -p out
+          .venv-tools/bin/python scripts/check-deployment.py --url "$url" --live --out out/check-public-url-external.json
+      - name: Browser path (instant and live runs in Chrome)
+        if: always()
+        run: |
+          url=$(python3 -c "import json;print(json.load(open('configs/deploy/public-demo.json'))['public_url'])")
+          node scripts/check-deployment-gui.mjs "$url" out | tee out/check-public-gui-external.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: public-demo-full, path: out/, if-no-files-found: warn }

@@ -12,7 +12,10 @@ report. The same runs work from a terminal with `sh bin/trustbench remote run --
 in memory for one run; sealed holdouts are never offered. Details and limits: [`docs/live-service.md`](docs/live-service.md); deploying
 and checking the public demo: [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
-<!-- Public link: added at deployment (TB-041). -->
+**Live demo: <https://trustbench.taila273c6.ts.net/live>**. Open it and press Run: instant runs need nothing, live runs use the
+project's free-tier key (shared daily cap), or bring your own free-tier key. Same from a terminal:
+`sh bin/trustbench remote run --url https://trustbench.taila273c6.ts.net --mode hosted --wait`. Self-hosted on the author's
+machine behind Tailscale Funnel, so it is best effort: if it is down, every published result is in this repository.
 
 ## Benchmark quickstart (TB-037)
 

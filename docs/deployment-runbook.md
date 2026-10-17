@@ -4,9 +4,10 @@ The public demo is the website plus the live-test service (`Dockerfile.service`)
 published results and start instant runs, live runs on the project's free-tier key, or live runs on their own key. This page
 says how to deploy it, what limits it runs under, how to check a deployment, and how to operate it.
 
-Status: verified in staging (local compose, and the exact image a Space builds). **Not yet at a public URL:** that needs a
-public GitHub repository for the README link and a hosting account, which only the project owner can create (see
-"Going public").
+Status: **public at <https://trustbench.taila273c6.ts.net>** (since 2026-10-17): the compose deployment on the author's
+Mac mini, published with Tailscale Funnel. Checked from outside over the public route: `scripts/check-deployment.py --live`
+20 of 20, the browser path (instant and live runs), and the exhausted-budget degradation (`evidence/tb041-deployment.json`).
+Hosting choices that were tried and why they were not used are under "Hosting options".
 
 ## What is exposed, and what is not
 
@@ -48,9 +49,50 @@ writable. It binds `127.0.0.1:8080`: put the host's TLS proxy in front (`TRUSTBE
 address comes from `X-Forwarded-For`). Without the key file the site still serves the results, instant and own-key runs,
 and the hosted mode says it has no key.
 
-## Going public: a Hugging Face Space (free, recommended)
+## How the public demo is hosted: a Mac with Tailscale Funnel
 
-A Docker Space on the free CPU hardware (2 vCPU, 16 GB) runs the image unchanged, serves it over HTTPS at
+The compose deployment above runs on the host machine; Tailscale Funnel gives it a public HTTPS name without opening any
+port on the router or revealing the home address. Funnel terminates TLS at Tailscale's edge and forwards to the container's
+loopback port; it replaces any client-sent `X-Forwarded-For` with the visitor's real address (tested), so the per-client
+limits see real clients.
+
+```bash
+TRUSTBENCH_DEMO_PORT=8088 docker compose -f deploy/compose.yaml up -d
+tailscale funnel --bg 8088          # https://<machine>.<tailnet>.ts.net -> 127.0.0.1:8088; persists across restarts
+tailscale funnel status
+tailscale funnel --https=443 off    # take the demo offline
+```
+
+One-time tailnet setup (admin console): DNS → HTTPS Certificates → Enable (the machine name is then published in the public
+certificate log), and Access controls → "Add Funnel to policy" (a `nodeAttrs` entry granting `funnel`).
+
+Checking it from outside: this machine resolves its own name to the tailnet address, so run the checker in a container with
+public DNS, which sends every request through Tailscale's public relay:
+
+```bash
+docker run --rm --dns 1.1.1.1 --entrypoint sh trustbench-live:demo -c \
+  ".venv-tools/bin/python scripts/check-deployment.py --url https://<machine>.<tailnet>.ts.net --live"
+```
+
+To keep it up unattended (machine settings the owner sets): no sleep (System Settings → Energy), start up after a power
+failure, Docker Desktop "Start when you sign in", Tailscale as a login item. The container restarts itself
+(`restart: unless-stopped`). Availability is best effort: a power, network or OS-update outage takes the demo down, and the
+README says so.
+
+## Hosting options (checked 2026-10-17)
+
+| Option | Result |
+| --- | --- |
+| Mac + Tailscale Funnel | **Used.** Free, 2 CPUs and 3 GB as capped by compose, stable HTTPS name. Depends on the machine staying on. |
+| Hugging Face Space | Docker and Gradio Spaces now need the paid PRO plan; only static Spaces are free. Works with `scripts/deploy-hf-space.py` if PRO is bought. |
+| Oracle Cloud Always Free (Ampere A1) | "Out of capacity" for A1 in the account's home region (Hyderabad, one availability domain) on five attempts. |
+| Small free container tiers (512 MB, 0.1 vCPU) | Measured unusable: instant run 248 s, live run 466 s with a pair lost to a timeout. |
+| Google Cloud Run | Fits (instance-based billing, scale to zero), needs a billing account; state resets when it scales to zero. |
+| Vercel | Static site only; cannot run the live-test service. |
+
+## Alternative: a Hugging Face Space (needs PRO)
+
+A Docker Space (PRO plan; 2 vCPU, 16 GB) runs the image unchanged, serves it over HTTPS at
 `https://<user>-<space>.hf.space`, and keeps the key in its secret store. The owner does these steps; each needs their own
 account or credentials, which this project never holds:
 

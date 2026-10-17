@@ -11,7 +11,7 @@ revocable share token, or to the operator; owners can delete a run or their whol
 deletes expired runs and sessions. Secrets come from src/service/secrets.py, which also redacts them from logs.
 
 Run locally:  .venv-tools/bin/python -m uvicorn src.service.app:app --port 8080"""
-import importlib.util, json, os, queue, re, secrets, shutil, sqlite3, subprocess, sys, threading, time
+import importlib.util, itertools, json, os, queue, re, secrets, shutil, sqlite3, subprocess, sys, threading, time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,7 +68,7 @@ def apply_profile(cfg: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any
         if over.pop('enabled', True) is False:
             out['modes'][mode]['disabled'] = True
         tighten(out['modes'][mode], over, f'modes.{mode}.')
-    tighten(out, {k: v for k, v in profile.items() if k not in ('note', 'name', 'modes')}, '')
+    tighten(out, {k: v for k, v in profile.items() if k not in ('note', 'name', 'modes', 'public_url')}, '')
     out['deploy_profile'] = profile.get('name')
     return out
 
@@ -236,7 +236,16 @@ class Service:
         if rendering not in [r['id'] for r in MATRIX['renderings']]:
             raise HTTPException(400, 'unknown rendering')
         by_id = {c['case_id']: c for c in SUITE['cases']}
-        cases = req.cases or [c['case_id'] for c in SUITE['cases'] if not (spec['live'] and c.get('scripted_only'))]
+        offered = [c for c in SUITE['cases'] if not (spec['live'] and c.get('scripted_only'))]
+        if req.cases:
+            cases = req.cases
+        else:
+            # No cases named: as many as the mode allows per run, alternating benign and attack in suite order, so the
+            # default run always fits the limits and always measures both utility and security (TB-041).
+            fit = max(1, spec['max_pairs_per_run'] // max(1, req.repetitions))
+            kinds = [[c['case_id'] for c in offered if c['kind'] == k] for k in ('benign', 'attack')]
+            interleaved = [cid for pair in itertools.zip_longest(*kinds) for cid in pair if cid]
+            cases = interleaved[:fit]
         unknown = [c for c in cases if c not in by_id or (spec['live'] and by_id[c].get('scripted_only'))]
         if unknown or len(set(cases)) != len(cases):
             raise HTTPException(400, f'cases not offered in this mode: {unknown[:5]}' if unknown else 'duplicate cases')
@@ -248,9 +257,11 @@ class Service:
         model = None
         if spec['live']:
             models = {m['id']: m for m in self.models(req.mode)}
-            if req.model not in models:
+            # No model named: the study's frozen model when this mode offers it (TB-041), else the mode's first model.
+            chosen = req.model or (HC['model'] if HC['model'] in models else next(iter(models), None))
+            if chosen not in models:
                 raise HTTPException(400, f"model must be one of {', '.join(models)}")
-            model = models[req.model]
+            model = models[chosen]
             if req.mode == 'own_key':
                 if not req.api_key or not re.fullmatch(spec['key_pattern'], req.api_key):
                     raise HTTPException(400, 'own_key mode needs a valid-looking provider key in api_key')

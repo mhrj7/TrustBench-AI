@@ -187,8 +187,11 @@ const attackInfo = JSON.parse(await readFile(`${fixturesPath}.attack-info.json`,
 const fixtures = new Map((await readFile(fixturesPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line)).map((row) => [row.fixture_id, row]));
 
 const freePort = () => new Promise((resolve) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
+// How long a gateway or tool server may take to start: 20 s by default; TRUSTBENCH_SERVER_START_TIMEOUT_MS raises it on
+// small hosts (a 0.1-vCPU container needs far longer to start Python).
+const serverStartPolls = Math.ceil(Number(process.env.TRUSTBENCH_SERVER_START_TIMEOUT_MS ?? 20000) / 200);
 async function waitFor(port) {
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < serverStartPolls; i++) {
     try { await fetch(`http://127.0.0.1:${port}/`); return; } catch { await new Promise((r) => setTimeout(r, 200)); }
   }
   throw new Error(`server on ${port} did not start`);

@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const docker = process.env.DOCKER_BIN || "/Users/mohitraj/.docker/bin/docker";
+const docker = process.env.DOCKER_BIN || "docker"; // from PATH unless DOCKER_BIN names one
 const image = "trustbench-tools:tb014";
 const name = `trustbench-tb014-${process.pid}`;
 const run = (command, args, options = {}) => {

@@ -63,7 +63,8 @@ def test_requests_outside_the_offer_are_rejected(client):
         {'mode': 'scripted', 'system': 'gateway_directive_flow_v4'},  # model-based defense needs a live mode
         {'mode': 'scripted', 'system': 'gateway_capability', 'cases': ['holdout-tb-ben-doc-005']},  # sealed / unknown
         {'mode': 'scripted', 'system': 'gateway_capability', 'repetitions': 9},
-        {'mode': 'hosted', 'system': 'gateway_capability', 'model': 'nvidia:openai/gpt-oss-20b'},  # 16 cases > hosted cap
+        {'mode': 'hosted', 'system': 'gateway_capability', 'model': 'nvidia:openai/gpt-oss-20b',  # more cases named than the hosted cap
+         'cases': [c['case_id'] for c in json.loads((ROOT / CFG['suite']).read_text())['cases'] if not c.get('scripted_only')][:CFG['modes']['hosted']['max_pairs_per_run'] + 1]},
         {'mode': 'own_key', 'system': 'gateway_capability', 'model': 'nvidia:openai/gpt-oss-20b', 'cases': ['doc-benign']},  # no key
         {'mode': 'own_key', 'system': 'gateway_capability', 'model': 'ollama:qwen3.5:9b', 'cases': ['doc-benign'], 'api_key': VISITOR_KEY},
         {'mode': 'scripted', 'system': 'gateway_capability', 'agent': 'langgraph_http'},  # planned, not available yet
@@ -148,3 +149,21 @@ def test_run_ids_are_unguessable_and_safe_as_cli_arguments(tmp_path):
     svc = Service(data_dir=tmp_path, start_workers=False)
     ids = [svc.submit(RunRequest(mode='scripted', system='gateway_capability', cases=['doc-benign']), f'c{i}', f'o{i}')['id'] for i in range(20)]
     assert all(len(i) == 24 and not i.startswith('-') for i in ids) and len(set(ids)) == 20
+
+
+def test_a_run_without_named_cases_fits_the_mode_limit_and_mixes_benign_and_attack(tmp_path, monkeypatch):
+    monkeypatch.setattr(svc_mod, 'env_value', lambda name: 'server-key-not-real-0000' if name else None)
+    svc = Service(data_dir=tmp_path, start_workers=False)
+    kinds = {c['case_id']: c['kind'] for c in json.loads((ROOT / CFG['suite']).read_text())['cases']}
+    for mode, extra in (('hosted', {'model': 'nvidia:openai/gpt-oss-20b'}), ('scripted', {})):
+        job = svc.submit(RunRequest(mode=mode, system='gateway_capability', **extra), 'c-' + mode, 'o-' + mode)
+        assert 0 < job['pairs'] <= CFG['modes'][mode]['max_pairs_per_run']
+        assert {kinds[c] for c in job['cases']} == {'benign', 'attack'}
+
+
+def test_a_live_run_without_a_model_uses_the_frozen_model(tmp_path, monkeypatch):
+    from src.service.app import HC
+    monkeypatch.setattr(svc_mod, 'env_value', lambda name: 'server-key-not-real-0000' if name else None)
+    svc = Service(data_dir=tmp_path, start_workers=False)
+    job = svc.submit(RunRequest(mode='hosted', system='gateway_capability'), 'c', 'o')
+    assert job['model']['id'] == HC['model']
