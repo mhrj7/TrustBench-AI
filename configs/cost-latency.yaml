@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-035",
+  "note": "TB-035 latency and operating cost from the TB-027 trace exporter (agent.run and model.call spans) of the confirmatory workloads. The cost ledger has one row per model-call attempt (failed attempts included), priced from the frozen budget file's pricing block. Latency is compared only between runs at the same measured concurrency. JSON content (valid YAML).",
+  "workloads": {
+    "holdout1": "evidence/tb032-holdout-run.json",
+    "holdout2": "evidence/tb032-holdout2-run.json"
+  },
+  "concurrency": {
+    "definition": "time-weighted mean number of other agent runs of the same workload in progress during the run (other lanes; the two arms of a pair run one after the other in one lane), rounded to the nearest integer",
+    "orchestrator_lanes_configured": "scripts/run-holdout.mjs --lanes (default 3)"
+  },
+  "success": {
+    "benign": "utility_pass",
+    "attack": "security_pass and utility_pass"
+  },
+  "percentiles": [50, 95],
+  "outputs": {
+    "csv": "reports/cost-latency.csv",
+    "ledger": "reports/cost-ledger.csv",
+    "json": "evidence/tb035-cost-latency.json",
+    "doc": "docs/cost-latency.md"
+  }
+}

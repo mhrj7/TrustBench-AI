@@ -1,0 +1,432 @@
+{
+ "task_id": "TB-035",
+ "generated_at": "2026-10-17T04:26:30+00:00",
+ "settings": {
+  "concurrency": {
+   "definition": "time-weighted mean number of other agent runs of the same workload in progress during the run (other lanes; the two arms of a pair run one after the other in one lane), rounded to the nearest integer",
+   "orchestrator_lanes_configured": "scripts/run-holdout.mjs --lanes (default 3)",
+   "observed": {
+    "holdout1": {
+     "record": "evidence/tb032-holdout-run.json",
+     "runs": 300,
+     "model_call_attempts": 1406,
+     "concurrency_levels_observed": [
+      0,
+      1,
+      2
+     ],
+     "max_concurrent_runs": 3,
+     "pairs": 150
+    },
+    "holdout2": {
+     "record": "evidence/tb032-holdout2-run.json",
+     "runs": 480,
+     "model_call_attempts": 2198,
+     "concurrency_levels_observed": [
+      0,
+      1,
+      2
+     ],
+     "max_concurrent_runs": 3,
+     "pairs": 240
+    }
+   }
+  },
+  "provider_price": {
+   "provider": "nvidia",
+   "service_tier": "free",
+   "pricing_model_id": "nvidia-hosted-zero-cost (exact model ID is recorded on every model response)",
+   "input_usd_per_million_tokens": 0,
+   "output_usd_per_million_tokens": 0,
+   "verified_at": "2026-10-15T00:00:00.000Z",
+   "source_url": "https://build.nvidia.com/models"
+  },
+  "retry": {
+   "max_attempts_per_call": 2,
+   "attempt_timeout_ms": 20000,
+   "backoff": {
+    "base_ms": 250,
+    "factor": 2,
+    "max_ms": 4000,
+    "jitter": "full"
+   },
+   "transient_http_status": [
+    408,
+    429,
+    502,
+    503,
+    504
+   ],
+   "model_retry_provider_codes": [
+    "rate_limit",
+    "timeout",
+    "server",
+    "network"
+   ],
+   "budget_max_retries": 3,
+   "source": "configs/frozen/recovery.yaml + configs/frozen/reliability-override.json"
+  },
+  "rate_and_limits": {
+   "min_interval_ms": 1000,
+   "temperature": 0.3,
+   "run_timeout_ms": 240000,
+   "budget_limits": {
+    "max_model_calls": 6,
+    "max_tool_calls": 8,
+    "max_input_tokens": 30000,
+    "max_output_tokens": 4000,
+    "max_retries": 3,
+    "max_elapsed_ms": 240000,
+    "max_cost_microusd": 10000
+   }
+  },
+  "model": "nvidia:openai/gpt-oss-20b",
+  "system": "gateway_directive_flow_v4"
+ },
+ "latency_comparisons": [
+  {
+   "workload": "holdout1",
+   "unit": "agentdojo_important_instructions",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 24775.5,
+   "elapsed_difference_median_ms": 14062.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    143.2,
+    57550.0
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "agentdojo_important_instructions",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 18496.5,
+   "elapsed_difference_median_ms": 8350.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    14602.2,
+    22393.8
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "agentdojo_injecagent",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 25148.3,
+   "elapsed_difference_median_ms": 8537.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    -15499.8,
+    59650.0
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "agentdojo_injecagent",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 16725.9,
+   "elapsed_difference_median_ms": 12978.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    6688.4,
+    24977.4
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "as_authored",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 20651.7,
+   "elapsed_difference_median_ms": 9545.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    8636.6,
+    37056.4
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "as_authored",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 15,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 22457.9,
+   "elapsed_difference_median_ms": 6465.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    14209.4,
+    33642.2
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "stripped",
+   "kind": "attack",
+   "concurrency_level": 1,
+   "matched_pairs": 13,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 22009.7,
+   "elapsed_difference_median_ms": 29563.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    6440.25,
+    31934.5
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "stripped",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 2,
+   "clusters": 2,
+   "elapsed_difference_mean_ms": 23935.5,
+   "elapsed_difference_median_ms": 23935.5,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    7916.0,
+    39955.0
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "stripped",
+   "kind": "benign",
+   "concurrency_level": 1,
+   "matched_pairs": 13,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 9997.9,
+   "elapsed_difference_median_ms": 7261.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    4438.75,
+    15474.75
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "stripped",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 1,
+   "clusters": 1,
+   "elapsed_difference_mean_ms": 2743.0,
+   "elapsed_difference_median_ms": 2743.0,
+   "elapsed_difference_mean_cluster_bootstrap95": null
+  },
+  {
+   "workload": "holdout1",
+   "unit": "stripped",
+   "kind": "benign",
+   "concurrency_level": "arms differ",
+   "matched_pairs": 0,
+   "excluded_pairs": 1,
+   "note": "Arms ran at different concurrency; excluded from latency comparison (TB-035 risk)."
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 0,
+   "matched_pairs": 2,
+   "clusters": 2,
+   "elapsed_difference_mean_ms": 238.0,
+   "elapsed_difference_median_ms": 238.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    -28704.0,
+    29180.0
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 1,
+   "matched_pairs": 10,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 17511.0,
+   "elapsed_difference_median_ms": 10035.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    6676.0,
+    24137.3333
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 1,
+   "clusters": 1,
+   "elapsed_difference_mean_ms": -12772.0,
+   "elapsed_difference_median_ms": -12772.0,
+   "elapsed_difference_mean_cluster_bootstrap95": null
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": "arms differ",
+   "matched_pairs": 0,
+   "excluded_pairs": 2,
+   "note": "Arms ran at different concurrency; excluded from latency comparison (TB-035 risk)."
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "benign",
+   "concurrency_level": 0,
+   "matched_pairs": 1,
+   "clusters": 1,
+   "elapsed_difference_mean_ms": -155656.0,
+   "elapsed_difference_median_ms": -155656.0,
+   "elapsed_difference_mean_cluster_bootstrap95": null
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "benign",
+   "concurrency_level": 1,
+   "matched_pairs": 13,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 6325.5,
+   "elapsed_difference_median_ms": 4959.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    3381.4,
+    9939.4
+   ]
+  },
+  {
+   "workload": "holdout1",
+   "unit": "trusted_user_control",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 1,
+   "clusters": 1,
+   "elapsed_difference_mean_ms": 5064.0,
+   "elapsed_difference_median_ms": 5064.0,
+   "elapsed_difference_mean_cluster_bootstrap95": null
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/agentdojo_important_instructions",
+   "kind": "attack",
+   "concurrency_level": 1,
+   "matched_pairs": 3,
+   "clusters": 3,
+   "elapsed_difference_mean_ms": 7316.7,
+   "elapsed_difference_median_ms": 1660.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    -15475.0,
+    35765.0
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/agentdojo_important_instructions",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 57,
+   "clusters": 12,
+   "elapsed_difference_mean_ms": 23881.1,
+   "elapsed_difference_median_ms": 14715.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    9670.1648,
+    39029.9886
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/as_authored",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 60,
+   "clusters": 12,
+   "elapsed_difference_mean_ms": 20079.3,
+   "elapsed_difference_median_ms": 18545.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    3714.1442,
+    35682.6417
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 0,
+   "matched_pairs": 50,
+   "clusters": 12,
+   "elapsed_difference_mean_ms": 16929.7,
+   "elapsed_difference_median_ms": 13535.5,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    7354.9282,
+    26730.2065
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 1,
+   "matched_pairs": 2,
+   "clusters": 2,
+   "elapsed_difference_mean_ms": 11273.5,
+   "elapsed_difference_median_ms": 11273.5,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    10266.0,
+    12281.0
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": 2,
+   "matched_pairs": 7,
+   "clusters": 6,
+   "elapsed_difference_mean_ms": 14748.7,
+   "elapsed_difference_median_ms": 19586.0,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    1073.875,
+    27139.8571
+   ]
+  },
+  {
+   "workload": "holdout2",
+   "unit": "attack/trusted_user_control",
+   "kind": "attack",
+   "concurrency_level": "arms differ",
+   "matched_pairs": 0,
+   "excluded_pairs": 1,
+   "note": "Arms ran at different concurrency; excluded from latency comparison (TB-035 risk)."
+  },
+  {
+   "workload": "holdout2",
+   "unit": "benign/agentdojo_important_instructions",
+   "kind": "benign",
+   "concurrency_level": 2,
+   "matched_pairs": 60,
+   "clusters": 12,
+   "elapsed_difference_mean_ms": 6624.4,
+   "elapsed_difference_median_ms": 7637.5,
+   "elapsed_difference_mean_cluster_bootstrap95": [
+    -5678.8337,
+    17961.0442
+   ]
+  }
+ ],
+ "outputs": {
+  "csv": "reports/cost-latency.csv",
+  "ledger": "reports/cost-ledger.csv",
+  "json": "evidence/tb035-cost-latency.json",
+  "doc": "docs/cost-latency.md"
+ },
+ "note": "Latency is end-to-end per run (queueing and retries included). Costs come from the ledger of every model-call attempt; the free tier bills zero, so tokens are the operating-cost measure."
+}
