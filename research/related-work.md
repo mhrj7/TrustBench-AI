@@ -56,4 +56,4 @@ These are evaluation and engineering properties, not a new defense idea:
 - Whether the gateway's trust in its signed session and contracts (the analogue of NetInjectBench's metadata-integrity
   assumption) can be weakened by an attacker who influences how contracts are created.
 
-TB-044 tests the project's research hypothesis against these limits.
+TB-044 tests the project's research hypothesis against these limits: [`findings.md`](findings.md).
