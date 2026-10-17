@@ -1,0 +1,85 @@
+# Regression release gate (TB-038, protocol/amendments.md A-028).
+# Tier 1 on every push and pull request: credential-free scripted gate against the baseline as committed on the base
+# branch (a change cannot move its own baseline), the injected-regression tests, and the full verification suite.
+# Tier 2 on demand for a release candidate: the A-025 live gate; FAIL and INCONCLUSIVE both fail the job.
+name: release-gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run the Tier 2 live gate for this commit (uses the NVIDIA_API_KEY secret and free-tier quota)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # docs/storage-policy.md: the checkout and its caches live under one storage root.
+  TRUSTBENCH_STORAGE_ROOT: ${{ github.workspace }}/..
+  npm_config_cache: ${{ github.workspace }}/../.cache/npm
+
+jobs:
+  tier1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.5.0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.11.28
+      - run: npm install -g npm@12.0.0
+      - run: sh scripts/ci.sh setup
+      - name: Tier 1 gate (baseline from the base branch, or the previous commit on a push)
+        env:
+          TRUSTBENCH_GATE_BASELINE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD') }}
+        run: sh scripts/ci.sh tier1
+      - run: sh scripts/ci.sh verify
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-tier1
+          path: evidence/release-gate-scripted.json
+          if-no-files-found: warn
+
+  tier2:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    needs: tier1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.5.0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.11.28
+      - run: npm install -g npm@12.0.0
+      - run: sh scripts/ci.sh setup
+      - name: Tier 2 live gate (one attempt per commit; the committed ledger records earlier attempts)
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          CANDIDATE: ${{ github.sha }}
+        run: sh scripts/ci.sh tier2 "$CANDIDATE"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-tier2-${{ github.sha }}
+          path: |
+            evidence/release-gate-ledger.json
+            evidence/release-gate-${{ github.sha }}-attempt-*.json
+            evidence/release-gate-runs/${{ github.sha }}/
+          if-no-files-found: warn

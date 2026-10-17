@@ -54,3 +54,16 @@ def test_injected_regression_blocks_the_release(candidate, tmp_path, name, path,
     code, record = gate(candidate, tmp_path / 'gate.json')
     assert code == 1 and record['outcome'] == 'FAIL'
     assert any(finding in b for b in record['blocking']), record['blocking']
+
+
+def test_a_candidate_cannot_hide_a_regression_by_editing_its_own_baseline(candidate, tmp_path):
+    name, path, original, injected, finding = INJECTIONS[1]
+    f = candidate / path
+    f.write_text(f.read_text().replace(original, injected))
+    # The candidate also rewrites its committed baseline to match the regressed behaviour; the gate reads baselines from
+    # the trusted checkout's git history at the baseline ref, so the edit has no effect.
+    import shutil
+    report = json.loads((ROOT / 'configs/release-gate.yaml').read_text())['scripted']['arm_baselines'][0]['report']
+    (candidate / report).write_text('{"cases": []}')
+    code, record = gate(candidate, tmp_path / 'gate.json')
+    assert code == 1 and any(finding in b for b in record['blocking'])

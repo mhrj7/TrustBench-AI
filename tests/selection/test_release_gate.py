@@ -82,3 +82,22 @@ def test_small_gain_with_wide_interval_is_inconclusive(gate):
     unsafe[0]['defended']['evaluation'] = {**unsafe[0]['defended']['evaluation'], 'security_pass': True}
     gate._report = r
     assert gate.evaluate(OK) == 'INCONCLUSIVE'
+
+
+def test_attempt_policy_one_run_then_only_with_a_defect_note_never_a_third(gate):
+    assert gate.admit({}, 'abc123', None) == (True, 'admitted')
+    one = {'abc123': [{'attempt': 1, 'outcome': 'INCONCLUSIVE'}]}
+    ok, why = gate.admit(one, 'abc123', None)
+    assert not ok and 'defect-note' in why
+    assert not gate.admit(one, 'abc123', '   ')[0]
+    assert gate.admit(one, 'abc123', 'provider outage: 30% invalid pairs')[0]
+    two = {'abc123': [{'attempt': 1}, {'attempt': 2}]}
+    assert not gate.admit(two, 'abc123', 'another defect')[0]
+    assert gate.admit(two, 'other-candidate', None)[0]
+
+
+def test_inconclusive_and_fail_both_block(gate):
+    """A noisy result must not pass silently: only PASS exits 0."""
+    import subprocess, sys
+    src = (ROOT / 'scripts/release-gate.py').read_text()
+    assert "sys.exit(0 if main() == 'PASS' else 1)" in src

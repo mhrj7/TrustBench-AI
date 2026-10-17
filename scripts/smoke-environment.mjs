@@ -8,7 +8,7 @@ import { z } from "zod";
 
 // Storage root (docs/storage-policy.md): /Volumes/MHRJ on the reference machine; a container or another machine sets
 // TRUSTBENCH_STORAGE_ROOT (TB-037) and keeps the same layout under it.
-const storageRoot = process.env.TRUSTBENCH_STORAGE_ROOT ?? "/Volumes/MHRJ";
+const storageRoot = path.resolve(process.env.TRUSTBENCH_STORAGE_ROOT ?? "/Volumes/MHRJ"); // normalised: CI passes "<workspace>/.."
 const projectRoot = await realpath(process.cwd());
 assert.ok(
   projectRoot.startsWith(`${storageRoot}/`),
@@ -20,7 +20,7 @@ assert.equal(process.version, `v${packageJson.engines.node}`);
 const effectiveNpmCache = execFileSync("npm", ["config", "get", "cache"], {
   encoding: "utf8",
 }).trim();
-assert.equal(effectiveNpmCache, `${storageRoot}/.cache/npm`);
+assert.equal(path.resolve(effectiveNpmCache), path.join(storageRoot, ".cache/npm"));
 
 const Fixture = z.object({
   fixture_version: z.literal("1.0.0"),
