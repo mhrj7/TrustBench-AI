@@ -11,7 +11,8 @@ move its own baseline). Also reruns the scripted smoke suite and compares it wit
 Outcome: FAIL on any runner or parity failure, a changed case set, a defended-arm security or functional regression, any
 baseline-arm verdict change (the harness or evaluator changed), a policy audit trail that became more permissive (a tool
 executed more often, or approved or denied less often, than in the committed policy traces; TB-042), or a smoke-suite
-difference; PASS otherwise. Defended-arm
+difference; PASS otherwise. A baseline-arm change listed in acknowledged_baseline_changes for this exact baseline commit
+under a recorded amendment (a deliberate refresh) is reported, not blocking. Defended-arm
 improvements pass and are listed for a deliberate baseline refresh. Exit 0 only on PASS."""
 import argparse, json, os, subprocess, sys, tempfile
 from datetime import datetime, timezone
@@ -99,6 +100,19 @@ def compare_arm(base: dict, fresh: dict) -> dict:
     return findings
 
 
+def acknowledge(system: str, findings: dict, baseline_commit: str) -> list:
+    """A deliberate baseline refresh (A-028 "FAIL until the baseline is refreshed deliberately"): a baseline-arm verdict
+    change is accepted only if configs/release-gate.yaml lists that exact change, for this system, against this exact
+    baseline commit, under an amendment recorded in protocol/amendments.md. It expires with that baseline commit and never
+    covers the defended arm, a parity failure or a policy change. Accepted changes stay in the record."""
+    amendments = (GATE_ROOT / 'protocol/amendments.md').read_text()
+    listed = {(x['system'], x['change']) for x in CFG.get('acknowledged_baseline_changes', [])
+              if x['baseline_commit'] == baseline_commit and f"## {x['amendment']} " in amendments}
+    accepted = [c for c in findings['baseline_arm_changes'] if (system, c) in listed]
+    findings['baseline_arm_changes'] = [c for c in findings['baseline_arm_changes'] if (system, c) not in listed]
+    return accepted
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--root', type=Path, default=GATE_ROOT, help='candidate checkout to run (default: this one)')
@@ -124,6 +138,7 @@ def main():
                 findings = compare_arm(committed(spec['report'], a.baseline_ref), json.loads((out / 'report.json').read_text()))
                 traces = spec['report'].replace('-report.json', '-policy-traces.jsonl')
                 findings |= compare_policy(committed_text(traces, a.baseline_ref), (out / 'policy-traces.jsonl').read_text())
+                findings['acknowledged_baseline_changes'] = acknowledge(spec['system'], findings, record['baseline_commit'])
                 arm.update(findings)
                 for kind in ('missing_cases', 'new_cases', 'security_regressions', 'functional_regressions', 'baseline_arm_changes', 'parity_failures',
                              'policy_permissive_changes'):
