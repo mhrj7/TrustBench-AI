@@ -232,8 +232,11 @@ def staging(image: str) -> dict:
         cat = http(port, 'GET', '/api/catalog')
         sess = http(port, 'POST', '/api/session')
         token = sess[1].get('token')
-        run = http(port, 'POST', '/api/runs', {'mode': 'scripted', 'system': 'gateway_capability', 'cases': ['doc-benign']}, token) if token else (None, {})
-        result['read_only_storage'] = {'catalog_status': cat[0], 'session_status': sess[0], 'session_detail': sess[1].get('detail'), 'run_status': run[0], 'run_detail': run[1].get('detail')}
+        run = http(port, 'POST', '/api/runs', {'mode': 'scripted', 'system': 'gateway_capability', 'cases': ['doc-benign']}, token)
+        page = subprocess.run(['docker', 'exec', 'tb040-ro', '.venv-tools/bin/python', '-c',
+                               "import urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8080/live', timeout=30); print(r.status, len(r.read()))"], capture_output=True, text=True).stdout.split()
+        result['read_only_storage'] = {'site_page_status': int(page[0]) if page else None, 'catalog_status': cat[0], 'catalog_storage': cat[1].get('storage'),
+                                       'session_status': sess[0], 'session_detail': sess[1].get('detail'), 'run_status': run[0], 'run_detail': run[1].get('detail')}
     except RuntimeError as e:
         result['read_only_storage'] = {'service_started': False, 'detail': str(e)[-600:]}
     finally:
@@ -255,7 +258,7 @@ def write_doc(out):
         f"Image `{st['image']}` ({st['image_id']}).", '',
         f"- **No network, live own-key run:** submitted {st['no_network_live_run']['submit_status']}; ended `{st['no_network_live_run']['status']}` after {st['no_network_live_run']['seconds']} s with {st['no_network_live_run']['valid_pairs']} valid and {st['no_network_live_run']['invalid_pairs']} invalid pairs; reasons: {', '.join(r['code'] + ' (' + str(r['runs']) + ' runs)' for r in st['no_network_live_run']['invalid_reasons'] or []) or st['no_network_live_run']['error']}.",
         f"- **Cancel a running run:** DELETE returned {st['cancel_running_run']['delete_status']} in {st['cancel_running_run']['stop_seconds']} s and removed {st['cancel_running_run']['files_removed']} files; processes idle {st['cancel_running_run']['processes_idle']}, during the run {st['cancel_running_run']['processes_during_run']}, after the delete {st['cancel_running_run']['processes_after_delete']} (leftover: {', '.join(st['cancel_running_run']['leftover']) or 'none'}); the run then answers {st['cancel_running_run']['get_after_delete']}.",
-        '- **Read-only service storage:** ' + (f"the catalog answers {st['read_only_storage']['catalog_status']}; creating a session answers {st['read_only_storage']['session_status']} ({st['read_only_storage']['session_detail']}); starting a run answers {st['read_only_storage']['run_status']} ({st['read_only_storage']['run_detail']})."
+        '- **Read-only service storage:** ' + (f"the service starts; the Live page answers {st['read_only_storage'].get('site_page_status')} and the catalog {st['read_only_storage']['catalog_status']} (storage `{st['read_only_storage'].get('catalog_storage')}`, every mode unavailable with the reason shown on the page); creating a session answers {st['read_only_storage']['session_status']} ({st['read_only_storage']['session_detail']}); starting a run answers {st['read_only_storage']['run_status']} ({st['read_only_storage']['run_detail']})."
                                                if st['read_only_storage'].get('service_started', True) else f"the service did not start: {st['read_only_storage']['detail']}")])
     hang, cancel = m.get('model-hang', {}), m.get('cancel', {})
     doc = f"""# Fault drill (TB-040)
@@ -292,7 +295,8 @@ What each fault does now:
   artifact. A runner that ignores SIGTERM is killed with its children (the old terminate-only stop leaves the child
   running; verified by running the drill against it). The TB-026 cancellation marker and kill/restart drills still pass.
 - **Resource exhaustion:** unwritable service storage refuses new runs with 503 `storage_unavailable` before any shared
-  budget is reserved; a damaged shared-budget record pauses the shared key (counted as spent) instead of resetting it,
+  budget is reserved; a data volume that cannot be written at all no longer stops the service: it starts degraded, serves
+  the site, the catalog and the published results, and answers 503 `storage_unavailable` for sessions and runs; a damaged shared-budget record pauses the shared key (counted as spent) instead of resetting it,
   while scripted and own-key runs stay available; step, token, retry and time budgets end runs explicitly (TB-015/TB-025
   suites, plus a tool that never returns, which now ends with `AgentTimeoutError` and outcome `timeout`).
 
