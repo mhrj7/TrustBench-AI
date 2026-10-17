@@ -52,16 +52,17 @@ def audit_overhead() -> dict:
         backend = importlib.import_module('src.tools.app')
         from fastapi.testclient import TestClient
         from src.gateway.app import Gateway
-        clients = {}
-        for arm, audit in (('no_audit_store', None), ('write_ahead_audit', str(Path(tmp) / 'audit.jsonl'))):
-            backend.store.reset(arm, spec['fixture'], 12)
-            g = Gateway(backend.app, audit_path=audit)
-            clients[arm] = (TestClient(g.app), {'Authorization': 'Bearer ' + g.bind(arm, [spec['tool']])})
+        gateways = {arm: Gateway(backend.app, audit_path=audit) for arm, audit in (('no_audit_store', None), ('write_ahead_audit', str(Path(tmp) / 'audit.jsonl')))}
+        clients = {arm: TestClient(g.app) for arm, g in gateways.items()}
         times = {arm: [] for arm in clients}
         for i in range(spec['warmup'] + spec['calls']):
-            for arm, (client, headers) in (clients.items() if i % 2 else reversed(list(clients.items()))):
+            for arm in (list(clients) if i % 2 else list(reversed(clients))):
+                # a fresh episode per call: an episode has a tool-call limit, and resetting it is not part of the timed call
+                episode = f'{arm}-{i}'
+                backend.store.reset(episode, spec['fixture'], 12)
+                headers = {'Authorization': 'Bearer ' + gateways[arm].bind(episode, [spec['tool']])}
                 t = time.perf_counter()
-                r = client.post(f'/v1/episodes/{arm}/tools/{spec["tool"]}', headers=headers, json=spec['arguments'])
+                r = clients[arm].post(f'/v1/episodes/{episode}/tools/{spec["tool"]}', headers=headers, json=spec['arguments'])
                 dt = (time.perf_counter() - t) * 1000
                 assert r.status_code == 200, r.text
                 if i >= spec['warmup']:
@@ -86,7 +87,7 @@ def uncertainty_module():
     return mod
 
 
-def hung_runs(spans_path: Path) -> set[str]:
+def hung_runs(spans_path: Path) -> dict[str, int]:
     """Run ids whose run timed out while a model call was still open (the rule in configs/fault-drill.yaml)."""
     runs, calls = {}, {}
     for line in spans_path.read_text().splitlines():
@@ -96,17 +97,19 @@ def hung_runs(spans_path: Path) -> set[str]:
             runs[rid] = s['start_ms'] + s['attributes']['run.elapsed_ms']
         elif s['name'] == 'model.call':
             calls.setdefault(rid, []).append((s['start_ms'], s['end_ms']))
-    return {rid for rid, at in runs.items() if any(a <= at <= b for a, b in calls.get(rid, []))}
+    # run id -> how long the open model call had been waiting when the run timed out
+    return {rid: round(at - a) for rid, at in runs.items() for a, b in calls.get(rid, []) if a <= at <= b}
 
 
-def reclassify(report: dict, hung: set[str]) -> tuple[dict, list[str]]:
+def reclassify(report: dict, hung: dict[str, int]) -> tuple[dict, list[tuple[str, int]]]:
     out = json.loads(json.dumps(report))
     changed = []
     for c in out['cases']:
         for arm in ('baseline', 'defended'):
-            if f"run-{c['case_id']}-r{c['repetition']}:{arm}" in hung and not c[arm]['invalid']:
+            rid = f"run-{c['case_id']}-r{c['repetition']}:{arm}"
+            if rid in hung and not c[arm]['invalid']:
                 c[arm]['invalid'] = True
-                changed.append(f"{c['case_id']}#r{c['repetition']}:{arm}")
+                changed.append((f"{c['case_id']}#r{c['repetition']}:{arm}", hung[rid]))
     return out, changed
 
 
@@ -122,7 +125,7 @@ def sensitivity() -> dict:
             report = json.loads(path.read_text())
             total_runs += 2 * len(report['cases'])
             fixed, changed = reclassify(report, hung_runs(path.parent / 'spans.jsonl'))
-            affected += [{'scope': scope, 'rendering': x['rendering'], 'role': x['role'], 'run': r} for r in changed]
+            affected += [{'scope': scope, 'rendering': x['rendering'], 'role': x['role'], 'run': r, 'open_model_call_ms': ms} for r, ms in changed]
             sets.append((scope, x['rendering'], report, fixed))
     def compare(label, orig, fixed):
         a, b = mod.analyse(label, orig, 'sensitivity'), mod.analyse(label, fixed, 'sensitivity')
@@ -140,7 +143,8 @@ def sensitivity() -> dict:
     f = [r for s, rend, _, r in sets if rend == primary]
     rows[f'pooled/{primary}'] = compare(f'pooled/{primary}', o, f)
     return {'rule': CFG['sensitivity']['rule'], 'primary_rendering': primary, 'runs_total': total_runs, 'runs_reclassified': len(affected),
-            'share_reclassified': round(len(affected) / total_runs, 4), 'affected': affected, 'primary_analyses': rows,
+            'share_reclassified': round(len(affected) / total_runs, 4), 'open_call_ms_quartiles': [round(q) for q in statistics.quantiles([a['open_model_call_ms'] for a in affected], n=4)] if len(affected) > 1 else None,
+            'reclassified_with_open_call_at_least_200s': sum(a['open_model_call_ms'] >= 200_000 for a in affected), 'affected': affected, 'primary_analyses': rows,
             'note': 'The registered results (TB-032..TB-034) are not rewritten: they were produced and analysed under the protocol as frozen. This is a sensitivity analysis of how much the corrected classification would move them.'}
 
 
@@ -304,7 +308,9 @@ What each fault does now:
 
 {s['rule']}
 
-{s['runs_reclassified']} of {s['runs_total']} confirmatory runs match. Paired difference (defended − baseline, percentage points, cluster
+{s['runs_reclassified']} of {s['runs_total']} confirmatory runs match (the open model call had waited {s['open_call_ms_quartiles'][0] / 1000:.0f} / {s['open_call_ms_quartiles'][1] / 1000:.0f} / {s['open_call_ms_quartiles'][2] / 1000:.0f} s at the
+quartiles; {s['reclassified_with_open_call_at_least_200s']} of them had waited 200 s or more, the stricter screen first used to spot the problem). The
+list is in the JSON evidence, with the primary-rendering runs flagged by role. Paired difference (defended − baseline, percentage points, cluster
 bootstrap 95%) on the primary rendering `{s['primary_rendering']}`, as recorded and with those pairs excluded:
 
 | Analysis | Endpoint | Valid pairs | As recorded | Reclassified |
