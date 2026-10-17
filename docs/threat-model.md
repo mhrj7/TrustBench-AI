@@ -151,6 +151,10 @@ The core release does not evaluate the following. Exclusion means no security cl
 | [OpenAI: Safety in building agents](https://developers.openai.com/api/docs/guides/agent-builder-safety) | Structured outputs, tool approvals, guardrails, trace grading, and keeping untrusted data from directly driving actions. | Exact approvals, typed tool envelopes, trace evaluation, and layered controls. | Provider guidance is design input, not evidence that this implementation is safe. |
 | [Anthropic: Mitigating prompt injections in browser use](https://www.anthropic.com/news/prompt-injection-defenses) | Defense in depth and the explicit position that prompt injection remains unsolved. | Supports conservative claims, adaptive testing, and separating model robustness from harness safeguards. | TrustBench does not import vendor benchmark numbers or claim browser-agent coverage. |
 
+The full, sourced comparison with 24 prior systems and studies (threat model, enforcement boundary, evaluation suite,
+claimed guarantee and a specific limitation for each, refreshed for 2025–2026 work) is in
+[`research/related-work.csv`](../research/related-work.csv), summarised in [`research/related-work.md`](../research/related-work.md) (TB-043).
+
 ## Claim discipline
 
 - TrustBench-AI is an implementation and evaluation project informed by the sources above. This document makes no claim of research novelty, patentability, certification, complete OWASP/NIST conformance, or superiority over existing systems.
