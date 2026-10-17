@@ -1,0 +1,8 @@
+#!/bin/sh
+# TrustBench benchmark CLI (TB-037): runs src/cli.py with the project's locked tools venv (npm run setup:python).
+root="$(cd "$(dirname "$0")/.." && pwd)"
+if [ ! -x "$root/.venv-tools/bin/python" ]; then
+  echo "trustbench: $root/.venv-tools is missing; run 'npm run setup:python' first" >&2
+  exit 2
+fi
+cd "$root" && exec "$root/.venv-tools/bin/python" -m src.cli "$@"

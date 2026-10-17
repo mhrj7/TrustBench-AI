@@ -4,6 +4,60 @@ TrustBench-AI is a local-first evaluation and enforcement project for tool-using
 
 This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://eve.dev/docs/reference/cli#eve-init).
 
+## Benchmark quickstart (TB-037)
+
+Requirements: Node.js 26.5.0 with npm 12.0.0 (`package.json` engines), [uv](https://docs.astral.sh/uv/) (it installs Python
+3.14.0 from `.python-version`), and git. The project expects its storage root at `/Volumes/MHRJ`; anywhere else, set
+`TRUSTBENCH_STORAGE_ROOT` to the parent of the checkout and `npm_config_cache` to `$TRUSTBENCH_STORAGE_ROOT/.cache/npm`.
+
+```bash
+cp .env.example .env
+npm ci
+npm run setup:python
+```
+
+`setup:python` creates `.venv-tools` from the hash-pinned locks (`src/tools/requirements.lock`, `requirements/analysis.lock`).
+Then the CLI (`bin/trustbench`, also `npm run trustbench -- <command>`), configured by `configs/cli/trustbench.yaml`:
+
+```bash
+sh bin/trustbench validate
+```
+
+```bash
+sh bin/trustbench smoke --check
+```
+
+```bash
+sh bin/trustbench manifest
+```
+
+```bash
+sh bin/trustbench report --check
+```
+
+| Command | What it does | Needs credentials |
+| --- | --- | --- |
+| `validate` | Fixture, split, sealed-manifest, protocol and frozen-configuration checks | no |
+| `fetch-data` | Clones the pinned AgentDojo checkout from `data/manifest.json` and verifies it | no (network) |
+| `smoke [--check]` | Environment fixture, scripted smoke suite and scripted arm comparison; `--check` compares each output with the committed result (ignoring the volatile fields listed in the config) and validates the arm report against `schemas/arm-report.schema.json` | no |
+| `benchmark <profile> [--dry-run]` | A live paired run on development data from `configs/cli/benchmark-<profile>.yaml` (`dev-frozen`: the frozen configuration; `dev-local-ollama`: a local model) | yes for hosted models: your own key in `.env` and free-tier quota |
+| `evaluate <report>...` | Security and utility rates (TB-033) and paired cluster-bootstrap intervals (TB-034) | no |
+| `report [--check]` | Regenerates the published TB-033..TB-036 reports from raw records, or runs their reproduction tests | no |
+| `manifest [--write]` | Checks the pinned hashes of data, locks, frozen configuration, schema and protocol (`manifests/pinned.json`) | no |
+
+The same checks in a clean container:
+
+```bash
+docker build -f Dockerfile.bench -t trustbench-bench .
+```
+
+```bash
+docker run --rm trustbench-bench
+```
+
+Live benchmark runs call a model provider and need your own credentials and budget; the sealed holdouts are excluded from
+every development run and cannot be rerun. `docs/benchmark-cli.md` records the fresh-environment reproduction.
+
 ## Getting started
 
 The project is designed to live at `/Volumes/MHRJ/TrustBench-AI`. Install the locked dependencies and run the credential-free verification suite:

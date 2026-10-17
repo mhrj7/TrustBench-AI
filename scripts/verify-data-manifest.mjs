@@ -5,7 +5,8 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 const manifest = JSON.parse(await readFile("data/manifest.json", "utf8"));
-const root = manifest.source.local_path;
+// TB-037: resolve the vendored checkout relative to this repository, so a fresh clone or container verifies its own copy.
+const root = manifest.source.relative_path ? path.resolve(manifest.source.relative_path) : manifest.source.local_path;
 const git = (...args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
 const sha = async (relative) => createHash("sha256").update(await readFile(path.join(root, relative))).digest("hex");
 

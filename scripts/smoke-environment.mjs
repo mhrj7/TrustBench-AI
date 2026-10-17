@@ -6,10 +6,13 @@ import path from "node:path";
 import process from "node:process";
 import { z } from "zod";
 
+// Storage root (docs/storage-policy.md): /Volumes/MHRJ on the reference machine; a container or another machine sets
+// TRUSTBENCH_STORAGE_ROOT (TB-037) and keeps the same layout under it.
+const storageRoot = process.env.TRUSTBENCH_STORAGE_ROOT ?? "/Volumes/MHRJ";
 const projectRoot = await realpath(process.cwd());
 assert.ok(
-  projectRoot.startsWith("/Volumes/MHRJ/"),
-  `Project must run from /Volumes/MHRJ, received ${projectRoot}`,
+  projectRoot.startsWith(`${storageRoot}/`),
+  `Project must run from ${storageRoot}, received ${projectRoot}`,
 );
 
 const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
@@ -17,7 +20,7 @@ assert.equal(process.version, `v${packageJson.engines.node}`);
 const effectiveNpmCache = execFileSync("npm", ["config", "get", "cache"], {
   encoding: "utf8",
 }).trim();
-assert.equal(effectiveNpmCache, "/Volumes/MHRJ/.cache/npm");
+assert.equal(effectiveNpmCache, `${storageRoot}/.cache/npm`);
 
 const Fixture = z.object({
   fixture_version: z.literal("1.0.0"),

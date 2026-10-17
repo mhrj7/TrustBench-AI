@@ -1,0 +1,769 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://trustbench.local/schemas/arm-report-1.1.0.json",
+ "title": "TrustBench arm-comparison report 1.1.0 (scripts/run-arm-smoke.mjs)",
+ "description": "Paired baseline/defended run report. Required fields are those every 1.1.0 report carries; later additions (model_revision, defended_system, suite, schedule, reliability, trace_file, ablation, confirmatory_holdout) are optional so older reports stay valid. TB-037.",
+ "type": "object",
+ "required": [
+  "attack_channel",
+  "attack_rendering",
+  "backend_tool_mode",
+  "cases",
+  "checked_at",
+  "config_differences",
+  "defended_variant",
+  "holdout_excluded_cases",
+  "mode",
+  "model",
+  "prompt_profile",
+  "repetitions",
+  "schema_version",
+  "status",
+  "summary",
+  "task_id",
+  "temperature"
+ ],
+ "properties": {
+  "schema_version": {
+   "const": "1.1.0"
+  },
+  "task_id": {
+   "enum": [
+    "TB-024",
+    "TB-024-live-model"
+   ]
+  },
+  "checked_at": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "mode": {
+   "enum": [
+    "scripted_test",
+    "live_model"
+   ]
+  },
+  "model": {
+   "type": "string"
+  },
+  "attack_rendering": {
+   "type": "string"
+  },
+  "attack_channel": {
+   "enum": [
+    "untrusted_content",
+    "trusted_user_control"
+   ]
+  },
+  "backend_tool_mode": {
+   "enum": [
+    "permissive",
+    "contract"
+   ]
+  },
+  "prompt_profile": {
+   "type": "string"
+  },
+  "repetitions": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "temperature": {
+   "type": [
+    "number",
+    "null"
+   ]
+  },
+  "defended_variant": {
+   "type": "string"
+  },
+  "defended_system": {
+   "type": "string"
+  },
+  "holdout_excluded_cases": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "status": {
+   "type": "string"
+  },
+  "config_differences": {
+   "type": [
+    "object",
+    "array"
+   ]
+  },
+  "cases": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "required": [
+     "baseline",
+     "case_id",
+     "defended",
+     "differences_attributable_to_gateway",
+     "final_state_identical",
+     "first_request_identical",
+     "fixture_id",
+     "kind",
+     "non_tool_messages_identical",
+     "pair_order",
+     "provider_retries",
+     "record_differences",
+     "repetition",
+     "run_config_identical",
+     "same_tool_call_sequence",
+     "settings_identical"
+    ],
+    "properties": {
+     "baseline": {
+      "type": "object",
+      "required": [
+       "elapsed_ms",
+       "engaged",
+       "evaluation",
+       "failures",
+       "final_text",
+       "final_tool_calls",
+       "injection_exposed",
+       "invalid",
+       "outcome",
+       "tokens",
+       "tool_calls",
+       "tool_trace"
+      ],
+      "properties": {
+       "elapsed_ms": {
+        "type": [
+         "integer",
+         "number"
+        ]
+       },
+       "engaged": {
+        "type": "boolean"
+       },
+       "evaluation": {
+        "type": "object",
+        "required": [
+         "attacker_goal_achieved",
+         "evaluator_version",
+         "evidence_complete",
+         "prohibited_side_effects",
+         "reason_codes",
+         "security_pass",
+         "utility_pass"
+        ],
+        "properties": {
+         "attacker_goal_achieved": {
+          "type": "boolean"
+         },
+         "security_pass": {
+          "type": "boolean"
+         },
+         "utility_pass": {
+          "type": "boolean"
+         },
+         "evidence_complete": {
+          "type": "boolean"
+         },
+         "evaluator_version": {
+          "type": "string"
+         },
+         "prohibited_side_effects": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "reason_codes": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        }
+       },
+       "failures": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "final_text": {
+        "type": "string"
+       },
+       "final_tool_calls": {
+        "type": "integer"
+       },
+       "injection_exposed": {
+        "type": [
+         "boolean",
+         "null"
+        ]
+       },
+       "invalid": {
+        "type": "boolean"
+       },
+       "outcome": {
+        "enum": [
+         "success",
+         "failure",
+         "timeout",
+         "budget_exhausted",
+         "cancelled"
+        ]
+       },
+       "tokens": {
+        "type": "object",
+        "required": [
+         "input",
+         "output"
+        ],
+        "properties": {
+         "input": {
+          "type": "integer"
+         },
+         "output": {
+          "type": "integer"
+         }
+        }
+       },
+       "tool_calls": {
+        "type": "integer"
+       },
+       "tool_trace": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "required": [
+          "tool",
+          "status",
+          "error",
+          "args"
+         ],
+         "properties": {
+          "tool": {
+           "type": "string"
+          },
+          "status": {
+           "type": "string"
+          },
+          "error": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "args": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     },
+     "defended": {
+      "allOf": [
+       {
+        "type": "object",
+        "required": [
+         "elapsed_ms",
+         "engaged",
+         "evaluation",
+         "failures",
+         "final_text",
+         "final_tool_calls",
+         "injection_exposed",
+         "invalid",
+         "outcome",
+         "tokens",
+         "tool_calls",
+         "tool_trace"
+        ],
+        "properties": {
+         "elapsed_ms": {
+          "type": [
+           "integer",
+           "number"
+          ]
+         },
+         "engaged": {
+          "type": "boolean"
+         },
+         "evaluation": {
+          "type": "object",
+          "required": [
+           "attacker_goal_achieved",
+           "evaluator_version",
+           "evidence_complete",
+           "prohibited_side_effects",
+           "reason_codes",
+           "security_pass",
+           "utility_pass"
+          ],
+          "properties": {
+           "attacker_goal_achieved": {
+            "type": "boolean"
+           },
+           "security_pass": {
+            "type": "boolean"
+           },
+           "utility_pass": {
+            "type": "boolean"
+           },
+           "evidence_complete": {
+            "type": "boolean"
+           },
+           "evaluator_version": {
+            "type": "string"
+           },
+           "prohibited_side_effects": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            }
+           },
+           "reason_codes": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            }
+           }
+          }
+         },
+         "failures": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "final_text": {
+          "type": "string"
+         },
+         "final_tool_calls": {
+          "type": "integer"
+         },
+         "injection_exposed": {
+          "type": [
+           "boolean",
+           "null"
+          ]
+         },
+         "invalid": {
+          "type": "boolean"
+         },
+         "outcome": {
+          "enum": [
+           "success",
+           "failure",
+           "timeout",
+           "budget_exhausted",
+           "cancelled"
+          ]
+         },
+         "tokens": {
+          "type": "object",
+          "required": [
+           "input",
+           "output"
+          ],
+          "properties": {
+           "input": {
+            "type": "integer"
+           },
+           "output": {
+            "type": "integer"
+           }
+          }
+         },
+         "tool_calls": {
+          "type": "integer"
+         },
+         "tool_trace": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "required": [
+            "tool",
+            "status",
+            "error",
+            "args"
+           ],
+           "properties": {
+            "tool": {
+             "type": "string"
+            },
+            "status": {
+             "type": "string"
+            },
+            "error": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "args": {
+             "type": "object"
+            }
+           }
+          }
+         }
+        }
+       },
+       {
+        "type": "object",
+        "required": [
+         "policy_decisions",
+         "approvals"
+        ],
+        "properties": {
+         "policy_decisions": {
+          "type": "array"
+         },
+         "approvals": {
+          "type": [
+           "array",
+           "null"
+          ]
+         }
+        }
+       }
+      ]
+     },
+     "case_id": {
+      "type": "string"
+     },
+     "fixture_id": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "benign",
+       "attack"
+      ]
+     },
+     "attack_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "repetition": {
+      "type": "integer",
+      "minimum": 1
+     },
+     "pair_order": {
+      "type": "array",
+      "items": {
+       "enum": [
+        "baseline",
+        "defended"
+       ]
+      },
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "record_differences": {
+      "type": "array"
+     },
+     "differences_attributable_to_gateway": {
+      "type": "boolean"
+     },
+     "final_state_identical": {
+      "type": "boolean"
+     },
+     "first_request_identical": {
+      "type": "boolean"
+     },
+     "non_tool_messages_identical": {
+      "type": "boolean"
+     },
+     "run_config_identical": {
+      "type": "boolean"
+     },
+     "same_tool_call_sequence": {
+      "type": "boolean"
+     },
+     "settings_identical": {
+      "type": "boolean"
+     }
+    }
+   }
+  },
+  "summary": {
+   "type": "object",
+   "required": [
+    "validity",
+    "benign_utility_pass",
+    "attacker_goal_achieved",
+    "unsafe_committed_effect"
+   ],
+   "properties": {
+    "validity": {
+     "type": "object",
+     "required": [
+      "total_pairs",
+      "valid_pairs",
+      "invalid_pairs",
+      "invalid_detail"
+     ],
+     "properties": {
+      "total_pairs": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "valid_pairs": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "invalid_pairs": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
+    },
+    "benign_utility_pass": {
+     "type": "object",
+     "required": [
+      "baseline",
+      "defended"
+     ],
+     "properties": {
+      "baseline": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      },
+      "defended": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      }
+     }
+    },
+    "attacker_goal_achieved": {
+     "type": "object",
+     "required": [
+      "baseline",
+      "defended"
+     ],
+     "properties": {
+      "baseline": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      },
+      "defended": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      }
+     }
+    },
+    "unsafe_committed_effect": {
+     "type": "object",
+     "required": [
+      "baseline",
+      "defended"
+     ],
+     "properties": {
+      "baseline": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      },
+      "defended": {
+       "type": "object",
+       "required": [
+        "numerator",
+        "denominator",
+        "rate",
+        "wilson95"
+       ],
+       "properties": {
+        "numerator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "denominator": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "rate": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wilson95": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "additionalProperties": true
+}

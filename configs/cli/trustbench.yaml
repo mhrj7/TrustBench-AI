@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "TB-037",
+  "note": "Configuration for the trustbench CLI (src/cli.py). Every command delegates to the project's existing scripts named here; nothing about a step is hard-coded in the CLI. JSON content (valid YAML).",
+  "validate": {
+    "steps": [
+      "verify:benign-data",
+      "verify:attack-data",
+      "verify:data-splits",
+      "verify:holdout2",
+      "verify:dataset-reset",
+      "verify:protocol",
+      "verify:frozen"
+    ],
+    "vendor_step": "verify:data",
+    "vendor_note": "Needs the pinned AgentDojo checkout (trustbench fetch-data)."
+  },
+  "smoke": {
+    "steps": [
+      {
+        "name": "environment",
+        "npm": "smoke",
+        "note": "credential-free environment fixture (TB-003)"
+      },
+      {
+        "name": "smoke_suite",
+        "npm": "verify:smoke-suite",
+        "output": "tests/smoke/report.json",
+        "volatile_keys": [
+          "checked_at"
+        ]
+      },
+      {
+        "name": "arm_smoke",
+        "npm": "verify:arms-smoke",
+        "output": "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-report.json",
+        "schema": "schemas/arm-report.schema.json",
+        "volatile_keys": [
+          "checked_at",
+          "elapsed_ms",
+          "median_elapsed_ms",
+          "request_id"
+        ]
+      }
+    ]
+  },
+  "report": {
+    "steps": [
+      "metrics:holdout",
+      "metrics:holdout2",
+      "uncertainty",
+      "cost:latency",
+      "ablations:analyse"
+    ],
+    "check_tests": [
+      "tests/evaluation",
+      "tests/selection"
+    ]
+  },
+  "benchmark": {
+    "profiles_dir": "configs/cli",
+    "profile_prefix": "benchmark-",
+    "runner": "scripts/run-arm-smoke.mjs",
+    "report_glob": "evidence/{prefix}-*-report.json"
+  },
+  "manifest": {
+    "file": "manifests/pinned.json",
+    "include": [
+      "data/benign.jsonl",
+      "data/attacks.jsonl",
+      "data/attack-oracles.json",
+      "data/attack-materialization.json",
+      "data/attack-renderings.json",
+      "data/splits.json",
+      "data/manifest.json",
+      "data/holdout-suite.json",
+      "data/holdout2-benign-suite.json",
+      "data/holdout2-attack-suite.json",
+      "tests/arms/smoke-cases.json",
+      "package-lock.json",
+      "src/tools/requirements.lock",
+      "requirements/analysis.lock",
+      "configs/frozen/MANIFEST.sha256",
+      "schemas/arm-report.schema.json",
+      "protocol/experiment-registry.yaml",
+      "protocol/preregister.md"
+    ],
+    "note": "Content hashes of the data, locks, frozen configuration manifest, schema and protocol a run depends on. data/benign.sqlite is derived (npm run data:seed-benign) and not pinned."
+  },
+  "report_schema": "schemas/arm-report.schema.json"
+}

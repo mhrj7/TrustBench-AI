@@ -1,0 +1,21 @@
+# TrustBench benchmark environment (TB-037): a fresh, locked environment that runs the credential-free checks.
+#   docker build -f Dockerfile.bench -t trustbench-bench .
+#   docker run --rm trustbench-bench                       # validate, smoke --check, manifest, report --check
+#   docker run --rm --env-file .env trustbench-bench sh bin/trustbench benchmark dev-frozen   # live: your key and budget
+# Base images are pinned by digest; Node, npm and Python versions match package.json engines and .python-version.
+FROM ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa AS uv
+FROM node:26.5.0-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=uv /uv /uvx /usr/local/bin/
+# The storage policy keeps the project, the npm cache and the Python toolchain under one root.
+ENV TRUSTBENCH_STORAGE_ROOT=/workspace \
+    npm_config_cache=/workspace/.cache/npm \
+    UV_CACHE_DIR=/workspace/.cache/uv \
+    UV_PYTHON_INSTALL_DIR=/workspace/.cache/python \
+    PYTHONDONTWRITEBYTECODE=1
+RUN npm install -g npm@12.0.0
+WORKDIR /workspace/TrustBench-AI
+COPY . .
+RUN cp .env.example .env && npm ci && sh scripts/setup-python.sh
+CMD ["sh", "-c", "sh bin/trustbench validate && sh bin/trustbench smoke --check && sh bin/trustbench manifest && sh bin/trustbench report --check"]
