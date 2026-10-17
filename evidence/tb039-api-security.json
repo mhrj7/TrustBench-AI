@@ -1,0 +1,33 @@
+{
+ "task_id": "TB-039",
+ "checked_at": "2026-10-17T09:00:03+00:00",
+ "commit": "38bf387",
+ "tests": {
+  "tests/api-security": "28 passed (isolation, sharing, deletion and retention, accounts and lockout, enumeration resistance, quotas, headers, keys/passwords/tokens never stored, logged or returned)",
+  "tests/service": "11 passed",
+  "tests/cli": "10 passed (incl. signup -> verify -> whoami -> runs -> logout, session file 0600)",
+  "web/tests/live.spec.ts": "15 passed (desktop, tablet, mobile; Live and Account pages)",
+  "npm_run_verify": "exit 0"
+ },
+ "browser_local": {
+  "guest": "session created on first visit; scripted run; share link (read-only) created",
+  "account": "sign-up -> verification email in the local outbox -> link opened -> verified, signed in, 1 guest run moved to the account -> profile page with runs, change password, sign out, delete account"
+ },
+ "container": {
+  "image": "trustbench-live:auth (Dockerfile.service, clean clone at 38bf387)",
+  "unauthenticated_run": 401,
+  "headers": [
+   "content-security-policy",
+   "x-frame-options DENY",
+   "referrer-policy no-referrer"
+  ],
+  "cli": "guest session automatic; scripted run; another client gets 404; delete removed 7 files; list empty",
+  "site_under_csp": "overview and Live page render with no console errors"
+ },
+ "not_built": [
+  "Sign-in with Google or GitHub (needs OAuth apps registered for the deployment).",
+  "Multi-factor authentication.",
+  "A managed cloud secrets service: secrets come from environment variables, NAME_FILE paths or /run/secrets mounts (how container hosts deliver secrets), or the local .env."
+ ],
+ "deployment_prerequisite": "Accounts need outgoing mail (TRUSTBENCH_SMTP_* secrets); without them verification emails stay in the local outbox and visitors use guest sessions."
+}
