@@ -48,6 +48,33 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
 
+def apply_profile(cfg: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    """TB-041: a deployment profile only constrains the service. Numeric limits must be at most the base value, a mode may
+    be switched off ('enabled': false) but not added, and anything else is refused, so a profile can never widen access."""
+    out = json.loads(json.dumps(cfg))
+    def tighten(base: dict, over: dict, where: str):
+        for k, v in over.items():
+            if k not in base:
+                raise ValueError(f'deployment profile: unknown setting {where}{k}')
+            if isinstance(base[k], bool) or not isinstance(base[k], (int, float)) or isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise ValueError(f'deployment profile: {where}{k} is not a numeric limit')
+            if v > base[k]:
+                raise ValueError(f'deployment profile: {where}{k}={v} would raise the base limit {base[k]}')
+            base[k] = v
+    for mode, over in profile.get('modes', {}).items():
+        if mode not in out['modes']:
+            raise ValueError(f'deployment profile: unknown mode {mode}')
+        over = dict(over)
+        if over.pop('enabled', True) is False:
+            out['modes'][mode]['disabled'] = True
+        tighten(out['modes'][mode], over, f'modes.{mode}.')
+    tighten(out, {k: v for k, v in profile.items() if k not in ('note', 'name', 'modes')}, '')
+    out['deploy_profile'] = profile.get('name')
+    return out
+
+
+if os.environ.get('TRUSTBENCH_DEPLOY_PROFILE'):
+    CFG = apply_profile(CFG, json.loads((ROOT / os.environ['TRUSTBENCH_DEPLOY_PROFILE']).read_text()))
 AUTH = CFG['auth']
 ACC = CFG['accounts']
 ADMIN = '__operator__'
@@ -175,6 +202,8 @@ class Service:
         for name, spec in CFG['modes'].items():
             limits = {k: v for k, v in spec.items() if k.startswith(('max_', 'per_client', 'daily'))}
             available, reason = (hosted['available'], hosted['reason']) if name == 'hosted' else (True, None)
+            if spec.get('disabled'):
+                available, reason = False, CFG['disabled_mode_reason']
             if self.storage_error:
                 available, reason = False, CFG['storage_unavailable_reason']
             modes[name] = {'label': spec['label'], 'live': spec['live'], 'limits': limits, 'models': self.models(name) if spec['live'] else [],
@@ -183,7 +212,7 @@ class Service:
         cases = [{'id': c['case_id'], 'kind': c['kind'], 'workflow': WORKFLOW[c['fixture_id'].split('--')[0]], 'scripted_only': bool(c.get('scripted_only'))} for c in SUITE['cases']]
         return {'modes': modes, 'systems': [{'id': k, **v} for k, v in CFG['systems'].items()], 'renderings': renderings, 'default_rendering': CFG['default_rendering'],
                 'cases': cases, 'agents': CFG['agents'], 'frozen': {'system': HC['defended_system']['system'], 'model': HC['model'], 'prompt_profile': HC['prompt_profile']},
-                'holdouts': 'sealed; never offered or run by this service', 'storage': 'unavailable' if self.storage_error else 'ok', 'access_token_required': bool(sec.get(CFG['access_token_env'])),
+                'holdouts': 'sealed; never offered or run by this service', 'storage': 'unavailable' if self.storage_error else 'ok', 'deploy_profile': CFG.get('deploy_profile'), 'access_token_required': bool(sec.get(CFG['access_token_env'])),
                 'auth': {'session': 'POST /api/session (anonymous, no account)', 'retention_hours': CFG['retention_hours'], 'session_ttl_hours': AUTH['session_ttl_hours'],
                          'accounts': {'signup': 'POST /api/auth/signup', 'retention_days': ACC['account_retention_days'], 'verified_quota_multiplier': ACC['verified_quota_multiplier'],
                                       'email_delivery': self.mailer.mode, 'password_min_length': ACC['password_policy']['min_length']}}}
@@ -193,6 +222,8 @@ class Service:
         if req.mode not in CFG['modes']:
             raise HTTPException(400, f"mode must be one of {', '.join(CFG['modes'])}")
         spec = CFG['modes'][req.mode]
+        if spec.get('disabled'):
+            raise HTTPException(503, CFG['disabled_mode_reason'])
         agent = CFG['agents'].get(req.agent)
         if not agent:
             raise HTTPException(400, f"agent must be one of {', '.join(CFG['agents'])}")

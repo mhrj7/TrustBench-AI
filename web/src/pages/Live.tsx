@@ -55,7 +55,8 @@ export default function Live() {
 }
 
 function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: string) => void }) {
-  const firstMode = MODE_ORDER.find((m) => catalog.modes[m].available) ?? 'scripted';
+  // A reviewer may have no key: when the shared key is unavailable, fall back to the instant mode, not to "your key".
+  const firstMode: Mode = catalog.modes.hosted.available ? 'hosted' : catalog.modes.scripted.available ? 'scripted' : (MODE_ORDER.find((m) => catalog.modes[m].available) ?? 'scripted');
   const [mode, setMode] = useState<Mode>(firstMode);
   const info = catalog.modes[mode];
   const systems = catalog.systems.filter((s) => s.modes.includes(mode));

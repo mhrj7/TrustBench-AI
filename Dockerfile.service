@@ -20,7 +20,10 @@ RUN npm install -g npm@12.0.0
 WORKDIR /workspace/TrustBench-AI
 COPY . .
 RUN cp .env.example .env && npm ci && npm run setup && npm run web:build \
-    && useradd --create-home --uid 10001 trustbench && mkdir -p /workspace/service-data && chown -R trustbench /workspace
-USER 10001
+    && mkdir -p /workspace/service-data && chown -R node /workspace
+# uid 1000 (the base image's node user): the uid most container hosts (Hugging Face Spaces among them) run images as.
+USER 1000
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD .venv-tools/bin/python -c "import json, sys, urllib.request; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('PORT', '8080') + '/api/health', timeout=4))['ok'] else 1)" 
 CMD ["sh", "-c", ".venv-tools/bin/python -m uvicorn src.service.app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --no-access-log"]

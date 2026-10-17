@@ -1,0 +1,33 @@
+# TB-041 constrained public demo: the website and live-test service (Dockerfile.service) with the public-demo profile.
+#   docker compose -f deploy/compose.yaml up -d --build
+# Secrets are files, never environment values in this file: put the project's NVIDIA free-tier key in
+# deploy/secrets/nvidia_api_key and an operator token in deploy/secrets/trustbench_admin_token (both gitignored).
+# Without the key file the site still serves the published results, instant runs and own-key runs.
+name: trustbench-demo
+services:
+  live:
+    build: { context: .., dockerfile: Dockerfile.service }
+    image: trustbench-live:demo
+    ports: ["127.0.0.1:${TRUSTBENCH_DEMO_PORT:-8080}:8080"]   # put a TLS proxy (or the host's) in front; never bind 0.0.0.0 bare
+    environment:
+      TRUSTBENCH_DEPLOY_PROFILE: ${TRUSTBENCH_DEPLOY_PROFILE:-configs/deploy/public-demo.json}
+      NVIDIA_API_KEY_FILE: /run/secrets/nvidia_api_key
+      TRUSTBENCH_ADMIN_TOKEN_FILE: /run/secrets/trustbench_admin_token
+    secrets: [nvidia_api_key, trustbench_admin_token]
+    read_only: true                      # the image is immutable at runtime; only the paths below can be written
+    tmpfs:
+      - /tmp:size=256m
+      - /workspace/TrustBench-AI/.tool-state:size=64m,uid=1000
+    volumes:
+      - service-data:/workspace/service-data   # sessions, accounts, runs (24 h retention), the daily budget record
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    mem_limit: 3g
+    cpus: 2
+    restart: unless-stopped
+volumes:
+  service-data: {}
+secrets:
+  nvidia_api_key: { file: ./secrets/nvidia_api_key }
+  trustbench_admin_token: { file: ./secrets/trustbench_admin_token }
