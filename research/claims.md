@@ -71,6 +71,11 @@ Only with the qualifiers shown, and only for the frozen configuration
   new defense idea is claimed.
 - **Security guarantee.** No formal or universal guarantee. Results are measured rates with intervals for one configuration;
   zero observed failures would still not mean zero risk.
+- **The "novel candidate" label.** The directive-flow systems carry the working label "ours (novel candidate …)" in
+  `configs/defenses.yaml`, the generated [`docs/defense-comparison.md`](../docs/defense-comparison.md) and the recorded run
+  reports. It was a working name given before the prior-work review (TB-043), not a claim. It stays because the live
+  configuration must match the frozen copy byte for byte (A-023; `scripts/verify-frozen.py`) and recorded reports are never
+  rewritten; changing it needs a new amendment and selection.
 - **Production readiness.** Synthetic data and local mock tools only.
 - **Patentability or publication.** Neither is claimed or implied; both would need specialist review.
 - **Hiring outcomes.** Portfolio material may use only the statements in "Measured results that may be stated", with their
