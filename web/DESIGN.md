@@ -36,6 +36,12 @@ The overview, top to bottom:
 9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 
+**How it works** (`pages/How.tsx`, `components/Anatomy.tsx`, `iso/bench.ts`): the pipeline built as one isometric machine
+with the Anatomy skill's kit (MIT): card hoppers (tasks, attacks), a stamping drum (renderings), the reader head (the
+model), three guard gates and a reject tray, a ten-socket tool rack, three scorer gauges, a filing cabinet (the run
+store) and a dial (the paired result). The pucks replay the real guarded run; hover takes the bench apart; the stage
+cards beside it light their part as they scroll. Numbers come from `pipeline.json` (configs/site-pipeline.json).
+
 Across the site: **water ripples** under the cursor (`components/Water.tsx`): each ripple refracts the real page through an
 SVG displacement filter used as `backdrop-filter` (Chromium); other browsers show the highlight ring only. **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.

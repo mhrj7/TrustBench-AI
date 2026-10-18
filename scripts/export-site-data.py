@@ -106,6 +106,29 @@ def headline() -> dict:
             'comparison': {'note': hc['comparison']['note'], 'systems': comparison}}
 
 
+def pipeline() -> dict:
+    """The How it works page's numbers (configs/site-pipeline.json): counted from the data, configs and run store."""
+    pc = json.loads((ROOT / 'configs/site-pipeline.json').read_text())
+    lines = lambda f: [json.loads(x) for x in (ROOT / f).read_text().splitlines() if x.strip()]
+    load = lambda f: json.loads((ROOT / f).read_text())
+    gateway = (ROOT / pc['gateway_source']).read_text()
+    missing = [l['id'] for l in pc['guard_layers'] if f"'{l['id']}'" not in gateway or f"'{l['denies_with']}'" not in (ROOT / l['source']).read_text()]
+    if missing:
+        raise SystemExit(f'site-pipeline: guard layers not found in {pc["gateway_source"]}: {missing}')
+    col = {f: i for i, f in enumerate(FIELDS)}
+    valid = [r for r in rows if not r[col['invalid']]]
+    holdouts = {Path(f).stem: len(load(f)['cases']) for f in pc['holdouts']}
+    return {'source': 'configs/site-pipeline.json',
+            'tasks': len(lines(pc['tasks'])), 'attacks': len(lines(pc['attacks'])), 'oracles': len(load(pc['oracles'])['attacks']),
+            'renderings': sorted(load(pc['renderings'])['renderings']), 'tools': sorted(load(pc['tools'])['descriptions']),
+            'providers': sorted(load(pc['providers'])['providers']), 'models': sorted({r[col['model']] for r in rows}),
+            'systems': sorted({r[col['system']] for r in rows}), 'case_groups': len(load(pc['splits'])['groups']), 'holdouts': holdouts,
+            'reports': len(store['reports']), 'runs': len(rows), 'valid_runs': len(valid),
+            'outcomes': {o: sum(1 for r in rows if r[col['outcome']] == o) for o in sorted({r[col['outcome']] for r in rows})},
+            'denial_codes': store['denial']['codes'], 'guard_layers': pc['guard_layers'], 'stages': pc['stages']}
+
+
+(out / 'pipeline.json').write_text(json.dumps(pipeline(), indent=1, ensure_ascii=False))
 (out / 'headline.json').write_text(json.dumps(headline(), indent=1, ensure_ascii=False))
 (out / 'runs.json').write_text(json.dumps({'fields': FIELDS, 'rows': rows}, separators=(',', ':'), ensure_ascii=False))
 leaks = [p.name for p in out.rglob('*.json') if red.find(p.read_text())]

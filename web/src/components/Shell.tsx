@@ -8,7 +8,7 @@ import { runPath, useDataset } from '../lib/data';
 import { short } from '../lib/format';
 import { Roll } from './Interactive';
 
-const LINKS = [['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution'], ['/account', 'Account']] as const;
+const LINKS = [['/how', 'How it works'], ['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution'], ['/account', 'Account']] as const;
 
 export function Nav() {
   const reduce = useReducedMotion();
