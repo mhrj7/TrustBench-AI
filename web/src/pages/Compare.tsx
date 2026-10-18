@@ -66,7 +66,7 @@ function Legend({ bad }: { bad: boolean }) {
   return (
     <div className="legend">
       <span><i style={{ background: 'var(--tone-2)' }} />0%</span>
-      <span><i style={{ background: bad ? 'var(--signal)' : 'var(--ink)' }} />100%{bad ? ' attacker success' : ''}</span>
+      <span><i style={{ background: bad ? 'var(--signal)' : 'var(--data-1)' }} />100%{bad ? ' attacker success' : ''}</span>
       <span><i style={{ background: 'var(--tone-1)' }} />not run</span>
     </div>
   );

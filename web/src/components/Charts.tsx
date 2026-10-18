@@ -6,7 +6,8 @@ import { EASE_OUT } from './Motion';
 /** Colour for a rate: ink ramp for good outcomes, signal ramp for attacker success. Interpolated in sRGB between tone-2 and the end colour. */
 export function rampColor(rate: number | null, bad: boolean) {
   if (rate === null) return 'var(--tone-2)';
-  const a = [0x1e, 0x21, 0x25], b = bad ? [0xff, 0xb2, 0x1f] : [0xed, 0xeb, 0xe6];
+  // From the card surface to the danger colour (a bad outcome such as attacker success) or the accent (a good one).
+  const a = [0x13, 0x16, 0x22], b = bad ? [0xfb, 0x71, 0x85] : [0x7c, 0x83, 0xff];
   const t = Math.pow(rate, 0.85);
   return `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * t)).join(',')})`;
 }
@@ -70,7 +71,7 @@ export function RateBars({ groups, dim, metric, spec, onSelect, muted, reference
             <button className="ratebar" onClick={() => onSelect(g)} aria-label={`${value(dim, g.key[dim])}: ${pct(m.rate)}, ${m.k} of ${m.n}, interval ${ci(m.ci)}. Open the evidence.`}>
               <span className={`ratebar-label small ${mute ? 'ink-2' : ''}`}>{value(dim, g.key[dim])}{mute ? ' (reference)' : ''}</span>
               <span className="ratebar-track">
-                <motion.span className="ratebar-fill" style={{ background: bad ? 'var(--signal)' : mute ? 'var(--ink-3)' : 'var(--ink)', width: `${(m.rate ?? 0) * 100}%` }}
+                <motion.span className="ratebar-fill" style={{ background: bad ? 'var(--signal)' : mute ? 'var(--ink-3)' : 'var(--data-1)', width: `${(m.rate ?? 0) * 100}%` }}
                   initial={{ scaleX: reduce ? 1 : 0, opacity: reduce ? 0 : 1 }} whileInView={{ scaleX: 1, opacity: 1 }} viewport={{ once: true }}
                   transition={{ duration: 0.8, ease: EASE_OUT, delay: Math.min(i * 0.04, 0.45) }} />
                 {m.ci && (

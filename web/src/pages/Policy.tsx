@@ -47,7 +47,7 @@ function PolicyBody({ d }: { d: Dataset }) {
               <div className="row" style={{ justifyContent: 'space-between' }}><span className="small">{reason}</span><span className="small num ink-2">{e.count.toLocaleString('en')} decisions</span></div>
               <div className="reason-track">
                 {e.parts.map((p, j) => (
-                  <motion.button key={String(p.key[by])} className="reason-seg" style={{ width: `${(p.count / max) * 100}%`, background: j % 2 ? 'var(--ink-2)' : 'var(--ink)' }}
+                  <motion.button key={String(p.key[by])} className="reason-seg" style={{ width: `${(p.count / max) * 100}%`, background: j % 2 ? 'var(--data-2)' : 'var(--data-1)' }}
                     title={`${value(by, p.key[by])}: ${p.count}`}
                     aria-label={`${reason}, ${value(by, p.key[by])}: ${p.count} decisions in ${p.run_ids.length} runs. Open the evidence.`}
                     onClick={() => open({ title: `${reason}`, summary: <>{value(by, p.key[by])}: {p.count} decisions in {p.run_ids.length} runs.</>, runIds: p.run_ids })}
@@ -64,7 +64,7 @@ function PolicyBody({ d }: { d: Dataset }) {
   );
 }
 
-const OUTCOME_COLORS: Record<string, string> = { success: 'var(--ink)', failure: 'var(--ink-3)', timeout: 'var(--signal-dim)', budget_exhausted: 'var(--signal)' };
+const OUTCOME_COLORS: Record<string, string> = { success: 'var(--data-1)', failure: 'var(--ink-3)', timeout: 'var(--signal-dim)', budget_exhausted: 'var(--signal)' };
 
 export function Outcomes() {
   const data = useDataset();

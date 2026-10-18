@@ -1,92 +1,95 @@
 # TrustBench review site — design system
 
-Source of truth for the website (`web/`) and the Figma reference file ("TrustBench — Design system"). Change values here
-first, then in `web/src/styles/tokens.css` and Figma.
+Source of truth for the website (`web/`). Change values here first, then in `web/src/styles/tokens.css`.
 
 ## Direction
 
-**Instrument.** TrustBench measures whether defenses stop prompt injection in autonomous agents, and every number it
-reports is backed by a hashed evidence record. The site reads like a measuring instrument: a dark graphite field, warm
-off-white ink, and a single amber signal that only marks what matters (the primary action, an attack that got through, a
-defense denial). No chart junk, no decoration: the data is the picture.
+**A product page that tells a story, backed by an instrument.** TrustBench measures whether a guard stops AI helpers
+from being tricked by hidden instructions in what they read. The overview explains this so a ten-year-old can follow it:
+a hero with a live 3D scene (the helper, the documents it reads, one trap, and the guard's shield stopping each hidden
+instruction), a four-chapter story, a switch that replays a real recorded pair of runs with and without the guard, and a
+bento grid of results. Every number and every scene comes from the evidence files (`web/public/data/*.json`); nothing on
+the page is invented for the illustration. The evidence pages (Compare, Runs, Policy, Outcomes, Attribution, Evidence
+index) keep the instrument rule: each number, cell and bar opens into the runs it counts, down to the raw record.
 
-**The idea.** On this site, the evidence hash of every run becomes the door: each number, cell and bar opens into the runs
-it counts, down to the raw record (report file, SHA-256, JSON pointer). The hero replays a real trace from the store, so
-the first thing a visitor sees is an agent being steered and the gateway answering.
-
-Guidance applied: Taste house rules (no gradients, glass, glows, eyebrow pills, tiny uppercase labels, index numbering,
-accent words in headlines; one ground, one ink, one accent; two type families with mono only for real identifiers), the
-Vercel web interface guidelines (focus-visible, semantic controls, tabular numbers, URL reflects state, reduced motion),
-Emil Kowalski's easing and duration rules, and the LottieFiles motion tables (Premium archetype for marketing reveals,
-Corporate for interface feedback).
+Guidance applied: the Apple design skill (springs with no bounce, interruptible motion, press feedback, translucent
+materials for chrome, size-specific tracking, reduced motion / reduced transparency / increased contrast), the UI/UX Pro
+Max data (Bento Box Grid style, scroll-triggered storytelling landing pattern, three.js performance rules), the Vercel web
+interface guidelines (focus-visible, semantic controls, tabular numbers, URL reflects state) and Emil Kowalski's easing
+and duration rules.
 
 ## Colour
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--ground` | `#0D0E10` | page field |
-| `--tone-1` | `#15171A` | raised surface (one tone step) |
-| `--tone-2` | `#1E2125` | second step: hover, table stripe, empty heatmap cell |
-| `--tone-3` | `#2A2E33` | third step: selected, chart track |
-| `--ink` | `#EDEBE6` | text and primary data marks |
-| `--ink-2` | `#A6A59F` | secondary text (notes only) |
-| `--ink-3` | `#6E6F6B` | tertiary: axes, disabled |
-| `--signal` | `#FFB21F` | the one accent: primary action, attacker success, defense denial |
-| `--signal-ink` | `#0D0E10` | text on signal |
-| `--signal-dim` | `#6B4B0E` | signal at low intensity (heatmap floor) |
+| `--ground` | `#06070B` | page field |
+| `--tone-1` / `--tone-2` / `--tone-3` | `#0C0E14` / `#131622` / `#1D2130` | raised surfaces, hover, chart tracks |
+| `--ink` / `--ink-2` / `--ink-3` | `#F5F5F7` / `#A4A8B8` / `#6B7084` | text, secondary text, axes |
+| `--accent` / `--accent-2` | `#7C83FF` / `#C084FC` | brand, primary action, focus, the guard |
+| `--gradient` | indigo → violet → pink | primary buttons, wordmark, one accent word per hero |
+| `--safe` | `#34D399` | the guard stopped something; task done |
+| `--danger` (= `--signal`) | `#FB7185` | attacker success: the trick worked |
+| `--data-1` / `--data-2` | `#7C83FF` / `#4A4F86` | neutral data series (two strengths) |
+| `--glass` / `--glass-strong` | translucent tone-1 + `blur(22px) saturate(160%)` | nav, cards, drawer |
 
-Data encoding: rates use one sequential ramp from `--tone-2` (0%) to `--ink` (100%) for good outcomes and from
-`--tone-2` to `--signal` for attacker success. Never two hues fighting in one chart. Separate surfaces by tone steps,
-never by lines or shadows. `color-scheme: dark`.
+Data encoding: danger is reserved for attacker success and the trick getting through; safe for a stopped call; every
+other series uses `--data-1` / `--data-2`. Heatmap rates ramp from `--tone-2` to `--danger` (bad outcomes) or to
+`--accent` (good ones). `prefers-reduced-transparency` replaces glass with solid tone-1; `prefers-contrast: more` raises
+line and secondary-ink contrast. `color-scheme: dark`.
 
 ## Type
 
-Families: **Instrument Sans** (variable, 400–700) for everything; **JetBrains Mono** only for run IDs, hashes, JSON and
-code. Tabular figures (`font-variant-numeric: tabular-nums`) wherever numbers align.
+Families: **Instrument Sans** (variable) for everything; **JetBrains Mono** only for run IDs, hashes, JSON, tool names
+and the hidden instruction text. Tabular figures wherever numbers align. Tracking tightens as size grows (display
+-0.035em, headline -0.03em, body 0).
 
-| Style | Size (desktop / phone) | Weight | Leading | Tracking |
-| --- | --- | --- | --- | --- |
-| Display | 112 / 52 px (`clamp(52px, 8.4vw, 112px)`) | 600 | 0.92 | -0.03em |
-| Headline | 56 / 34 px (`clamp(34px, 4.4vw, 56px)`) | 600 | 1.0 | -0.025em |
-| Statement | 28 / 22 px | 500 | 1.25 | -0.015em |
-| Body | 18 / 17 px | 400 | 1.55 | 0 |
-| Small | 14 px | 500 | 1.45 | 0 |
-| Figure | 64 / 44 px | 600 | 1.0 | -0.03em, tabular |
-| Mono | 13 px | 450 | 1.5 | 0 |
+| Style | Size | Weight |
+| --- | --- | --- |
+| Display | `clamp(48px, 7.2vw, 104px)` | 600 |
+| Headline | `clamp(32px, 4.2vw, 56px)` | 600 |
+| Statement | `clamp(21px, 2vw, 27px)` | 500 |
+| Body | `clamp(17px, 1.2vw, 18px)` | 400 |
+| Small | 14px | 500 |
+| Figure | `clamp(44px, 4.8vw, 72px)` | 600, tabular |
+| Mono | 13px | 450 |
 
-Five sizes at most on a page; headlines two lines or fewer at every width (`text-wrap: balance`). Sentence case.
+Headlines stay at two lines or fewer at every width (`text-wrap: balance`). Sentence case.
 
 ## Space and layout
 
-Spacing scale (px): 4, 8, 12, 16, 24, 32, 48, 64, 96, 144, 200. Margins 32 desktop, 24 tablet, 16 phone. Twelve-column
-grid, max content width 1360. Section gaps 160 desktop, 96 phone; gaps inside a section never above 64. Text blocks share
-three left edges: the margin, column 4, column 7. Radius: 2px everywhere (square corners); one shape decision for all
-controls.
+Spacing scale (px): 4, 8, 12, 16, 24, 32, 48, 64, 96, 144, 200. Margins 32 / 24 / 16 (desktop / tablet / phone); max
+content width 1280; section gaps 144 / 112 / 88. Radius 14px for controls and small cards, 24px for bento cards and
+panels, pill for chips and switches. Bento grid: 12 columns on desktop, cards span 4 / 6 / 8 / 12; one column on phones.
 
 ## Components
 
-- **Bar navigation:** wordmark, four links, one action. Plain bar, sticky, tone step on scroll, no blur.
-- **Button:** flat; primary is `--signal` on `--signal-ink`, secondary is `--tone-2` with ink text. Height 44, padding 0 20.
-  Hover lightens one step; press `scale(0.97)` 160ms; focus-visible 2px signal outline offset 2px.
-- **Figure:** big tabular number + one-line caption; counts up once on first view.
-- **Data table:** real table, tone-1 field, tone-2 row hover, no borders, tabular numbers, sticky header.
-- **Evidence drawer:** slides in from the right (drawer curve), holds the run list behind an aggregate and the raw record.
+- **Hero 3D** (`components/Hero3D.tsx`, react-three-fiber): the helper (a glowing face that blinks and looks toward the
+  pointer), seven orbiting documents, one red trap, hidden-instruction particles that stop at the shield, which flashes
+  safe-green on each hit. No external assets. DPR capped at 2; the loop pauses off screen or when the tab is hidden, and
+  renders a still frame under reduced motion. Lazy-loaded so the text paints first.
+- **Story** (`components/Story.tsx`): four chapters; on wide screens a sticky stage swaps scenes (blur cross-fade) with
+  the chapter in view; on phones each chapter carries its own scene. All scenes use the recorded example.
+- **Guard switch** (Overview `Simulator`): segmented switch with a shared-layout thumb; replays the real tool calls of
+  the chosen run and lands on a verdict.
+- **Bento card** (`components/Bento.tsx`): glass, pointer-following glow, spring tilt on hover, press scale, enters on
+  view. Holds dot grids, the interval bar, the split bar and the comparison race.
+- **Bar navigation:** glass when scrolled, wordmark, links, Evidence index, gradient primary action.
+- **Data table, evidence drawer:** glass panel, tabular numbers, drawer from the right with the drawer curve.
 
 ## Motion
 
+Springs first (`{ type: 'spring', bounce: 0, duration: 0.5 }`), so every animation can be interrupted mid-flight. CSS
+easings are only for colour and opacity:
+
 | Token | Value | Use |
 | --- | --- | --- |
-| `--ease-out` | `cubic-bezier(0.23, 1, 0.32, 1)` | entrances, UI feedback (80% of motion) |
-| `--ease-in-out` | `cubic-bezier(0.77, 0, 0.175, 1)` | on-screen movement, chart morphs |
+| `--ease-out` | `cubic-bezier(0.23, 1, 0.32, 1)` | colour, opacity, UI feedback |
+| `--ease-in-out` | `cubic-bezier(0.77, 0, 0.175, 1)` | chart morphs |
 | `--ease-drawer` | `cubic-bezier(0.32, 0.72, 0, 1)` | drawer |
-| `--dur-quick` | 160ms | press, hover |
-| `--dur-standard` | 280ms | UI transitions |
-| `--dur-slow` | 700ms | section reveals, chart draws |
+| `--dur-quick` / `--dur-standard` / `--dur-slow` | 160 / 280 / 700ms | press, transitions, reveals |
 
-Signature move: the hero trace replay, bars of a real run drawing left to right in time, the denied call landing in
-signal. Entrances rise 24px with opacity, staggered 60ms (heading, text, figure), once per section. Charts draw with a
-wave stagger of 30–40ms per mark, total under 500ms. Scroll: section reveals and one scroll-linked chart. Only transform
-and opacity animate; `prefers-reduced-motion` keeps fades and removes travel. Content is visible without JavaScript
-animation (reveals start from a visible state if scripts fail).
+Motion runs continuously where it explains something (the 3D scene, the story scenes, the replay), not only on scroll.
+Only transform, opacity and filter animate. `prefers-reduced-motion` keeps fades, removes travel and stops the 3D loop.
+Content is readable without JavaScript animation.
 
-Figma reference: https://www.figma.com/design/ZryhjfSxX6T2vC8iYC4Mdg (variables Color/Space/Motion, text styles, Foundations specimen).
+The Figma reference file made for the earlier "instrument" direction (amber on graphite) no longer matches this system.

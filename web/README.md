@@ -29,7 +29,8 @@ All view state (filters, axes, verdict, source) is in the URL.
 ## Data and redaction
 
 `scripts/export-site-data.py` writes `public/data/` (git-ignored): `store.json`, `runs.json` (one row per run),
-`records/<n>.json` (each report's redacted records, loaded on demand) and `spans/<n>.json`. A static site cannot hide data,
+`records/<n>.json` (each report's redacted records, loaded on demand), `spans/<n>.json`, and `headline.json` (the
+overview's numbers, comparison and recorded example, read from the evidence files named in `configs/site-headline.json`). A static site cannot hide data,
 so the export is always redacted (`app/redact.py`); there is no unredacted mode. Raw records stay in the repository.
 
 ## Tests

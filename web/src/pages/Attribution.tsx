@@ -25,7 +25,7 @@ export function Attribution() {
                 <div className="att-col-bar">
                   {s.wilson95 && <motion.span className="att-ci" style={{ bottom: `${s.wilson95[0] * 100}%`, height: `${(s.wilson95[1] - s.wilson95[0]) * 100}%` }}
                     initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.6 + i * 0.08 }} />}
-                  <motion.span className="att-col-fill" style={{ height: `${(s.accuracy ?? 0) * 100}%`, background: Number(r) === a.measured.round ? 'var(--signal)' : 'var(--ink-2)' }}
+                  <motion.span className="att-col-fill" style={{ height: `${(s.accuracy ?? 0) * 100}%`, background: Number(r) === a.measured.round ? 'var(--data-1)' : 'var(--data-2)' }}
                     initial={{ scaleY: reduce ? 1 : 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true }} transition={{ duration: 0.9, ease: EASE_OUT, delay: i * 0.08 }} />
                 </div>
                 <p className="figure-sm num">{pct(s.accuracy)}</p>

@@ -12,7 +12,7 @@ const untimedRun = runs.find((r: { timed: boolean; utility_rule: string | null; 
 const untimed = runs.find((r: { timed: boolean; utility_rule: string | null; invalid: boolean }) => !r.timed && r.utility_rule === 'call_denied_by_defense' && !r.invalid)?.run_id;
 
 const PAGES: [string, string, RegExp][] = [
-  ['overview', '/', /Does the defense hold/],
+  ['overview', '/', /Can a guard stop a tricked AI/],
   ['compare', '/compare', /Compare defenses/],
   ['runs', '/runs', /Every run in the store/],
   ['run-timed', `/runs/${encodeURIComponent(heroRun)}`, new RegExp(heroCase)],
