@@ -153,7 +153,7 @@ function SpaceCta() {
   const reduce = !!useReducedMotion();
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
-      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} /></Suspense>
+      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>
       <div className="space-copy wrap">
         <p className="caps">Think you can beat it?</p>
         <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
@@ -534,7 +534,7 @@ function PairedMorph({ d }: { d: Dataset }) {
   return (
     <section ref={ref} className="morph" style={{ height: reduce ? 'auto' : Math.round((vh * Math.max(180, 120 + rows.length * 6)) / 100) }} aria-labelledby="morph-title">
       <div className="morph-sticky wrap" style={reduce ? { position: 'static' } : undefined}>
-        <div className="grid" style={{ rowGap: 32 }}>
+        <div className="grid chart-card" style={{ rowGap: 32 }}>
           <div className="span-6 stack-24">
             <h2 id="morph-title" className="headline">{morphHeadline(rows)}</h2>
             <p className="body ink-2">Attacker goal reached on attack cases for {short(model)}, the model every defense was run on. Each defense is compared with the baseline arm of its own reports, on the same cases. These are development runs and point estimates, not a confirmatory result (that is in the technical report). Scroll to move each bar from its baseline to its defended rate.</p>
@@ -590,8 +590,9 @@ function UtilityCost({ d, fp }: { d: Dataset; fp: number }) {
     return aggregate(runs as Run[], ['system'], { utility_pass: d.store.metrics.utility_pass }, d.store.wilson_z);
   }, [d, model, sys]);
   return (
-    <section className="section wrap" aria-labelledby="cost-title">
-      <div className="grid" style={{ rowGap: 48 }}>
+    <section className="section wrap clip-x" aria-labelledby="cost-title">
+      <Barrel max={18}>
+      <div className="grid chart-card" style={{ rowGap: 48 }}>
         <div className="span-5 stack-24">
           <Reveal><h2 id="cost-title" className="headline">Some defenses also refuse correct work.</h2></Reveal>
           <Reveal i={1}><p className="body ink-2">Benign utility on {short(model)}: the share of benign cases the agent completed. The baseline bar pools the baseline arms of every report on this model; bars below it are the cost of the defense.</p></Reveal>
@@ -604,6 +605,7 @@ function UtilityCost({ d, fp }: { d: Dataset; fp: number }) {
               runIds: g.run_ids, counted: Object.fromEntries(g.metrics.utility_pass.hit_ids.map((i) => [i, 'yes' as const]).concat(g.metrics.utility_pass.miss_ids.map((i) => [i, 'no' as const]))) })} />
         </div>
       </div>
+      </Barrel>
     </section>
   );
 }

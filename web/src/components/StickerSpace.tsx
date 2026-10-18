@@ -1,9 +1,10 @@
-// The ending scene: a dark sky full of floating stickers (our own artwork, components/stickers.ts) drifting in zero
-// gravity around an empty middle where the title sits. Each sticker is a physics body (Rapier); a weak spring pulls it back
-// to its home, and the pointer is a kinematic ball that shoves stickers aside. Stickers tilt with their own velocity, so a
-// push reads as a flick. No external assets. The loop stops off screen, and the stickers hang still under reduced motion.
+// The ending scene: stickers (our own artwork, components/stickers.ts) rain down onto the floor of a dark sky and settle
+// into a heap, a sea bed of stickers under the title, with the astronaut model floating above. Each sticker is a flat
+// physics body (Rapier) under gravity; nothing moves until the pointer, a kinematic ball, pushes into the heap. The loop
+// stops off screen, and the heap lies still under reduced motion.
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-import { BallCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
+import { BallCollider, CuboidCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
+import { useGLTF } from '@react-three/drei';
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { STICKERS } from './stickers';
@@ -12,33 +13,52 @@ const NAMES = Object.keys(STICKERS);
 const URLS = NAMES.map((n) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(STICKERS[n].replace('<svg ', '<svg width="512" height="512" '))}`);
 const seeded = (s: number) => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
 
-function Sticker({ tex, home, size, still }: { tex: THREE.Texture; home: THREE.Vector3; size: number; still: boolean }) {
-  const api = useRef<RapierRigidBody>(null);
-  const mesh = useRef<THREE.Mesh>(null);
-  const pull = useMemo(() => new THREE.Vector3(), []);
-  const phase = useMemo(() => Math.random() * 10, []);
-  useFrame(({ clock }) => {
-    const b = api.current;
-    if (!b) return;
-    const t = b.translation(), v = b.linvel(), time = clock.elapsedTime + phase;
-    if (!still) {
-      // Spring home, plus a slow drift so the sky never stands still.
-      pull.set(home.x + Math.sin(time * 0.3) * 0.4 - t.x, home.y + Math.cos(time * 0.27) * 0.4 - t.y, home.z - t.z).multiplyScalar(0.035 * size * size);
-      b.applyImpulse(pull, true);
-    }
-    if (mesh.current) {
-      mesh.current.rotation.z += ((-v.x * 0.08 + Math.sin(time * 0.5) * 0.12) - mesh.current.rotation.z) * 0.1;
-      mesh.current.rotation.x += ((v.y * 0.06) - mesh.current.rotation.x) * 0.1;
-    }
-  });
+function Sticker({ tex, start, size }: { tex: THREE.Texture; start: THREE.Vector3; size: number }) {
   return (
-    <RigidBody ref={api} position={home.toArray()} colliders={false} enabledRotations={[false, false, false]} linearDamping={1.6}>
-      <BallCollider args={[size * 0.42]} />
-      <mesh ref={mesh}>
+    <RigidBody position={start.toArray()} rotation={[0, 0, (start.x * 7) % Math.PI]} colliders={false} enabledRotations={[false, false, true]}
+      linearDamping={0.3} angularDamping={0.8} friction={0.7} restitution={0.12}>
+      <CuboidCollider args={[size * 0.4, size * 0.4, 0.25]} />
+      <mesh>
         <planeGeometry args={[size, size]} />
         <meshBasicMaterial map={tex} transparent alphaTest={0.02} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
     </RigidBody>
+  );
+}
+
+/** Floor and side walls at the edges of the view, so the heap stays on screen at any width. */
+function Bounds() {
+  const { viewport } = useThree();
+  const w = viewport.width / 2, h = viewport.height / 2;
+  return (
+    <RigidBody type="fixed" colliders={false}>
+      <CuboidCollider args={[w + 2, 1, 3]} position={[0, -h - 1, 0]} />
+      <CuboidCollider args={[1, h * 4, 3]} position={[-w - 1, h, 0]} />
+      <CuboidCollider args={[1, h * 4, 3]} position={[w + 1, h, 0]} />
+      <CuboidCollider args={[w + 2, h * 4, 0.5]} position={[0, h, -1.2]} />
+      <CuboidCollider args={[w + 2, h * 4, 0.5]} position={[0, h, 1.2]} />
+    </RigidBody>
+  );
+}
+
+/** The astronaut model, floating above the heap and turning slowly. */
+function Floater({ url }: { url: string }) {
+  const g = useRef<THREE.Group>(null);
+  const { scene } = useGLTF(url);
+  const { viewport } = useThree();
+  const model = useMemo(() => scene.clone(true), [scene]);
+  const fit = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    return { s: (viewport.height * 0.26) / Math.max(size.y, 1e-3), c };
+  }, [model, viewport.height]);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    if (g.current) { g.current.position.y = viewport.height * 0.3 + Math.sin(t * 0.8) * 0.25; g.current.rotation.y = Math.sin(t * 0.25) * 0.6; g.current.rotation.z = Math.sin(t * 0.5) * 0.08; }
+  });
+  return (
+    <group ref={g} position={[0, 0, -4]}>
+      <primitive object={model} scale={fit.s} position={[-fit.c.x * fit.s, -fit.c.y * fit.s, -fit.c.z * fit.s]} />
+    </group>
   );
 }
 
@@ -50,24 +70,19 @@ function Pointer() {
   return <RigidBody ref={api} type="kinematicPosition" colliders={false} position={[0, 100, 0]}><BallCollider args={[1.3]} /></RigidBody>;
 }
 
-function Sky({ count, still }: { count: number; still: boolean }) {
+function Heap({ count }: { count: number }) {
   const textures = useLoader(THREE.TextureLoader, URLS);
   textures.forEach((t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; });
   const { viewport } = useThree();
   const items = useMemo(() => {
-    const rnd = seeded(31), w = viewport.width / 2, h = viewport.height / 2, out: { home: THREE.Vector3; size: number; tex: number }[] = [];
-    let guard = 0;
-    while (out.length < count && guard++ < 4000) {
-      const x = (rnd() * 2 - 1) * w * 1.05, y = (rnd() * 2 - 1) * h * 1.05;
-      // Keep an oval in the middle clear for the title.
-      if ((x / (w * 0.5)) ** 2 + (y / (h * 0.42)) ** 2 < 1) continue;
-      const size = (0.9 + rnd() * 0.9) * Math.min(1.3, viewport.width / 14);
-      if (out.some((o) => o.home.distanceTo(new THREE.Vector3(x, y, o.home.z)) < (o.size + size) * 0.45)) continue;
-      out.push({ home: new THREE.Vector3(x, y, (rnd() - 0.5) * 2), size, tex: out.length % textures.length });
-    }
-    return out;
+    const rnd = seeded(31), w = viewport.width / 2, h = viewport.height / 2;
+    // Dropped from above the view in a loose column per slot, so they arrive in a shower rather than all at once.
+    return Array.from({ length: count }, (_, i) => ({
+      start: new THREE.Vector3((rnd() * 2 - 1) * w * 0.92, h + 1 + (i / count) * h * 3 + rnd() * 2, (rnd() - 0.5) * 1.2),
+      size: (0.75 + rnd() * 0.7) * Math.min(1.25, viewport.width / 15), tex: i % textures.length,
+    }));
   }, [count, viewport.width, viewport.height, textures.length]);
-  return <>{items.map((it, i) => <Sticker key={i} tex={textures[it.tex]} home={it.home} size={it.size} still={still} />)}</>;
+  return <>{items.map((it, i) => <Sticker key={i} tex={textures[it.tex]} start={it.start} size={it.size} />)}</>;
 }
 
 function Dust({ count }: { count: number }) {
@@ -81,7 +96,7 @@ function Dust({ count }: { count: number }) {
   return <points ref={ref} geometry={geo}><pointsMaterial size={0.06} color="#cfd6ff" transparent opacity={0.8} depthWrite={false} /></points>;
 }
 
-export default function StickerSpace({ reduce, source }: { reduce: boolean; source: RefObject<HTMLElement | null> }) {
+export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boolean; source: RefObject<HTMLElement | null>; modelUrl: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [started, setStarted] = useState(false);
@@ -99,9 +114,14 @@ export default function StickerSpace({ reduce, source }: { reduce: boolean; sour
         <Canvas dpr={[1, 1.75]} camera={{ position: [0, 0, 16], fov: 38 }} gl={{ antialias: true, alpha: false }} onCreated={({ gl }) => gl.setClearColor('#07080c')}
           eventSource={source.current ?? undefined} eventPrefix="client" frameloop={reduce ? 'demand' : visible ? 'always' : 'never'}>
           <Dust count={small ? 400 : 1200} />
-          <Physics gravity={[0, 0, 0]} paused={reduce || !visible} timeStep="vary">
+          <ambientLight intensity={0.6} />
+          <directionalLight position={[4, 8, 6]} intensity={2.4} />
+          <directionalLight position={[-6, -2, 4]} intensity={0.6} color="#9aa4ff" />
+          {modelUrl && <Suspense fallback={null}><Floater url={modelUrl} /></Suspense>}
+          <Physics gravity={[0, -16, 0]} paused={reduce || !visible} timeStep="vary">
+            <Bounds />
             {!reduce && <Pointer />}
-            <Suspense fallback={null}><Sky count={small ? 14 : 26} still={reduce} /></Suspense>
+            <Suspense fallback={null}><Heap count={small ? 30 : 64} /></Suspense>
           </Physics>
         </Canvas>
       )}

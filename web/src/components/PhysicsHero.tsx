@@ -43,7 +43,7 @@ function makePieces(n: number, tricks: number): Piece[] {
     id: i,
     kind: kinds[i % 3],
     color: i < tricks ? 'red' : colors[Math.floor(rnd() * 3)],
-    scale: 1.3 + rnd() * 0.8,
+    scale: 1.05 + rnd() * 0.75,
     start: [(rnd() - 0.5) * 16, (rnd() - 0.5) * 12, (rnd() - 0.5) * 8 - 2],
   }));
 }
@@ -107,7 +107,7 @@ export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onSc
   const [visible, setVisible] = useState(true);
   const [pointerIn, setPointerIn] = useState(false);
   const small = typeof window !== 'undefined' && window.innerWidth < 760;
-  const pieces = useMemo(() => makePieces(small ? 22 : 40, small ? 4 : 6), [small]);
+  const pieces = useMemo(() => makePieces(small ? 34 : 64, small ? 5 : 8), [small]);
   const tricks = pieces.filter((p) => p.color === 'red').map((p) => p.id);
   const [stopped, setStopped] = useState<Set<number>>(new Set());
   useEffect(() => { onScore?.({ stopped: stopped.size, total: tricks.length }); }, [stopped, tricks.length, onScore]);

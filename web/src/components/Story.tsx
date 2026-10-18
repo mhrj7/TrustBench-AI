@@ -5,6 +5,7 @@
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Headline } from '../lib/data';
+import { Barrel } from './Interactive';
 
 const SPRING = { type: 'spring', bounce: 0, duration: 0.5 } as const;
 
@@ -125,10 +126,12 @@ function Chapter({ i, onActive, ex }: { i: number; onActive: (i: number) => void
   const c = CHAPTERS[i];
   return (
     <div ref={ref} className="chapter">
-      <p className="eyebrow">{c.kicker}</p>
-      <h3 className="statement">{c.title}</h3>
-      <p className="body ink-2">{c.text}</p>
-      <div className="chapter-scene">{c.scene(ex)}</div>
+      <Barrel className="chapter-inner" max={26}>
+        <p className="eyebrow">{c.kicker}</p>
+        <h3 className="statement">{c.title}</h3>
+        <p className="body ink-2">{c.text}</p>
+        <div className="chapter-scene">{c.scene(ex)}</div>
+      </Barrel>
     </div>
   );
 }
