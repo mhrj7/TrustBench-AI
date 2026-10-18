@@ -24,8 +24,19 @@ The overview, top to bottom:
 5. **Flip the guard**: the recorded pair of runs replayed with the guard off and on.
 6. **Results bento**, **evidence grid** (two-column cards with live mini visuals and rolling titles), the development
    evidence (paired morph, utility cost), and the call to action.
-7. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
+7. **Sticker sky** (`components/StickerSpace.tsx`, art in `components/stickers.ts`): the call to action floats on a dark
+   sky of die-cut stickers (shield, lock, check, bug, trick, key, stars, bolt, document, helper, eye) that drift in zero
+   gravity and flick away from the pointer; the white footer follows.
+8. **Journey** (`components/Journey.tsx`): a pinned 3D flight through four portals (development, sealed test, the audit,
+   reproduction) with captions from the evidence. It renders only when the astronaut model is present in
+   `src/assets/astronaut.glb` (see `lib/models.ts` for its source and CC BY 4.0 credit, shown on the page).
+9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
+
+Across the site: **water ripples** under the cursor (`components/Water.tsx`): each ripple refracts the real page through an
+SVG displacement filter used as `backdrop-filter` (Chromium); other browsers show the highlight ring only. **Barrel scroll**
+(`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
+**Menu**: the sheet unfolds with a clip-path spring and its numbered links rise in one after another.
 
 ## Colour
 

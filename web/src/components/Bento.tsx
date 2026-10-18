@@ -1,7 +1,8 @@
 // Bento grid and card. A card follows the pointer with a small spring tilt, presses in on pointer-down
 // (feedback on the press, not the release), and is a plain card under reduced motion.
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'motion/react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useRef, type CSSProperties, type ReactNode } from 'react';
+import { useBarrel } from './Interactive';
 
 const SPRING = { stiffness: 260, damping: 26, mass: 0.6 };
 
@@ -14,7 +15,10 @@ export function Card({ children, span = 4, rows = 1, tone, className = '', style
   const reduce = useReducedMotion();
   const px = useMotionValue(0.5);
   const py = useMotionValue(0.5);
-  const rx = useSpring(useTransform(py, [0, 1], [3, -3]), SPRING);
+  const ref = useRef<HTMLElement>(null);
+  const barrel = useBarrel(ref, 22);
+  const tilt = useSpring(useTransform(py, [0, 1], [3, -3]), SPRING);
+  const rx = useTransform(() => tilt.get() + barrel.rotateX.get());
   const ry = useSpring(useTransform(px, [0, 1], [-4, 4]), SPRING);
   const move = (e: React.PointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -23,8 +27,8 @@ export function Card({ children, span = 4, rows = 1, tone, className = '', style
   };
   const leave = () => { px.set(0.5); py.set(0.5); };
   return (
-    <motion.article aria-label={label} className={`card span-${span} rows-${rows} ${tone ? `tone-${tone}` : ''} ${className}`}
-      style={{ ...style, ...(reduce ? {} : { rotateX: rx, rotateY: ry, transformPerspective: 900 } as object) }}
+    <motion.article ref={ref} aria-label={label} className={`card span-${span} rows-${rows} ${tone ? `tone-${tone}` : ''} ${className}`}
+      style={{ ...style, ...(reduce ? {} : { rotateX: rx, rotateY: ry, z: barrel.z, transformPerspective: 1100 } as object) }}
       onPointerMove={reduce ? undefined : move} onPointerLeave={reduce ? undefined : leave}
       whileTap={reduce ? undefined : { scale: 0.985 }}
       initial={{ opacity: 0, y: reduce ? 0 : 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '0px 0px -10% 0px' }}

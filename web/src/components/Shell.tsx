@@ -11,6 +11,7 @@ import { Roll } from './Interactive';
 const LINKS = [['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution'], ['/account', 'Account']] as const;
 
 export function Nav() {
+  const reduce = useReducedMotion();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const loc = useLocation();
@@ -38,14 +39,23 @@ export function Nav() {
         </nav>
         <Link to="/method" className="btn btn-secondary roll-host"><Roll>Evidence index</Roll></Link>
         <Link to="/live" className="btn btn-primary roll-host"><span className="btn-dot" /><Roll>Run it live</Roll></Link>
-        <button className="nav-toggle" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen((o) => !o)}>{open ? 'Close' : 'Menu'}</button>
-        {open && (
-          <nav id="mobile-nav" className="nav-links" aria-label="Main (mobile)">
-            {LINKS.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
-            <NavLink to="/method">Evidence index</NavLink>
-            <NavLink to="/live">Run it live</NavLink>
-          </nav>
-        )}
+        <button className="nav-toggle roll-host" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen((o) => !o)}>
+          <Roll>{open ? 'Close' : 'Menu'}</Roll><span className={`nav-dots ${open ? 'is-open' : ''}`} aria-hidden="true"><i /><i /></span>
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.nav id="mobile-nav" key="menu" className="nav-links" aria-label="Main (mobile)"
+              initial={reduce ? { opacity: 0 } : { clipPath: 'inset(0% 0% 100% 0% round 24px)' }} animate={reduce ? { opacity: 1 } : { clipPath: 'inset(0% 0% 0% 0% round 24px)' }}
+              exit={reduce ? { opacity: 0 } : { clipPath: 'inset(0% 0% 100% 0% round 24px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.55 }}>
+              {[...LINKS, ['/method', 'Evidence index'] as const, ['/live', 'Run it live'] as const].map(([to, label], i) => (
+                <motion.span key={to} className="menu-item" initial={reduce ? false : { opacity: 0, y: 28, filter: 'blur(6px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={reduce ? undefined : { opacity: 0, y: -12, transition: { duration: 0.15 } }} transition={{ type: 'spring', bounce: 0, duration: 0.6, delay: 0.08 + i * 0.045 }}>
+                  <NavLink to={to} className="roll-host"><span className="menu-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><Roll>{label}</Roll></NavLink>
+                </motion.span>
+              ))}
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );

@@ -350,7 +350,7 @@ td.args { max-width: 520px; min-width: 260px; }
 .work-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-24); flex-wrap: wrap; margin-bottom: var(--space-48); }
 .work-head .caps { max-width: 38ch; text-align: right; }
 @media (max-width: 640px) { .work-head .caps { text-align: left; } }
-.works { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-64) var(--space-24); }
+.works { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-64) var(--space-24); overflow: hidden; padding: 32px var(--margin); margin: -32px calc(-1 * var(--margin)); }
 @media (max-width: 860px) { .works { grid-template-columns: 1fr; gap: var(--space-48); } }
 .work { min-width: 0; }
 .work-link { display: block; text-decoration: none; color: inherit; }
@@ -396,3 +396,47 @@ td.args { max-width: 520px; min-width: 260px; }
 
 /* Evidence-section headings run long: a step smaller than the hero headlines. */
 #morph-title, #cost-title { font-size: clamp(32px, 3.6vw, 56px); }
+
+/* Water ripples under the cursor (components/Water.tsx) */
+.water { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; contain: strict; }
+.ripple { position: absolute; left: 0; top: 0; border-radius: 50%; opacity: 0; pointer-events: none; will-change: transform, opacity;
+  --t: 0; --r: calc(6% + var(--t) * 39%);
+  background: radial-gradient(circle, transparent calc(var(--r) - 4%), rgba(255, 255, 255, 0.28) var(--r), rgba(36, 51, 255, 0.05) calc(var(--r) + 2%), transparent calc(var(--r) + 6%)); }
+
+/* The journey (components/Journey.tsx) */
+.journey { position: relative; height: 640vh; margin-top: var(--section-gap); }
+.journey-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #0b0c10; color: #fff; }
+.journey-canvas { position: absolute; inset: 0; }
+.journey-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
+.journey-copy { position: absolute; inset: auto 0 0 0; z-index: 2; padding-bottom: 56px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
+.journey-cap { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.journey-cap .headline { font-size: clamp(34px, 4.4vw, 72px); color: #fff; }
+.journey-cap .tail { color: rgba(255, 255, 255, 0.5); }
+.journey-cap .caps { color: rgba(255, 255, 255, 0.7); }
+.journey-cap .body { color: rgba(255, 255, 255, 0.75); max-width: 48ch; }
+.journey-dots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.journey-dots li { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); transition: background-color var(--dur-standard) ease, transform var(--dur-standard) var(--ease-out); }
+.journey-dots li.on { background: #fff; }
+.journey-copy::before { content: ''; position: absolute; inset: -120px 0 0 0; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.75)); }
+.journey-list { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 32px; }
+@media (max-width: 640px) { .journey-copy { padding-bottom: 32px; } .journey-dots { display: none; } }
+
+/* The ending: floating stickers on a dark sky (components/StickerSpace.tsx) */
+.space { position: relative; min-height: min(100svh, 1000px); margin-top: var(--section-gap); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #07080c; color: #fff; }
+.space-canvas { position: absolute; inset: 0; z-index: 0; }
+.space-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
+.space-copy { position: relative; z-index: 1; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-24); padding: var(--space-96) var(--margin); }
+.space-copy a { pointer-events: auto; }
+.space-copy .headline { color: #fff; max-width: 12ch; }
+.space-copy .tail { color: rgba(255, 255, 255, 0.5); }
+.space-copy .caps { color: rgba(255, 255, 255, 0.7); }
+.space-copy .body { color: rgba(255, 255, 255, 0.75); max-width: 44ch; }
+.space-copy .row { justify-content: center; }
+.space-credit { color: rgba(255, 255, 255, 0.5); }
+.btn-light { background: #fff; color: var(--ink); }
+.btn-ghost { background: rgba(255, 255, 255, 0.12); color: #fff; }
+@media (hover: hover) and (pointer: fine) { .btn-light:hover { background: #e4e6ef; } .btn-ghost:hover { background: rgba(255, 255, 255, 0.2); } }
+
+/* The footer sits on white, below the dark ending (as on the reference site). */
+.footer { background: #fff; }
+main:has(> .space:last-child) + .footer { margin-top: 0; border-top: 0; }
