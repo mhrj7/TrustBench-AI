@@ -110,6 +110,8 @@ def key_available(key: Optional[str]) -> bool:
     """True when the provider needs no key, or the key is set in the environment or in .env (the value is never read out)."""
     if not key or os.environ.get(key):
         return True
+    if os.environ.get('TRUSTBENCH_NO_DOTENV') == '1':  # the runner then reads no .env either (src/service/secrets.py)
+        return False
     env = ROOT / '.env'
     return env.exists() and any(line.split('=', 1)[0].strip() == key and line.split('=', 1)[1].strip() for line in env.read_text().splitlines() if '=' in line)
 

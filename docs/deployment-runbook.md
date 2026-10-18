@@ -86,6 +86,7 @@ outside clients and the tailnet route work; host-side checks therefore use the t
 | The server process crashes | `init: true` (a real PID 1) exits with it, `restart: unless-stopped` restarts the container | SIGKILL of the server: healthy again in 8 s |
 | Docker Desktop restarts | Docker restarts `unless-stopped` containers | quit and reopen: healthy 36 s after start |
 | The container is stopped, or Funnel is reset | the watchdog LaunchAgent (every 5 minutes, `deploy/install-watchdog.sh`) | both broken at once: repaired in 21 s |
+| Funnel shows as on but its public DNS record is gone (seen on 2026-10-17: outside visitors got "name not found" for about ten hours while the site worked inside the tailnet) | the watchdog resolves the name through a public resolver every 5 minutes; after 10 minutes it resets and re-publishes Funnel, after 25 minutes (and every 30 after that) it reconnects Tailscale with the machine's own settings | dry run of every step; the real incident was fixed by the same reset and reconnect (the record returned some minutes after the reconnect, so which step restored it is not certain) |
 | Login after a reboot | Docker Desktop `AutoStart`, Tailscale as a login item, then the two rows above | not rebooted during testing |
 | Power failure | needs "Start up automatically after a power failure" (System Settings → Energy), set by the owner | — |
 
