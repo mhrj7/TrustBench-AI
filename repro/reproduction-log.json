@@ -1,0 +1,127 @@
+{
+ "task_id": "TB-046",
+ "commit": "0c1f9d0d25e8c9864bcfc4c36392612a9002f9f0",
+ "route": "container (tracked files at the commit, non-root, no network)",
+ "started_at": "2026-10-18T00:28:22+00:00",
+ "finished_at": "2026-10-18T00:29:15+00:00",
+ "environment": "Linux aarch64, Python 3.14.0, Node v26.5.0",
+ "steps": [
+  {
+   "name": "fixtures, splits, sealed manifests, protocol, frozen configuration",
+   "command": "sh bin/trustbench validate",
+   "exit_code": 0,
+   "seconds": 2.1,
+   "tail": [
+    "  }",
+    " ]",
+    "}"
+   ]
+  },
+  {
+   "name": "pinned content hashes",
+   "command": "sh bin/trustbench manifest",
+   "exit_code": 0,
+   "seconds": 0.2,
+   "tail": [
+    " \"files\": 18,",
+    " \"changed\": []",
+    "}"
+   ]
+  },
+  {
+   "name": "scripted smoke suite and arm comparison",
+   "command": "sh bin/trustbench smoke --check",
+   "exit_code": 0,
+   "seconds": 30.0,
+   "tail": [
+    "  }",
+    " ]",
+    "}"
+   ]
+  },
+  {
+   "name": "TB-033..TB-036 metrics, intervals, cost and ablations from the raw run records",
+   "command": "sh bin/trustbench report",
+   "exit_code": 0,
+   "seconds": 8.9,
+   "tail": [
+    "  }",
+    " ]",
+    "}"
+   ]
+  },
+  {
+   "name": "TB-043 related-work matrix",
+   "command": ".venv-tools/bin/python scripts/build-related-work.py",
+   "exit_code": 0,
+   "seconds": 0.1,
+   "tail": [
+    "{'rows': 25, 'kinds': {'benchmark': 9, 'defense': 13, 'design-guidance': 1, 'evaluation': 1, 'benchmark and defense': 1}, 'sources_checked_on': '2026-10-17', 'problems': 0}"
+   ]
+  },
+  {
+   "name": "TB-044 hypothesis test",
+   "command": ".venv-tools/bin/python scripts/test-hypothesis.py",
+   "exit_code": 0,
+   "seconds": 0.1,
+   "tail": [
+    "{\"primary\": \"supported\", \"per_holdout\": {\"holdout1/agentdojo_important_instructions\": \"not separated\", \"holdout2/agentdojo_important_instructions\": \"supported\"}, \"robustness\": {\"holdout1/as_authored\": \"not separated\", \"holdout1/agentdojo_injecagent\": \"supported\", \"holdout1/stripped\": \"not separated\", \"holdout2/as_authored\": \"unsafe lower (utility not measured here)\"}}"
+   ]
+  },
+  {
+   "name": "TB-045 full-population re-analysis (A-029)",
+   "command": ".venv-tools/bin/python scripts/label-audit.py rerun",
+   "exit_code": 0,
+   "seconds": 1.9,
+   "tail": [
+    "{\"relabelled_runs\": 6, \"metric_cells_changed\": 3, \"primary_unchanged\": true, \"sensitivity_rows\": 13}"
+   ]
+  },
+  {
+   "name": "TB-045 label audit report",
+   "command": ".venv-tools/bin/python scripts/label-audit.py report",
+   "exit_code": 0,
+   "seconds": 1.2,
+   "tail": [
+    "{\"labels\": 183, \"adjudications\": 16, \"categories\": {\"reviewer_error\": 8, \"definition_upheld\": 7, \"evaluator_error\": 1}, \"evaluator_error\": {\"utility_pass\": [0, 61], \"security_pass\": [0, 61], \"attacker_goal_achieved\": [1, 61]}}"
+   ]
+  },
+  {
+   "name": "reproduction tests of the published reports",
+   "command": "sh bin/trustbench report --check",
+   "exit_code": 0,
+   "seconds": 5.1,
+   "tail": [
+    ".........................................................                [100%]",
+    "57 passed in 3.71s"
+   ]
+  },
+  {
+   "name": "research tests",
+   "command": ".venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/research -k not last_recorded_reproduction",
+   "exit_code": 0,
+   "seconds": 3.3,
+   "tail": [
+    ".......................                                                  [100%]",
+    "23 passed, 1 deselected in 2.16s"
+   ]
+  }
+ ],
+ "rewritten_files_volatile_only": [
+  "artifacts/verification/tb010-split-validation.json",
+  "data/benign.sqlite",
+  "evidence/tb033-holdout2-metrics.json",
+  "evidence/tb033-metrics.json",
+  "evidence/tb035-cost-latency.json",
+  "evidence/tb036-ablations.json",
+  "evidence/tb044-hypothesis.json",
+  "evidence/tb045-label-audit.json",
+  "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-policy-traces.jsonl",
+  "reports/tests/tb024-scripted-as_authored-plain-gateway_capability-report.json",
+  "reports/tests/traces/tb024-scripted-as_authored-plain-gateway_capability.spans.jsonl",
+  "reports/uncertainty.json",
+  "research/label-audit.md"
+ ],
+ "unexpected_changes": [],
+ "outcome": "REPRODUCED"
+}

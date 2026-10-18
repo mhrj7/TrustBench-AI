@@ -32,7 +32,7 @@ Requirements: git, Node.js 26.5.0 with npm 12.0.0, and [uv](https://docs.astral.
 Docker, with the container route below. No API key, model or network access is needed after installation.
 
 ```bash
-git clone --branch <release tag> https://github.com/mhrj7/TrustBench-AI.git
+git clone --branch repro-tb046 https://github.com/mhrj7/TrustBench-AI.git
 ```
 
 ```bash
@@ -72,7 +72,11 @@ sh repro/run-in-container.sh <commit or tag>
 
 ## Result
 
-Not yet reproduced.
+- [`reproduction-log.json`](reproduction-log.json), 2026-10-18, commit `0c1f9d0`, container (tracked files at the commit, non-root, no network), Linux aarch64, Python 3.14.0, Node v26.5.0: 10/10 steps passed, 0 unexpected file changes, outcome **REPRODUCED**.
+- [`reproduction-log-clone.json`](reproduction-log-clone.json), 2026-10-18, commit `0c1f9d0`, fresh clone of the release tag from GitHub, documented steps on the host, Darwin arm64, Python 3.14.0, Node v26.5.0: 10/10 steps passed, 0 unexpected file changes, outcome **REPRODUCED**.
+
+Both runs were made by the project's author: the container as a separate non-root account on Linux with no network, the
+clone on the author's own machine with none of its local state. No independent person has run the package yet.
 
 ## What this does not reproduce
 

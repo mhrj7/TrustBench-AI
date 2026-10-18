@@ -85,11 +85,10 @@ def readme(m: dict) -> str:
     excl = '\n'.join(f"- `{x['path']}`: {x['reason']}" for x in CFG['exclusions'])
     counts = ', '.join(f'{k} {v}' for k, v in m['fixtures']['counts'].items())
     seeds_ = ', '.join(f'`{k}` = {v}' for k, v in m['seeds'].items())
-    log = json.loads((ROOT / CFG['reproduction_log']).read_text()) if (ROOT / CFG['reproduction_log']).exists() else None
-    result = ('Not yet reproduced.' if not log else
-              f"Last reproduction ({log['finished_at'][:10]}, commit `{log['commit'][:7]}`, {log['route']}, {log['environment']}): "
-              f"{sum(s['exit_code'] == 0 for s in log['steps'])}/{len(log['steps'])} steps passed, "
-              f"{len(log['unexpected_changes'])} unexpected file changes, outcome **{log['outcome']}**.")
+    logs = [(p, json.loads((ROOT / p).read_text())) for p in [CFG['reproduction_log'], *CFG.get('additional_reproduction_logs', [])] if (ROOT / p).exists()]
+    result = '\n'.join(f"- [`{Path(p).name}`]({Path(p).name}), {log['finished_at'][:10]}, commit `{log['commit'][:7]}`, {log['route']}, {log['environment']}: "
+                       f"{sum(s['exit_code'] == 0 for s in log['steps'])}/{len(log['steps'])} steps passed, "
+                       f"{len(log['unexpected_changes'])} unexpected file changes, outcome **{log['outcome']}**." for p, log in logs) or 'Not yet reproduced.'
     return f"""# Reproducing TrustBench offline (TB-046)
 
 This package lets someone else rerun the credential-free part of TrustBench from a clean clone and check that they get the
@@ -118,7 +117,7 @@ Requirements: git, Node.js 26.5.0 with npm 12.0.0, and [uv](https://docs.astral.
 Docker, with the container route below. No API key, model or network access is needed after installation.
 
 ```bash
-git clone --branch <release tag> https://github.com/mhrj7/TrustBench-AI.git
+git clone --branch {CFG['release_tag_prefix']} https://github.com/mhrj7/TrustBench-AI.git
 ```
 
 ```bash
@@ -150,6 +149,9 @@ sh repro/run-in-container.sh <commit or tag>
 ## Result
 
 {result}
+
+Both runs were made by the project's author: the container as a separate non-root account on Linux with no network, the
+clone on the author's own machine with none of its local state. No independent person has run the package yet.
 
 ## What this does not reproduce
 

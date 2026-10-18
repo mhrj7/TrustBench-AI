@@ -19,6 +19,9 @@ machine behind Tailscale Funnel, so it is best effort: if it is down, every publ
 
 ## Benchmark quickstart (TB-037)
 
+To reproduce the published results offline from a clean clone (no key, model or network), follow
+[`repro/README.md`](repro/README.md) (TB-046, release tag `repro-tb046`).
+
 Requirements: Node.js 26.5.0 with npm 12.0.0 (`package.json` engines), [uv](https://docs.astral.sh/uv/) (it installs Python
 3.14.0 from `.python-version`), and git. The project expects its storage root at `/Volumes/MHRJ`; anywhere else, set
 `TRUSTBENCH_STORAGE_ROOT` to the parent of the checkout and `npm_config_cache` to `$TRUSTBENCH_STORAGE_ROOT/.cache/npm`.
