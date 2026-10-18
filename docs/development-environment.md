@@ -2,7 +2,7 @@
 
 ## Locked toolchain
 
-The TB-003 reference environment is the configuration verified on the Mac mini used for development:
+The TB-003 reference environment is the configuration verified on the development machine (macOS, Apple silicon):
 
 | Component | Locked value | Lock mechanism |
 | --- | --- | --- |

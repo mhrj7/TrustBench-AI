@@ -5,7 +5,7 @@ published results and start instant runs, live runs on the project's free-tier k
 says how to deploy it, what limits it runs under, how to check a deployment, and how to operate it.
 
 Status: **public at <https://trustbench.taila273c6.ts.net>** (since 2026-10-17): the compose deployment on the author's
-Mac mini, published with Tailscale Funnel. Checked from outside over the public route: `scripts/check-deployment.py --live`
+own machine, published with Tailscale Funnel. Checked from outside over the public route: `scripts/check-deployment.py --live`
 20 of 20, the browser path (instant and live runs), and the exhausted-budget degradation (`evidence/tb041-deployment.json`).
 Hosting choices that were tried and why they were not used are under "Hosting options".
 
