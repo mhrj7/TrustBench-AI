@@ -1,15 +1,17 @@
-// How it works: the whole pipeline as one machine (Fig 1, components/Anatomy.tsx), with the eight stages beside it. As a
-// stage card scrolls into the middle of the screen, its part of the bench lights up. Every number is read from
-// pipeline.json and headline.json (scripts/export-site-data.py); every stage names the files that implement it.
-import { motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+// How it works: a 3D model of what happens when you press Run on the Live page (components/SystemModel.tsx). The section
+// is pinned while you scroll: the camera starts on the whole system, then visits each part in the order a run flows
+// through it, with a caption naming what happens there and the files that do it. Every number is read from
+// pipeline.json and headline.json (scripts/export-site-data.py).
+import { AnimatePresence, motion, useReducedMotion, useScroll } from 'motion/react';
+import { Suspense, lazy, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import '../iso/iso.css';
-import { Anatomy } from '../components/Anatomy';
 import { Barrel, Roll } from '../components/Interactive';
 import { CountUp } from '../components/Motion';
 import { loadHeadline, loadPipeline, useAsync, type Headline, type Pipeline } from '../lib/data';
 import { Loading } from './Common';
+import type { StepId } from '../components/SystemModel';
+
+const SystemModel = lazy(() => import('../components/SystemModel'));
 
 const REPO = 'https://github.com/mhrj7/TrustBench-AI/tree/main/';
 const pretty = (s: string) => s.replaceAll('_', ' ');
@@ -23,41 +25,26 @@ export default function How() {
   return <HowBody pl={pl.value} h={h.value} />;
 }
 
-function stageText(id: string, pl: Pipeline, h: Headline): { lead: string; facts: ReactNode[] } {
-  const ex = h.example;
+function stepFacts(id: StepId, pl: Pipeline, h: Headline): ReactNode[] {
+  const L = pl.live;
   switch (id) {
-    case 'tasks': return { lead: 'Every test starts as two piles of cards: ordinary jobs a helper should finish, and documents with a trick hidden inside.',
-      facts: [<><b>{pl.tasks}</b> everyday tasks, each with a contract of what the job allows</>, <><b>{pl.attacks}</b> attacks, each with an oracle that says what success for the attacker looks like ({pl.oracles} oracles)</>, <><b>{pl.case_groups}</b> case groups split once, with <b>{Object.values(pl.holdouts).reduce((a, b) => a + b, 0)}</b> cases sealed away in {Object.keys(pl.holdouts).length} holdout suites</>] };
-    case 'render': return { lead: 'The same trick can be written in different voices. The drum stamps one of them onto the document before the helper reads it.',
-      facts: [<><b>{pl.renderings.length}</b> renderings, from the attack as written to published templates</>, <>{pl.renderings.map(pretty).join(', ')}</>] };
-    case 'agent': return { lead: 'The helper is a real language model. It reads the task and the document and decides which tools to call. It never sees the guard\'s rules.',
-      facts: [<><b>{pl.models.length}</b> models through <b>{pl.providers.length}</b> free providers ({pl.providers.join(', ')})</>, <>{pl.models.map(short).join(', ')}</>, <>Example task: “{ex.task}”</>] };
-    case 'guard': return { lead: 'Every tool call passes three gates before it can do anything. A call that fails one is refused, whatever the helper was talked into.',
-      facts: pl.guard_layers.map((l) => <><b>{l.label}</b>: refuses with <code>{l.denies_with}</code></>) };
-    case 'tools': return { lead: 'Calls that pass reach real tools: a small document store, contacts, customer records, notes and email drafts, all on a test server.',
-      facts: [<><b>{pl.tools.length}</b> tools: {pl.tools.map(pretty).join(', ')}</>] };
-    case 'score': return { lead: 'The scorer reads what the tools actually did, not what the helper said, and gives three verdicts.',
-      facts: [<>Did the job get done (<b>utility</b>)? Did anything unsafe happen (<b>security</b>)? Did the attacker get what they wanted (<b>attacker goal</b>)?</>,
-        <>This run: utility {ex.with_guard.utility_pass ? 'pass' : 'fail'}, security {ex.with_guard.security_pass ? 'pass' : 'fail'}, attacker goal {ex.with_guard.attacker_goal_achieved ? 'reached' : 'not reached'}</>] };
-    case 'store': return { lead: 'Every run is filed: its tool trace, the gate decisions and the verdicts, in a report with a hash, so nothing can change quietly.',
-      facts: [<><b>{pl.runs.toLocaleString('en')}</b> runs in <b>{pl.reports}</b> reports ({pl.valid_runs.toLocaleString('en')} valid)</>, <><b>{pl.systems.length}</b> systems compared, the guard among them</>] };
-    default: return { lead: 'The same tasks run with and without the guard, and the pairs are compared. The sealed test was opened once, at the end.',
-      facts: [<>Unsafe actions in tricked tasks: <b>{h.primary.unsafe.baseline}</b> without the guard, <b>{h.primary.unsafe.defended}</b> with it</>, <>Normal tasks still done: <b>{h.primary.utility.baseline}</b> → <b>{h.primary.utility.defended}</b></>, <>{h.primary.pairs} paired tasks, verdict: {h.primary.verdict}</>] };
+    case 'browser': return L.modes.map((m) => <><b>{pretty(m.id)}</b>: {m.label}, up to {m.max_pairs_per_run} pairs a run</>);
+    case 'service': return [<><b>{L.systems.length}</b> defenses offered: {L.systems.map(pretty).join(', ')}</>, <>A key you bring is used for that run only, never stored or logged</>];
+    case 'queue': return Object.entries(L.workers).map(([lane, n]) => <><b>{lane}</b> lane: {n} worker{n > 1 ? 's' : ''}</>);
+    case 'runner': return [<>Starts a tool server and the guard for each arm, then the agent</>, <>The sealed holdout suites are excluded from live runs</>];
+    case 'fixtures': return [<><b>{pl.tasks}</b> everyday tasks and <b>{pl.attacks}</b> attacks</>, <><b>{pl.renderings.length}</b> ways to write the trick: {pl.renderings.map(pretty).join(', ')}</>];
+    case 'agent': return [<><b>{pl.models.length}</b> models through {pl.providers.join(', ')}</>, ...L.agents.map((a) => <>{a.label}: <b>{a.status}</b></>)];
+    case 'arms': return [<>Baseline: the agent's calls go straight to the tools</>, <>Defended: the same calls pass the guard first</>];
+    case 'gateway': return [...pl.guard_layers.map((l) => <><b>{l.label}</b>: refuses with <code>{l.denies_with}</code></>), <><b>Flow guard</b>: refuses with <code>untrusted_flow:…</code> when untrusted text steers a call</>];
+    case 'tools': return [<><b>{pl.tools.length}</b> tools: {pl.tools.map(pretty).join(', ')}</>];
+    case 'score': return [<><b>{pl.oracles}</b> attack oracles say what success for each attacker looks like</>, <>Sealed test: unsafe {h.primary.unsafe.baseline} without the guard, {h.primary.unsafe.defended} with it</>];
+    default: return [<><b>{pl.runs.toLocaleString('en')}</b> runs kept in <b>{pl.reports}</b> reports so far</>, <>Every report is hashed, so a changed number would show</>];
   }
 }
 
 function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
   const reduce = !!useReducedMotion();
-  const [active, setActive] = useState(0);
-  const cards = useRef<(HTMLElement | null)[]>([]);
-  useEffect(() => {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) setActive(Number((e.target as HTMLElement).dataset.i));
-    }, { rootMargin: '-45% 0px -45% 0px', threshold: 0 });
-    cards.current.forEach((c) => c && io.observe(c));
-    return () => io.disconnect();
-  }, []);
-  const go = useCallback((i: number) => { setActive(i); cards.current[i]?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }, [reduce]);
+  const [step, setStep] = useState(-1);
   const counts: [number, string][] = [[pl.tasks, 'everyday tasks'], [pl.attacks, 'hidden tricks'], [pl.renderings.length, 'ways to write a trick'], [pl.models.length, 'models'], [pl.tools.length, 'tools'], [pl.runs, 'runs recorded']];
   const total = Object.values(pl.outcomes).reduce((a, b) => a + b, 0);
   return (
@@ -65,32 +52,14 @@ function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
       <section className="section wrap page-head how-head" aria-labelledby="how-title">
         <div className="grid">
           <h1 id="how-title" className="display span-7 how-title">How it <span className="tail">works.</span></h1>
-          <p className="start-8 statement ink-2 how-lede">The whole pipeline is one machine on a bench. Follow a single tool call from the card it started on to the dial that reports the result.</p>
+          <p className="start-8 statement ink-2 how-lede">Press Run on the Live page and a run travels through eleven parts of the system. Scroll to follow it, from the whole system down into each part.</p>
         </div>
         <dl className="how-counts">
           {counts.map(([n, label]) => <div key={label}><dd className="figure"><CountUp to={n} /></dd><dt>{label}</dt></div>)}
         </dl>
       </section>
 
-      <section className="section wrap how-anatomy" aria-label="The pipeline, stage by stage">
-        <div className="how-figure"><Anatomy pl={pl} h={h} active={active} onStage={go} /></div>
-        <ol className="how-stages">
-          {pl.stages.map((st, i) => {
-            const t = stageText(st.id, pl, h);
-            return (
-              <li key={st.id} ref={(el) => { cards.current[i] = el; }} data-i={i} className={`how-stage ${i === active ? 'is-on' : ''}`} onClick={() => go(i)}>
-                <Barrel max={14}>
-                  <p className="caps ink-2">Stage {i + 1}</p>
-                  <h2 className="how-stage-title">{st.title}</h2>
-                  <p className="body">{t.lead}</p>
-                  <ul className="how-facts">{t.facts.map((f, j) => <li key={j}>{f}</li>)}</ul>
-                  <p className="how-code small">{st.code.map((c) => <a key={c} href={REPO + c} className="mono">{c}</a>)}</p>
-                </Barrel>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+      {reduce ? <StaticFlow pl={pl} h={h} /> : <FlowSection pl={pl} h={h} step={step} setStep={setStep} />}
 
       <section className="section wrap" aria-labelledby="layers-title">
         <div className="section-head">
@@ -137,3 +106,55 @@ function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
     </>
   );
 }
+
+/** The pinned 3D section: the model fills the screen, the caption follows the camera. */
+function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step: number; setStep: (i: number) => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const cur = step >= 0 && step < pl.flow.length ? pl.flow[step] : null;
+  return (
+    <section ref={ref} className="sm" aria-labelledby="sm-title">
+      <div className="sm-sticky">
+        <Suspense fallback={<div className="sm-canvas" />}><SystemModel pl={pl} progress={scrollYProgress} reduce={false} onStep={setStep} /></Suspense>
+        <h2 id="sm-title" className="sr-only">One live run, part by part</h2>
+        <div className="sm-copy wrap">
+          <AnimatePresence mode="wait">
+            <motion.div key={step} className="sm-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -16, filter: 'blur(8px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.55 }}>
+              {cur ? (
+                <>
+                  <p className="caps">Step {step + 1} of {pl.flow.length}</p>
+                  <p className="sm-title">{cur.title}</p>
+                  <p className="body">{cur.what}</p>
+                  <ul className="sm-facts">{stepFacts(cur.id as StepId, pl, h).map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  <p className="sm-code small">{cur.code.map((c) => <a key={c} href={REPO + c} className="mono">{c}</a>)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="caps">The whole system</p>
+                  <p className="sm-title">One run, eleven parts.</p>
+                  <p className="body">Keep scrolling: the camera flies to each part in the order a live run reaches it.</p>
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+          <ol className="sm-dots" aria-hidden="true">{pl.flow.map((_, i) => <li key={i} className={i <= step ? 'on' : ''} />)}</ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Reduced motion: the same steps as a list, no flight. */
+function StaticFlow({ pl, h }: { pl: Pipeline; h: Headline }) {
+  return (
+    <section className="section wrap" aria-labelledby="sm-title">
+      <h2 id="sm-title" className="headline">One run, <span className="tail">eleven parts.</span></h2>
+      <ol className="sm-list">{pl.flow.map((st, i) => (
+        <li key={st.id}><p className="caps ink-2">Step {i + 1}</p><p className="statement">{st.title}</p><p className="body ink-2">{st.what}</p>
+          <ul className="sm-facts">{stepFacts(st.id as StepId, pl, h).map((x, j) => <li key={j}>{x}</li>)}</ul></li>
+      ))}</ol>
+    </section>
+  );
+}
+

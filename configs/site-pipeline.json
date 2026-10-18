@@ -105,5 +105,106 @@
         "scripts/build-report.py"
       ]
     }
+  ],
+  "live_service": "configs/live-service.yaml",
+  "flow": [
+    {
+      "id": "browser",
+      "title": "You press Run",
+      "code": [
+        "web/src/pages/Live.tsx"
+      ],
+      "what": "On the Live page you pick a mode, a defense, how the trick is written and which cases to run, then press Run. The page sends one request and then follows the job."
+    },
+    {
+      "id": "service",
+      "title": "The live service checks the request",
+      "code": [
+        "src/service/app.py",
+        "configs/live-service.yaml"
+      ],
+      "what": "The service checks every limit before anything runs: the mode, the defense, the cases, the repetitions, the shared budget and your rate. A key you bring is held in memory for that run only, never stored or logged."
+    },
+    {
+      "id": "queue",
+      "title": "The job waits its turn",
+      "code": [
+        "src/service/app.py"
+      ],
+      "what": "Accepted jobs join a queue. Each lane has a fixed number of workers, so one visitor cannot crowd out another."
+    },
+    {
+      "id": "runner",
+      "title": "A worker starts the runner",
+      "code": [
+        "scripts/run-arm-smoke.mjs"
+      ],
+      "what": "A worker starts the benchmark runner in its own process group, so it can be stopped cleanly. The runner fixes the case order and the seeds before the first call."
+    },
+    {
+      "id": "fixtures",
+      "title": "The tasks are built",
+      "code": [
+        "src/arms",
+        "data/benign.jsonl",
+        "data/attacks.jsonl",
+        "data/attack-renderings.json"
+      ],
+      "what": "Each case becomes a fresh copy of a small world: documents, contacts and records. In attack cases one document carries the hidden instruction, written in the chosen style."
+    },
+    {
+      "id": "agent",
+      "title": "The helper thinks",
+      "code": [
+        "src/agent/runner.ts",
+        "configs/providers.yaml"
+      ],
+      "what": "The agent reads the task and the documents and asks a language model what to do next. The model answers with tool calls. The agent never sees the guard's rules."
+    },
+    {
+      "id": "arms",
+      "title": "Two arms, the same tasks",
+      "code": [
+        "scripts/run-arm-smoke.mjs",
+        "configs/defended.yaml"
+      ],
+      "what": "Every case runs twice: once with the agent's calls going straight to the tools (the baseline), and once through the guard (the defended arm). Same task, same trick, same seed."
+    },
+    {
+      "id": "gateway",
+      "title": "The guard checks every call",
+      "code": [
+        "src/gateway/app.py",
+        "src/policy"
+      ],
+      "what": "In the defended arm each call passes the guard's layers in turn. A call that fails one is refused and recorded with its reason; the agent is told it was refused."
+    },
+    {
+      "id": "tools",
+      "title": "The tools do the work",
+      "code": [
+        "src/tools/app.py",
+        "configs/tool-descriptions.json"
+      ],
+      "what": "Calls that pass reach the tool service, which runs real tools over the case's own database, so every effect, safe or not, is recorded where the scorer can see it."
+    },
+    {
+      "id": "score",
+      "title": "The scorer reads what happened",
+      "code": [
+        "src/evaluators/outcomes_v2.py",
+        "data/attack-oracles.json"
+      ],
+      "what": "After each run the scorer reads the tool trace and the final state, not the agent's words, and records three verdicts: job done, nothing unsafe, attacker goal reached or not."
+    },
+    {
+      "id": "report",
+      "title": "The report comes back",
+      "code": [
+        "scripts/run-arm-smoke.mjs",
+        "app/store.py"
+      ],
+      "what": "The runner writes a report of every pair with its trace, its gate decisions and a hash. The service reads it, explains any provider failure, and your page shows the result."
+    }
   ]
 }

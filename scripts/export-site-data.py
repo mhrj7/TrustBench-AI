@@ -125,7 +125,15 @@ def pipeline() -> dict:
             'systems': sorted({r[col['system']] for r in rows}), 'case_groups': len(load(pc['splits'])['groups']), 'holdouts': holdouts,
             'reports': len(store['reports']), 'runs': len(rows), 'valid_runs': len(valid),
             'outcomes': {o: sum(1 for r in rows if r[col['outcome']] == o) for o in sorted({r[col['outcome']] for r in rows})},
-            'denial_codes': store['denial']['codes'], 'guard_layers': pc['guard_layers'], 'stages': pc['stages']}
+            'denial_codes': store['denial']['codes'], 'guard_layers': pc['guard_layers'], 'stages': pc['stages'],
+            'live': live_facts(load(pc['live_service'])), 'flow': pc['flow']}
+
+
+def live_facts(ls: dict) -> dict:
+    """What the Live page can run: its modes and limits, the agents (available or planned), workers and offered systems."""
+    return {'modes': [{'id': k, 'label': v['label'], 'live': v['live'], 'max_pairs_per_run': v['max_pairs_per_run']} for k, v in ls['modes'].items()],
+            'agents': [{'id': k, 'label': v['label'], 'status': v['status']} for k, v in ls['agents'].items()],
+            'workers': ls['workers'], 'systems': list(ls['systems'])}
 
 
 (out / 'pipeline.json').write_text(json.dumps(pipeline(), indent=1, ensure_ascii=False))

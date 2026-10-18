@@ -36,11 +36,14 @@ The overview, top to bottom:
 9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 
-**How it works** (`pages/How.tsx`, `components/Anatomy.tsx`, `iso/bench.ts`): the pipeline built as one isometric machine
-with the Anatomy skill's kit (MIT): card hoppers (tasks, attacks), a stamping drum (renderings), the reader head (the
-model), three guard gates and a reject tray, a ten-socket tool rack, three scorer gauges, a filing cabinet (the run
-store) and a dial (the paired result). The pucks replay the real guarded run; hover takes the bench apart; the stage
-cards beside it light their part as they scroll. Numbers come from `pipeline.json` (configs/site-pipeline.json).
+**How it works** (`pages/How.tsx`, `components/SystemModel.tsx`): a 3D model of what really happens when you press Run on
+the Live page, pinned while you scroll. Eleven modules on a dark grid, in the order a run reaches them: the browser (a
+laptop showing the Live page), the live service (server tower, mode drawers, key vault), the job queue (lanes and
+workers), the runner (a process group), the fixtures (pages, one carrying the trick), the agent (core, three provider
+towers, a dashed socket for the planned external agents), the two arms, the guard (one ring per layer, a refused packet
+in red), the tool service (ten named tools around the case database), the scorer (three verdict lamps) and the report,
+whose result arcs back to the browser. The camera starts on the whole system and flies to each module; the one in focus
+opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.json and configs/live-service.yaml).
 
 Across the site: **water ripples** under the cursor (`components/Water.tsx`): each ripple refracts the real page through an
 SVG displacement filter used as `backdrop-filter` (Chromium); other browsers show the highlight ring only. **Barrel scroll**
