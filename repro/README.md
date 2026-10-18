@@ -74,7 +74,7 @@ sh repro/run-in-container.sh <commit or tag>
 
 ## Result
 
-- [`reproduction-log.json`](reproduction-log.json), 2026-10-18, commit `c2dac5f`, container (tracked files at the commit, non-root, no network), Linux aarch64, Python 3.14.0, Node v26.5.0: 12/12 steps passed, 0 unexpected file changes, outcome **REPRODUCED**.
+- [`reproduction-log.json`](reproduction-log.json), 2026-10-18, commit `5ad0835`, container (tracked files at the commit, non-root, no network), Linux aarch64, Python 3.14.0, Node v26.5.0: 12/12 steps passed, 0 unexpected file changes, outcome **REPRODUCED**.
 - [`reproduction-log-clone.json`](reproduction-log-clone.json), 2026-10-18, commit `0c1f9d0`, fresh clone of the release tag from GitHub, documented steps on the host, Darwin arm64, Python 3.14.0, Node v26.5.0: 10/10 steps passed, 0 unexpected file changes, outcome **REPRODUCED**.
 
 Both runs were made by the project's author: the container as a separate non-root account on Linux with no network, the
