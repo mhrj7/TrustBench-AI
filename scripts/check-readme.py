@@ -150,7 +150,9 @@ def fresh(ref: str):
         problems.append('benchmark --dry-run did not name the key variable')
     if live['exit_code'] == 0 or not any('NVIDIA_API_KEY is not set' in l for l in live['output_tail']):
         problems.append('a live benchmark without a key did not stop with the documented message')
-    out = {'task_id': 'TB-050', 'commit': sha, 'started_at': started, 'environment': 'node:26.5.0-bookworm-slim (Debian 12), non-root user "node", '
+    import hashlib
+    readme_at = subprocess.run(['git', 'show', f'{sha}:README.md'], cwd=ROOT, capture_output=True, check=True).stdout
+    out = {'task_id': 'TB-050', 'commit': sha, 'readme_sha256': hashlib.sha256(readme_at).hexdigest(), 'started_at': started, 'environment': 'node:26.5.0-bookworm-slim (Debian 12), non-root user "node", '
            'fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)',
            'install_block': install, 'install_ok': install_ok, 'checks': results, 'problems': problems, 'ok': not problems,
            'log_tail': log.strip().splitlines()[-40:] if problems else []}

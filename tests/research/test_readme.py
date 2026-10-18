@@ -1,5 +1,5 @@
 """TB-050: a fresh user can follow the README without hidden local files."""
-import json, runpy, subprocess
+import json, runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,8 +32,9 @@ def test_the_fresh_clone_check_passed_on_exactly_this_readme():
     ev = json.loads((ROOT / 'evidence/tb050-readme-check.json').read_text())
     assert ev['ok'] and ev['install_ok'] and not ev['problems']
     assert 'fresh clone from GitHub' in ev['environment'] and 'non-root' in ev['environment']
-    at_commit = subprocess.run(['git', 'show', f"{ev['commit']}:README.md"], cwd=ROOT, capture_output=True, text=True).stdout
-    assert at_commit == (ROOT / 'README.md').read_text(), 'README changed since the fresh-clone check: run scripts/check-readme.py --fresh'
+    import hashlib
+    assert ev['readme_sha256'] == hashlib.sha256((ROOT / 'README.md').read_bytes()).hexdigest(), \
+        'README changed since the fresh-clone check: run scripts/check-readme.py --fresh'
     cmds = {c['command']: c for c in ev['checks']}
     for c in ('sh bin/trustbench validate', 'sh bin/trustbench smoke --check', 'sh bin/trustbench manifest', 'sh bin/trustbench report --check'):
         assert cmds[c]['exit_code'] == 0 and all(cmds[c]['expected_found'].values()), c
