@@ -28,7 +28,7 @@ CMD ["sh", "-c", ".venv-tools/bin/python scripts/repro.py check && .venv-tools/b
 DOCKER
 tag="trustbench-repro:$(git -C "$root" rev-parse --short "$ref")"
 docker build -q -f "$ctx/Dockerfile.repro" -t "$tag" "$ctx" >/dev/null
-cid="$(docker create --network none "$tag")"
+cid="$(docker create --network none -e TRUSTBENCH_REPRO_SOURCE_COMMIT="$(git -C "$root" rev-parse "$ref^{commit}")" "$tag")"
 status=0; docker start -a "$cid" || status=$?
 docker cp "$cid:/home/node/work/TrustBench-AI/repro/reproduction-log.json" "$out" 2>/dev/null || true
 docker rm "$cid" >/dev/null

@@ -87,7 +87,7 @@ def readme(m: dict) -> str:
     seeds_ = ', '.join(f'`{k}` = {v}' for k, v in m['seeds'].items())
     log = json.loads((ROOT / CFG['reproduction_log']).read_text()) if (ROOT / CFG['reproduction_log']).exists() else None
     result = ('Not yet reproduced.' if not log else
-              f"Last reproduction ({log['finished_at'][:10]}, commit `{log['commit'][:7]}`, {log['environment']}): "
+              f"Last reproduction ({log['finished_at'][:10]}, commit `{log['commit'][:7]}`, {log['route']}, {log['environment']}): "
               f"{sum(s['exit_code'] == 0 for s in log['steps'])}/{len(log['steps'])} steps passed, "
               f"{len(log['unexpected_changes'])} unexpected file changes, outcome **{log['outcome']}**.")
     return f"""# Reproducing TrustBench offline (TB-046)
@@ -251,7 +251,9 @@ def reproduce():
             committed = git('show', f'HEAD:{f}') if f.endswith(('.json', '.md', '.csv', '.jsonl', '.txt', '.xml')) else None
             same = committed is not None and (ROOT / f).exists() and strip(f, committed) == strip(f, (ROOT / f).read_text())
         (volatile_only if same else unexpected).append(f)
-    log = {'task_id': 'TB-046', 'commit': git('rev-parse', 'HEAD').strip(), 'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+    import os
+    source = os.environ.get('TRUSTBENCH_REPRO_SOURCE_COMMIT')  # set by repro/run-in-container.sh, whose checkout is a fresh git init of the tracked files
+    log = {'task_id': 'TB-046', 'commit': source or git('rev-parse', 'HEAD').strip(), 'route': 'container (tracked files at the commit, non-root, no network)' if source else 'git checkout', 'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
            'environment': f"{platform.system()} {platform.machine()}, Python {platform.python_version()}, "
                           f"Node {subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip()}",
            'steps': steps, 'rewritten_files_volatile_only': volatile_only, 'unexpected_changes': unexpected,
