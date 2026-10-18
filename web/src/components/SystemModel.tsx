@@ -20,6 +20,8 @@ const POS: Record<StepId, [number, number, number]> = {
   arms: [28, 0, -1], gateway: [30, 0, 5], tools: [41, 0, 0], score: [51, 0, -4], report: [61, 0, 2],
 };
 const BLUE = '#2433ff', RED = '#ef3b24', GLOW = '#5b6bff';
+const GATE_GAP = 3.4, GATE_Y = 2.2;
+const gateX = (i: number, n: number) => POS.gateway[0] + (i - (n - 1) / 2) * GATE_GAP;
 const smooth = (t: number) => t * t * (3 - 2 * t);
 type F = React.MutableRefObject<number[]>;   // per-step focus 0..1, written by the rig each frame
 
@@ -58,7 +60,7 @@ function Browser({ open, modes }: { open: () => number; modes: Pipeline['live'][
   const mats = useMemo(() => ({ body: metal('#c9ccd8', 0.3), key: plastic('#2b2e3a') }), []);
   useFrame(({ clock }) => {
     const o = open();
-    if (lid.current) lid.current.rotation.x = -1.2 - o * 0.25;
+    if (lid.current) lid.current.rotation.x = -0.24 - o * 0.06;   // open laptop: lid up, tipped back a little
     if (btn.current) (btn.current.material as THREE.MeshBasicMaterial).opacity = 0.25 + (Math.sin(clock.elapsedTime * 4) * 0.5 + 0.5) * 0.6 * (0.3 + o);
   });
   return (
@@ -157,17 +159,18 @@ function Runner({ open }: { open: () => number }) {
 function Fixtures({ open, tasks, attacks }: { open: () => number; tasks: number; attacks: number }) {
   const pages = useRef<(THREE.Group | null)[]>([]);
   const mats = useMemo(() => ({ page: plastic('#ffffff'), line: glow('#b9bccb'), trick: glow(RED), base: metal('#9a9ca6', 0.3) }), []);
-  useFrame(() => { const o = open(); pages.current.forEach((p, i) => { if (!p) return; p.position.set((i - 2) * o * 1.5, 0.6 + i * 0.12 + o * 1.4, 0); p.rotation.set(-0.9 + o * 0.6, (i - 2) * o * 0.18, 0); }); });
+  // Pages stand on edge facing the viewer, stacked one behind another; in focus they fan out side by side.
+  useFrame(() => { const o = open(); pages.current.forEach((p, i) => { if (!p) return; p.position.set((i - 2) * (0.35 + o * 2.0), 1.95, -i * 0.25 * (1 - o)); p.rotation.set(Math.PI / 2 - 0.12, (i - 2) * -0.12 * o, 0); }); });
   return (
     <group>
-      <RoundedBox args={[4.6, 0.4, 3.4]} radius={0.12} position={[0, 0.2, 0]} material={mats.base} />
+      <RoundedBox args={[11, 0.4, 3]} radius={0.12} position={[0, 0.2, 0]} material={mats.base} />
       {Array.from({ length: 5 }, (_, i) => (
         <group key={i} ref={(el) => { pages.current[i] = el; }}>
           <mesh material={mats.page}><boxGeometry args={[2.2, 0.03, 2.9]} /></mesh>
           {[0, 1, 2, 3, 4].map((l) => <mesh key={l} position={[-0.1, 0.03, -1 + l * 0.45]} material={i === 3 && l === 2 ? mats.trick : mats.line}><boxGeometry args={[1.6, 0.01, 0.1]} /></mesh>)}
         </group>
       ))}
-      <Label text="Fixtures" sub={`${tasks} tasks · ${attacks} attacks`} y={3.6} />
+      <Label text="Fixtures" sub={`${tasks} tasks · ${attacks} attacks`} y={4.4} />
     </group>
   );
 }
@@ -210,8 +213,8 @@ function Agent({ open, providers, agents }: { open: () => number; providers: str
 function Arms() {
   return (
     <group>
-      <group position={[0, 0, -5]}><Label text="Baseline arm" sub="straight to the tools" y={1.6} /></group>
-      <group position={[0, 0, 4]}><Label text="Defended arm" sub="through the guard" y={4.6} /></group>
+      <group position={[0, 0, -6.5]}><Label text="Baseline arm" sub="straight to the tools" y={1.2} /></group>
+      <group position={[2, 0, 10]}><Label text="Defended arm" sub="through the guard" y={1.2} /></group>
     </group>
   );
 }
@@ -222,15 +225,17 @@ function Gateway({ open, layers }: { open: () => number; layers: string[] }) {
   const mats = useMemo(() => ({ ring: metal('#d9dcea', 0.15) }), []);
   useFrame(({ clock }) => {
     const o = open(), t = clock.elapsedTime;
-    rings.current.forEach((r, i) => { if (!r) return; r.position.x = (i - (layers.length - 1) / 2) * (1.1 + o * 1.4); r.rotation.x = Math.sin(t * 0.5 + i) * 0.05; });
+    // Fixed, equal spacing on the defended lane (GATE_GAP), so the flow line runs through every ring's centre; in focus
+    // the rings turn gently.
+    rings.current.forEach((r, i) => { if (!r) return; r.position.x = (i - (layers.length - 1) / 2) * GATE_GAP; r.rotation.x = Math.sin(t * 0.5 + i) * 0.06 * (0.3 + o); });
   });
   return (
     <group>
       {layers.map((l, i) => (
-        <group key={l} ref={(el) => { rings.current[i] = el; }} position={[0, 2.2, 0]}>
+        <group key={l} ref={(el) => { rings.current[i] = el; }} position={[0, GATE_Y, 0]}>
           <mesh rotation={[0, Math.PI / 2, 0]} material={mats.ring}><torusGeometry args={[1.8, 0.16, 20, 64]} /></mesh>
           <mesh rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[1.55, 0.03, 8, 64]} /><meshBasicMaterial color={i === 0 ? RED : GLOW} toneMapped={false} /></mesh>
-          <Label text={l} y={2.4} />
+          <Label text={l} y={i % 2 ? 3.9 : 2.7} />
         </group>
       ))}
     </group>
@@ -292,19 +297,26 @@ function Report({ open }: { open: () => number }) {
 }
 
 /** Links between modules, with packets moving along them. In the defended arm one packet is refused at the guard. */
-function Links({ f }: { f: F }) {
+function Links({ f, gates }: { f: F; gates: number }) {
   const curves = useMemo(() => {
     const v = (id: StepId, dy = 0.6, dz = 0) => new THREE.Vector3(POS[id][0], dy, POS[id][2] + dz);
-    const seg = (pts: THREE.Vector3[], tone: string, refused = false) => ({ curve: new THREE.CatmullRomCurve3(pts), tone, refused });
+    const seg = (pts: THREE.Vector3[], tone: string, refused = false) => {
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+      // Where the refused packet stops: the point of the curve nearest the first ring's centre.
+      let stopAt = 0.5;
+      if (refused) { const g = new THREE.Vector3(gateX(0, gates), GATE_Y, POS.gateway[2]); let best = 1e9; for (let k = 0; k <= 400; k++) { const d = curve.getPointAt(k / 400).distanceTo(g); if (d < best) { best = d; stopAt = k / 400; } } }
+      return { curve, tone, refused, stopAt };
+    };
     return [
       seg([v('browser'), v('service')], GLOW), seg([v('service'), v('queue')], GLOW), seg([v('queue'), v('runner')], GLOW), seg([v('runner'), v('fixtures')], GLOW),
       seg([v('fixtures'), v('agent')], GLOW),
       seg([v('agent'), new THREE.Vector3(26, 0.6, -5), new THREE.Vector3(34, 0.6, -5), v('tools')], '#b9bccb'),        // baseline arm
-      seg([v('agent'), new THREE.Vector3(25, 2.2, 5), v('gateway', 2.2), new THREE.Vector3(35, 2.2, 5), v('tools')], GLOW, true), // defended arm
+      seg([v('agent'), new THREE.Vector3(gateX(0, gates) - 2.4, GATE_Y, POS.gateway[2]), ...Array.from({ length: gates }, (_, i) => new THREE.Vector3(gateX(i, gates), GATE_Y, POS.gateway[2])),
+        new THREE.Vector3(gateX(gates - 1, gates) + 2.4, GATE_Y, POS.gateway[2]), v('tools')], GLOW, true),                    // defended arm
       seg([v('tools'), v('score')], GLOW), seg([v('score'), v('report')], GLOW),
       seg([v('report'), new THREE.Vector3(30, 14, 20), new THREE.Vector3(-10, 14, 20), v('browser', 2)], '#9aa4ff'),       // the result comes back
     ];
-  }, []);
+  }, [gates]);
   const tubes = useMemo(() => curves.map((c) => new THREE.TubeGeometry(c.curve, 64, 0.05, 6, false)), [curves]);
   const packets = useRef<(THREE.Mesh | null)[]>([]);
   useFrame(({ clock }) => {
@@ -316,10 +328,10 @@ function Links({ f }: { f: F }) {
         let u = (t * 0.22 + k / 3 + i * 0.07) % 1;
         // In the defended arm the first packet of each cycle is refused: it stops at the guard and fades red.
         const stop = c.refused && k === 0;
-        if (stop) u = Math.min(u, 0.5);
+        if (stop) u = Math.min(u, c.stopAt);
         m.position.copy(c.curve.getPointAt(u));
         const mat = m.material as THREE.MeshBasicMaterial;
-        mat.color.set(stop && u >= 0.5 ? RED : c.tone);
+        mat.color.set(stop && u >= c.stopAt ? RED : c.tone);
       }
     });
     void f;
@@ -341,7 +353,9 @@ function Rig({ progress, f, onStep }: { progress: MotionValue<number>; f: F; onS
   const last = useRef(-2);
   const keys = useMemo(() => {
     const overview = { pos: new THREE.Vector3(13, 30, 44), at: new THREE.Vector3(13, 0, -2) };
-    const steps = STEPS.map((id) => { const [x, , z] = POS[id]; return { pos: new THREE.Vector3(x - 7, 9, z + 15), at: new THREE.Vector3(x, 1.8, z) }; });
+    // Close-ups: a little above and in front of each module; the guard's four rings need a wider view.
+    const steps = STEPS.map((id) => { const [x, , z] = POS[id]; const wide = id === 'gateway' ? 1.45 : 1;
+      return { pos: new THREE.Vector3(x - 5 * wide, 8.5 * wide, z + 15 * wide), at: new THREE.Vector3(x, id === 'gateway' ? 3 : 1.8, z) }; });
     return [overview, ...steps, overview];
   }, []);
   useFrame((_, dt) => {
@@ -393,7 +407,7 @@ export default function SystemModel({ pl, progress, reduce, onStep }: { pl: Pipe
         <Node id="tools" f={f}>{(o) => <Tools open={o} tools={pl.tools} />}</Node>
         <Node id="score" f={f}>{(o) => <Score open={o} />}</Node>
         <Node id="report" f={f}>{(o) => <Report open={o} />}</Node>
-        <Links f={f} />
+        <Links f={f} gates={layers.length} />
         <Rig progress={progress} f={f} onStep={onStep} />
       </Canvas>
     </div>
