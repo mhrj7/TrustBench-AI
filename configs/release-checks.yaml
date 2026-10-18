@@ -1,0 +1,19 @@
+{
+  "note": "TB-051 final clean-checkout verification (scripts/release-check.py). Every required check must pass on the same candidate commit, or the release is BLOCKED with the failing checks as its written reason. JSON content (valid YAML).",
+  "output": "release/checks.json",
+  "repository": "https://github.com/mhrj7/TrustBench-AI.git",
+  "checks": [
+    {"id": "ci_tier1", "required": true, "name": "CI on GitHub: Tier 1 release gate (scripted, every case and the policy trail against the committed baselines) and the full npm run verify"},
+    {"id": "tier2_live_gate", "required": true, "name": "Tier 2 live release gate (A-025, A-028): the frozen configuration on the development suite with the live model, one attempt per candidate"},
+    {"id": "fresh_clone_verify", "required": true, "name": "Fresh clone from GitHub: locked install, the pinned AgentDojo data, and the full npm run verify (fixtures, regression, website browser tests), with no local keys"},
+    {"id": "offline_reproduction", "required": true, "name": "Offline reproduction in a clean container (repro/README.md): every published number rebuilt from the committed raw records"},
+    {"id": "readme_fresh", "required": true, "name": "README followed by a fresh non-root user in a clean container (scripts/check-readme.py --fresh)"},
+    {"id": "demo_rebuilt", "required": true, "name": "Demo rebuilt from the candidate's committed files and running healthy"},
+    {"id": "live_site_external", "required": true, "name": "Public live site end to end from outside the host: every mode from the API, the CLI and the browser, report download, own-key form"},
+    {"id": "own_key_real", "required": true, "name": "Live run with a real own key from the CLI against the deployed site, with no key in the output"},
+    {"id": "no_key_paths", "required": true, "name": "No-key paths: instant runs, and a spent shared budget degrading to instant and own-key (staging)"},
+    {"id": "linked_reports", "required": true, "name": "Linked reports: every relative link in the documentation resolves, README links answer, and the report, claim, README and reproduction checks pass"}
+  ],
+  "evidence_only_paths": ["release/", "evidence/", "planning/", "repro/reproduction-log", "repro/README.md", "repro/manifest.json", "research/report-claims.json", "research/claims-ledger.json", "research/claims-check.json", "docs/architecture-claims.json", "research/report.md", "research/claims.md", "docs/architecture.md"],
+  "scope_note": "A RELEASE decision means the checks above passed on the candidate commit. It is not a full replication of the benchmark: the confirmatory holdouts are not rerun (they were run once, sealed), live model runs are small and sampled, and passing smoke and scripted checks shows the harness and published analyses reproduce, not that a new live study would give the same rates."
+}
