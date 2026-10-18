@@ -126,15 +126,31 @@ def fmt(v, f: str) -> str:
         return f'{v:+,.0f}'
     if f == 'cimean':
         return f'[{v[0]:+,.0f}, {v[1]:+,.0f}]'
+    if f == 'list':
+        return '; '.join(str(x) for x in v)
+    if f == 'mmss':    # seconds as m:ss
+        return f'{int(v) // 60}:{int(v) % 60:02d}'
     if f == 'kappa':
         return f'{v:.2f}'
     raise SystemExit(f'unknown format {f}')
+
+
+def blank_fences(text: str) -> str:
+    out, inside = [], False
+    for line in text.splitlines():
+        if line.strip().startswith('```'):
+            inside = not inside
+            out.append('')
+        else:
+            out.append('' if inside else line)
+    return '\n'.join(out)
 
 
 def lint(template: str, doc: dict | None = None) -> list[str]:
     doc = doc or DOCS[0]
     problems = []
     prose = PH.sub(' ', template)
+    prose = blank_fences(prose)  # fenced blocks (diagrams, commands) are code, not claims; line numbers are kept
     prose_no_code = re.sub(r'`[^`]*`', ' ', prose)
     prose_no_code = re.sub(r'\]\([^)]*\)', ']', prose_no_code)   # link targets are paths, not claims
     allowed = [re.compile(p) for p in CFG['allowed_identifier_patterns']]
@@ -151,7 +167,7 @@ def lint(template: str, doc: dict | None = None) -> list[str]:
         if re.search(phrase, template, flags=re.I):
             problems.append(f'forbidden overclaiming phrase: {phrase}')
     for target in re.findall(r'\]\(([^)#]+)(?:#[^)]*)?\)', template) + re.findall(r'`((?:[\w.-]+/)+[\w.-]+\.[a-z]{2,5})`', template):
-        if target.startswith('http') or target in {Path(d['claims']).name for d in DOCS}:  # ledgers are written by this build
+        if target.startswith(('http', '{{')) or target in {Path(d['claims']).name for d in DOCS}:  # ledgers are written by this build; placeholders render to URLs
             continue
         p = (ROOT / doc['report']).parent / target if not (ROOT / target).exists() else ROOT / target
         if not p.exists():

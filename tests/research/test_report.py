@@ -24,7 +24,7 @@ def test_every_number_in_the_rendered_report_is_covered_by_a_claim_on_its_line(d
     for c in json.loads((ROOT / doc['claims']).read_text())['items']:
         by_line.setdefault(c['report_line'], []).append(c['rendered'])
     allowed = [re.compile(p) for p in CFG['allowed_identifier_patterns']]
-    for n, line in enumerate((ROOT / doc['report']).read_text().splitlines(), 1):
+    for n, line in enumerate(NS['blank_fences']((ROOT / doc['report']).read_text()).splitlines(), 1):
         text = re.sub(r'`[^`]*`', ' ', line)
         text = re.sub(r'\]\([^)]*\)', ']', text)
         for rendered in sorted(by_line.get(n, []), key=len, reverse=True):

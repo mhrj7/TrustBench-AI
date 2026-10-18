@@ -45,7 +45,9 @@ def describe(row: dict, rec: dict, fields: list) -> dict:
             'denied_calls': sum(1 for p in run.get('policy_decisions') or [] if p['decision'] == 'deny'),
             'elapsed_ms': run['elapsed_ms'], 'tokens': run['tokens'], 'final_text': run['final_text'],
             'attribution': {k: row[k] for k in ('first_rule', 'first_step', 'utility_rule', 'utility_step', 'security_rule', 'security_step')},
-            'timed': row['timed']}
+            'timed': row['timed'],
+            'parity': {k: case.get(k) for k in ('run_config_identical', 'settings_identical', 'first_request_identical', 'non_tool_messages_identical',
+                                                'same_tool_call_sequence', 'differences_attributable_to_gateway')}}
 
 
 def select():
