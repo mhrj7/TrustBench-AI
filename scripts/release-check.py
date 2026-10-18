@@ -178,6 +178,8 @@ def check_linked_reports(sha):
     broken, external = [], set()
     for f in files:
         text = (ROOT / f).read_text()
+        for auto in re.findall(r'<(https?://[^>\s]+)>', text):  # autolinks
+            external.add(auto.split('#')[0])
         for target in re.findall(r'\]\(([^)\s]+)\)', text):
             if target.startswith('http'):
                 external.add(target.split('#')[0]); continue
