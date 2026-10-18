@@ -1,12 +1,14 @@
-import '@fontsource-variable/instrument-sans';
+import '@fontsource-variable/geist';
+import 'lenis/dist/lenis.css';
 import '@fontsource-variable/jetbrains-mono';
 import './styles/base.css';
 import './styles/site.css';
 import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Outlet, Route, Routes } from 'react-router';
+import { BrowserRouter, Outlet, Route, Routes, useLocation } from 'react-router';
 import { EvidenceProvider, Footer, Nav, useSmoothScroll } from './components/Shell';
 import Overview from './pages/Overview';
+import { NextPage } from './components/Interactive';
 
 const Compare = lazy(() => import('./pages/Compare'));
 const Runs = lazy(() => import('./pages/Runs'));
@@ -23,6 +25,7 @@ const NotFound = lazy(() => import('./pages/Method').then((m) => ({ default: m.N
 
 function Layout() {
   useSmoothScroll();
+  const loc = useLocation();
   return (
     <EvidenceProvider>
       <a className="skip" href="#main">Skip to content</a>
@@ -31,6 +34,7 @@ function Layout() {
         <Suspense fallback={<div className="section wrap"><p className="body ink-2">Loading…</p></div>}><Outlet /></Suspense>
       </main>
       <Footer />
+      <NextPage key={loc.pathname} from={loc.pathname} />
     </EvidenceProvider>
   );
 }

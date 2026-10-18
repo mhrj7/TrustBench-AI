@@ -7,11 +7,11 @@ import { EASE_OUT } from './Motion';
 export function rampColor(rate: number | null, bad: boolean) {
   if (rate === null) return 'var(--tone-2)';
   // From the card surface to the danger colour (a bad outcome such as attacker success) or the accent (a good one).
-  const a = [0x13, 0x16, 0x22], b = bad ? [0xfb, 0x71, 0x85] : [0x7c, 0x83, 0xff];
+  const a = [0xe4, 0xe6, 0xef], b = bad ? [0xef, 0x3b, 0x24] : [0x24, 0x33, 0xff];
   const t = Math.pow(rate, 0.85);
   return `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * t)).join(',')})`;
 }
-const textOn = (rate: number | null) => (rate !== null && rate > 0.55 ? 'var(--ground)' : 'var(--ink)');
+const textOn = (rate: number | null) => (rate !== null && rate > 0.5 ? '#fff' : 'var(--ink)');
 
 export function Heatmap({ groups, dims, metric, spec, onSelect }: {
   groups: Group[]; dims: [string, string]; metric: string; spec: MetricSpec; onSelect: (g: Group) => void;

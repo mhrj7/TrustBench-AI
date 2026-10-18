@@ -1,44 +1,47 @@
-/* Design tokens (web/DESIGN.md). Dark premium surface, one accent (indigo to violet), two semantic colours (safe, danger)
-   and translucent "glass" layers for chrome and cards. Motion is spring-first (components/Motion.tsx); the CSS easings
-   below are only for colour and opacity. */
+/* Design tokens (web/DESIGN.md). A pale lavender floor, ink-black type, dark 3D stages, and two semantic colours:
+   electric blue is the guard (it stopped something), hot red is the trick (it got through). No glows on interface
+   chrome. Motion is spring-first (components/Motion.tsx); the CSS easings below are
+   only for colour and opacity. */
 :root {
-  --ground: #06070b;
-  --tone-1: #0c0e14;
-  --tone-2: #131622;
-  --tone-3: #1d2130;
-  --ink: #f5f5f7;
-  --ink-2: #a4a8b8;
-  --ink-3: #6b7084;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --ground: #f0f1fa;
+  --floor-edge: #e7e8f4;
+  --tone-1: #ffffff;
+  --tone-2: #e4e6ef;
+  --tone-3: #d5d8e6;
+  --ink: #0d0e13;
+  --ink-2: #4b4e5f;
+  --ink-3: #8a8da0;
+  --line: rgba(13, 14, 19, 0.09);
+  --line-strong: rgba(11, 11, 15, 0.16);
 
-  --accent: #7c83ff;
-  --accent-2: #c084fc;
-  --accent-ink: #0b0c19;
-  --accent-soft: rgba(124, 131, 255, 0.16);
-  --gradient: linear-gradient(135deg, #7c83ff 0%, #a78bfa 45%, #f0abfc 100%);
-  --safe: #34d399;
-  --safe-soft: rgba(52, 211, 153, 0.14);
-  --danger: #fb7185;
-  --danger-soft: rgba(251, 113, 133, 0.14);
+  --accent: #2433ff;
+  --accent-2: #2b2e3a;  /* the dark pill */
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(36, 51, 255, 0.08);
+  --gradient: #2433ff; /* kept as a name for older rules; it is a solid colour now */
+  --stage: #14161d;   /* the dark 3D stage */
+  --safe: #2433ff;
+  --safe-soft: rgba(36, 51, 255, 0.08);
+  --danger: #ef3b24;
+  --danger-soft: rgba(239, 59, 36, 0.09);
 
   /* "signal" marks attacker success and denials in the evidence charts; it stays the danger colour. */
-  --signal: #fb7185;
-  --signal-ink: #1a0509;
-  --signal-dim: #6b2433;
-  /* Neutral data series: the accent at two strengths. Danger stays reserved for attacker success and denials. */
-  --data-1: #7c83ff;
-  --data-2: #4a4f86;
+  --signal: #ef3b24;
+  --signal-ink: #ffffff;
+  --signal-dim: #f7c3ba;
+  /* Neutral data series: ink at two strengths. Danger stays reserved for attacker success and denials. */
+  --data-1: #0d0e13;
+  --data-2: #b9bccb;
 
-  --glass: rgba(16, 18, 28, 0.62);
-  --glass-strong: rgba(12, 14, 22, 0.82);
-  --glass-blur: blur(22px) saturate(160%);
+  --glass: rgba(240, 241, 250, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.92);
+  --glass-blur: blur(20px) saturate(180%);
 
-  --font-sans: 'Instrument Sans Variable', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --size-display: clamp(48px, 7.2vw, 104px);
-  --size-headline: clamp(32px, 4.2vw, 56px);
+  --size-display: clamp(48px, 7.4vw, 120px);
+  --size-headline: clamp(38px, 5.6vw, 92px);
   --size-statement: clamp(21px, 2vw, 27px);
   --size-body: clamp(17px, 1.2vw, 18px);
   --size-small: 14px;
@@ -49,14 +52,15 @@
   --space-48: 48px; --space-64: 64px; --space-96: 96px; --space-144: 144px; --space-200: 200px;
   --margin: 32px;
   --section-gap: 144px;
-  --max: 1280px;
+  --max: 1400px;
   --radius: 14px;
-  --radius-lg: 24px;
+  --radius-lg: 28px;
   --radius-pill: 999px;
   --nav-h: 64px;
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 0 1px rgba(124, 131, 255, 0.35), 0 18px 60px -18px rgba(124, 131, 255, 0.55);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 14px 40px -16px rgba(26, 33, 51, 0.16);
+  --shadow-lift: 0 2px 4px rgba(16, 24, 40, 0.05), 0 34px 70px -24px rgba(26, 33, 51, 0.30);
+  --shadow-glow: var(--shadow-card);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -76,5 +80,5 @@
   :root { --glass: var(--tone-1); --glass-strong: var(--tone-1); --glass-blur: none; }
 }
 @media (prefers-contrast: more) {
-  :root { --line: rgba(255, 255, 255, 0.28); --ink-2: #d4d6e0; }
+  :root { --line: rgba(11, 11, 15, 0.3); --ink-2: #2f3036; --ink-3: #55565e; }
 }
