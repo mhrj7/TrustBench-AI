@@ -293,7 +293,7 @@ async function runArm(arm, testCase, fixture, rep) {
     };
   } else {
     const originalGenerate = adapter.generate.bind(adapter);
-    adapter.generate = (req, opts) => spans.model("agent", req.request_id, async () => {}, () => originalGenerate(req, opts));
+    adapter.generate = (req, opts) => spans.model("agent", req.request_id, null, () => originalGenerate(req, opts));  // scripted: no pacing
   }
   let built, port, dbPath, auditFile, gatewayProcess = null; const approvalLog = [];
   const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};

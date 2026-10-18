@@ -1,0 +1,80 @@
+{
+ "task_id": "TB-051",
+ "checks": {
+  "demo_rebuilt": {
+   "name": "Demo rebuilt from the candidate's committed files and running healthy",
+   "required": true,
+   "candidate": "75e4e3ddce947b463f4edeff168486d458a82a6d",
+   "ok": true,
+   "started_at": "2026-10-18T07:41:08+00:00",
+   "finished_at": "2026-10-18T07:42:26+00:00",
+   "detail": {
+    "image_tag": "trustbench-live:75e4e3d",
+    "image_id": "sha256:27f823fcddae",
+    "running_image": "sha256:27f823fcddae",
+    "health": "healthy",
+    "build_seconds": 68.4,
+    "source": "git archive 75e4e3ddce94 (committed files only)"
+   }
+  },
+  "linked_reports": {
+   "name": "Linked reports: every relative link in the documentation resolves, README links answer, and the report, claim, README and reproduction checks pass",
+   "required": true,
+   "candidate": "75e4e3ddce947b463f4edeff168486d458a82a6d",
+   "ok": true,
+   "started_at": "2026-10-18T07:42:26+00:00",
+   "finished_at": "2026-10-18T07:42:46+00:00",
+   "detail": {
+    "markdown_files": 44,
+    "broken_links": [],
+    "readme_external_links": 7,
+    "unreachable": [],
+    "report_checks": {
+     "report and claims ledgers": true,
+     "claim boundaries": true,
+     "README instructions": true,
+     "reproducibility package": true,
+     "published reports reproduce": true
+    }
+   }
+  },
+  "offline_reproduction": {
+   "name": "Offline reproduction in a clean container (repro/README.md): every published number rebuilt from the committed raw records",
+   "required": true,
+   "candidate": "75e4e3ddce947b463f4edeff168486d458a82a6d",
+   "ok": false,
+   "started_at": "2026-10-18T07:41:04+00:00",
+   "finished_at": "2026-10-18T07:43:13+00:00",
+   "detail": {
+    "exit_code": 1,
+    "seconds": 129.4,
+    "outcome": "NOT REPRODUCED",
+    "steps_passed": 12,
+    "steps": 12,
+    "unexpected_changes": [
+     "reports/tests/traces/tb024-scripted-as_authored-plain-gateway_capability.spans.jsonl"
+    ],
+    "route": "container (tracked files at the commit, non-root, no network)"
+   }
+  },
+  "readme_fresh": {
+   "name": "README followed by a fresh non-root user in a clean container (scripts/check-readme.py --fresh)",
+   "required": true,
+   "candidate": "75e4e3ddce947b463f4edeff168486d458a82a6d",
+   "ok": true,
+   "started_at": "2026-10-18T07:43:13+00:00",
+   "finished_at": "2026-10-18T07:43:54+00:00",
+   "detail": {
+    "exit_code": 0,
+    "seconds": 41.1,
+    "problems": [],
+    "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root user \"node\", fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)"
+   }
+  }
+ },
+ "candidate": "75e4e3ddce947b463f4edeff168486d458a82a6d",
+ "superseded": {
+  "reason": "Stopped before a decision: offline_reproduction failed because one scripted trace differed under CPU load. The span code labelled any wait of 1 ms or more before a model call as provider pacing (queue.reason), and scripted runs, which have no pacing, sometimes took that long to resume while the Tier 2 run and an image build were running. Fixed in src/observability/run-spans.ts (the label needs real pacing) with a test; a new candidate was cut. The Tier 2 attempt for this candidate (label release-75e4e3ddce94 in evidence/release-gate-ledger.json) was stopped after about 20 minutes, before any result.",
+  "recorded_at": "2026-10-18"
+ }
+}

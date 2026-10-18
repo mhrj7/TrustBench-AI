@@ -31,17 +31,19 @@ export class RunSpans {
     return this.tracer.startSpan(name, { attributes: { "run.id": this.runId, ...attributes } as any, ...(startTime !== undefined ? { startTime } : {}) }, this.ctx);
   }
 
-  /** Wraps one model request: `wait` is the pacing that precedes it (queueing), `call` the provider request. */
+  /** Wraps one model request: `wait` is the pacing that precedes it (queueing; null when nothing paces this model), `call`
+   *  the provider request. `queue.reason` is set only when pacing exists and made the request wait: a scripted run under CPU
+   *  load can take a millisecond to resume, which is not provider pacing (TB-051: it made scripted traces vary). */
   async model<T extends { usage: { input_tokens: number; output_tokens: number }; finish_reason: string; tool_calls: unknown[] }>(
-    role: string, requestId: string, wait: () => Promise<void>, call: () => Promise<T>): Promise<T> {
+    role: string, requestId: string, wait: (() => Promise<void>) | null, call: () => Promise<T>): Promise<T> {
     const span = this.child("model.call", { "model.role": role, "model.request_id": requestId });
     const queued = performance.now();
-    await wait();
+    if (wait) await wait();
     const queue = performance.now() - queued;
     this.queueMs += queue;
     this.modelCalls++;
     span.setAttribute("queue.ms", round(queue));
-    if (queue >= 1) span.setAttribute("queue.reason", "provider_pacing"); // waited at least 1 ms for rate pacing
+    if (wait && queue >= 1) span.setAttribute("queue.reason", "provider_pacing"); // waited at least 1 ms for rate pacing
     span.addEvent("dequeued");
     try {
       const response = await call();

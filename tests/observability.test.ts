@@ -42,6 +42,20 @@ test("model, tool and policy spans all link to their run, and queueing is record
   assert.ok(!text.includes(canary), "tool output never reaches a span");
 });
 
+test("an unpaced model call is never labelled as provider pacing, however long it takes to resume (TB-051)", async () => {
+  const { text } = await traced(async (spans) => {
+    const response = { usage: { input_tokens: 5, output_tokens: 2 }, finish_reason: "stop", tool_calls: [] };
+    const busy = Date.now() + 5; while (Date.now() < busy) { /* a loaded machine: the call itself starts late */ }
+    await spans.model("agent", "unpaced", null, async () => { const t = Date.now() + 3; while (Date.now() < t) {} return response; });
+    await spans.model("agent", "paced", () => new Promise((r) => setTimeout(r, 5)), async () => response);
+    spans.end({ "run.outcome": "success" }, 0);
+  });
+  const calls = text.trim().split("\n").map((l) => JSON.parse(l)).filter((s) => s.name === "model.call");
+  const by = (id: string) => calls.find((s) => s.attributes["model.request_id"] === id);
+  assert.equal(by("unpaced").attributes["queue.reason"], undefined);
+  assert.equal(by("paced").attributes["queue.reason"], "provider_pacing");
+});
+
 test("a canary that reaches an exported attribute is redacted, and unknown attributes are dropped", async () => {
   const { text, redactor } = await traced(async (spans) => {
     const tools = spans.tools({ lookup_contact: { execute: async () => { throw Object.assign(new Error("x"), { code: `leak-${canary}` }); } } }, { read: ["lookup_contact"], write: [] });
