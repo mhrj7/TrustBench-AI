@@ -19,6 +19,7 @@ machine behind Tailscale Funnel, so it is best effort: if it is down, every publ
 
 ## Benchmark quickstart (TB-037)
 
+The technical report is [`research/report.md`](research/report.md) (TB-047; every number in it maps to a stored artifact).
 To reproduce the published results offline from a clean clone (no key, model or network), follow
 [`repro/README.md`](repro/README.md) (TB-046, release tag `repro-tb046`).
 
