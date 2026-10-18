@@ -186,12 +186,25 @@ def render() -> tuple[str, list[dict]]:
     return report, claims
 
 
+def content_hash(src: str) -> str:
+    import hashlib
+    raw = (ROOT / src).read_bytes()
+    if src.endswith('.json') or src.endswith('.yaml'):
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            return hashlib.sha256(raw).hexdigest()
+        if isinstance(obj, dict):
+            obj = {k: v for k, v in obj.items() if k not in CFG['content_hash_ignores_keys']}
+        raw = json.dumps(obj, sort_keys=True).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
 def main():
     report, claims = render()
-    import hashlib
-    sources = {src: hashlib.sha256((ROOT / src).read_bytes()).hexdigest() for src in sorted({c['source'] for c in claims})}
+    sources = {src: content_hash(src) for src in sorted({c['source'] for c in claims})}
     ledger = json.dumps({'task_id': 'TB-047', 'report': CFG['report'], 'claims': len(claims),
-                         'sources_sha256': sources, 'items': claims}, indent=1) + '\n'
+                         'sources_content_sha256': sources, 'content_hash_note': CFG['content_hash_note'], 'items': claims}, indent=1) + '\n'
     rp, lp = ROOT / CFG['report'], ROOT / CFG['claims']
     if '--check' in sys.argv:
         stale = [str(p.relative_to(ROOT)) for p, text in ((rp, report), (lp, ledger)) if not p.exists() or p.read_text() != text]

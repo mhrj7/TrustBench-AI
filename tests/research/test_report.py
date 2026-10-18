@@ -35,9 +35,9 @@ def test_every_number_in_the_rendered_report_is_covered_by_a_claim_on_its_line()
 
 def test_every_claim_source_is_a_committed_file_with_the_recorded_hash():
     tracked = set(subprocess.run(['git', 'ls-files'], cwd=ROOT, capture_output=True, text=True).stdout.split())
-    for src, digest in LEDGER['sources_sha256'].items():
+    for src, digest in LEDGER['sources_content_sha256'].items():
         assert src in tracked, src
-        assert hashlib.sha256((ROOT / src).read_bytes()).hexdigest() == digest, src
+        assert NS['content_hash'](src) == digest, src
 
 
 def test_every_claim_re_resolves_to_its_recorded_value():
