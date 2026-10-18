@@ -9,7 +9,7 @@ research/report-claims.json (each claim: source file, path, raw value, rendered 
 
   build-report.py            build
   build-report.py --check    build in memory and fail if the committed report or ledger differs"""
-import csv, json, re, sys
+import csv, json, os, re, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,6 +222,14 @@ def content_hash(src: str) -> str:
 
 def build(doc: dict) -> tuple[str, str]:
     report, claims = render(doc)
+    if doc.get('claim_table'):  # TB-052: each number with the run or report it comes from, in the document itself
+        rows = ['', '## Claim-to-evidence table', '', 'Every number above, the file it is read from and its path in that file.', '',
+                '| Value | Source | Path |', '| --- | --- | --- |']
+        start = len(report.splitlines()) + len(rows)
+        for i, c in enumerate(claims, 1):
+            rows.append(f"| {c['rendered']} | [`{c['source']}`]({os.path.relpath(ROOT / c['source'], (ROOT / doc['report']).parent)}) | `{c['path']}` |")
+            c['table_line'] = start + i
+        report = report + '\n'.join(rows) + '\n'
     sources = {src: content_hash(src) for src in sorted({c['source'] for c in claims})}
     ledger = json.dumps({'task_id': doc['task_id'], 'report': doc['report'], 'claims': len(claims),
                          'sources_content_sha256': sources, 'content_hash_note': CFG['content_hash_note'], 'items': claims}, indent=1) + '\n'
