@@ -9,6 +9,7 @@ import { BrowserRouter, Outlet, Route, Routes, useLocation } from 'react-router'
 import { EvidenceProvider, Footer, Nav, useSmoothScroll } from './components/Shell';
 import Overview from './pages/Overview';
 import { NextPage } from './components/Interactive';
+import { WaterCursor } from './components/Water';
 
 const Compare = lazy(() => import('./pages/Compare'));
 const Runs = lazy(() => import('./pages/Runs'));
@@ -35,6 +36,7 @@ function Layout() {
       </main>
       <Footer />
       <NextPage key={loc.pathname} from={loc.pathname} />
+      <WaterCursor />
     </EvidenceProvider>
   );
 }

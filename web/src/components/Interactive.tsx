@@ -1,7 +1,7 @@
 // Interaction pieces shared by the pages: the cursor ribbon, letter-roll text, the pinned card that grows with scroll, and
 // the "keep scrolling" hand-off that rolls straight into the next page (an endless tour of the site).
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useNavigate } from 'react-router';
 
 /** A thick blue ribbon that trails the pointer inside its parent, each point springing after the one before it. */
@@ -140,4 +140,23 @@ export function NextPage({ from }: { from: string }) {
       </div>
     </div>
   );
+}
+
+/** The barrel: as an element travels up the screen it rotates like a panel on the inside of a drum, tipped back at the
+ *  bottom of the viewport, flat in the middle, tipped forward at the top. Returns the rotation in degrees and a matching
+ *  depth, both driven by the element's own scroll position. */
+export function useBarrel(ref: RefObject<HTMLElement | null>, max = 34) {
+  const reduce = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], reduce ? [0, 0, 0] : [max, 0, -max]);
+  const z = useTransform(scrollYProgress, [0, 0.5, 1], reduce ? [0, 0, 0] : [-120, 0, -120]);
+  const opacity = useTransform(scrollYProgress, [0, 0.12, 0.88, 1], reduce ? [1, 1, 1, 1] : [0.35, 1, 1, 0.35]);
+  return { rotateX, z, opacity };
+}
+
+/** A block that rides the barrel. */
+export function Barrel({ children, className = '', max }: { children: ReactNode; className?: string; max?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { rotateX, z, opacity } = useBarrel(ref, max);
+  return <motion.div ref={ref} className={`barrel ${className}`} style={{ rotateX, z, opacity, transformPerspective: 1100 }}>{children}</motion.div>;
 }

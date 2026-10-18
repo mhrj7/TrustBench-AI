@@ -1,4 +1,4 @@
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { Suspense, lazy, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { aggregate, type Group, type Run } from '../lib/aggregate';
@@ -6,8 +6,9 @@ import { loadHeadline, loadSpans, runPath, useAsync, useDataset, type Dataset, t
 import { Bento, Card, Eyebrow } from '../components/Bento';
 import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
+import { ASTRONAUT_CREDIT, ASTRONAUT_URL } from '../lib/models';
 import { CountUp, Reveal } from '../components/Motion';
-import { GrowCard, Ribbon, Roll } from '../components/Interactive';
+import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
 import { RateBars } from '../components/Charts';
 import { useEvidence } from '../components/Shell';
@@ -15,6 +16,8 @@ import { TimedWaterfall } from '../components/Waterfall';
 import { Loading } from './Common';
 
 const PhysicsHero = lazy(() => import('../components/PhysicsHero'));
+const Journey = lazy(() => import('../components/Journey'));
+const StickerSpace = lazy(() => import('../components/StickerSpace'));
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 
 /** The defended system each report evaluates, read from its defended runs (baseline runs carry "baseline"). */
@@ -102,6 +105,8 @@ function OverviewBody({ d }: { d: Dataset }) {
 
       {h.state === 'ready' && <Results h={h.value} />}
 
+      {h.state === 'ready' && ASTRONAUT_URL && <JourneySection h={h.value} runs={runs.length} modelUrl={ASTRONAUT_URL} />}
+
       <section className="section wrap" aria-labelledby="work-title">
         <div className="work-head">
           <h2 id="work-title" className="headline">The evidence</h2>
@@ -137,15 +142,79 @@ function OverviewBody({ d }: { d: Dataset }) {
 
       <UtilityCost d={d} fp={fp} />
 
-      <section className="section wrap" aria-labelledby="cta-title">
-        <div className="cta-x">
-          <p className="caps ink-2">Think you can beat it?</p>
-          <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
-          <p className="body ink-2">Run the same comparison in your browser: instantly with no model, live on our free-tier key, or with your own key.</p>
-          <div className="row"><Link className="btn btn-primary roll-host" to="/live"><Roll>Run it live</Roll></Link><Link className="btn btn-glass roll-host" to="/method"><Roll>How to check a number</Roll></Link></div>
-        </div>
-      </section>
+      <SpaceCta />
     </>
+  );
+}
+
+/** The ending: a dark sky of floating stickers around the call to action; the pointer flicks them away. */
+function SpaceCta() {
+  const ref = useRef<HTMLElement>(null);
+  const reduce = !!useReducedMotion();
+  return (
+    <section ref={ref} className="space" aria-labelledby="cta-title">
+      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} /></Suspense>
+      <div className="space-copy wrap">
+        <p className="caps">Think you can beat it?</p>
+        <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
+        <p className="body">Run the same comparison in your browser: instantly with no model, live on our free-tier key, or with your own key.</p>
+        <div className="row"><Link className="btn btn-light roll-host" to="/live"><span className="btn-dot" /><Roll>Run it live</Roll></Link><Link className="btn btn-ghost roll-host" to="/method"><Roll>How to check a number</Roll></Link></div>
+        {ASTRONAUT_URL && <p className="space-credit small">Astronaut: <a href={ASTRONAUT_CREDIT.url}>{ASTRONAUT_CREDIT.title}</a> by {ASTRONAUT_CREDIT.author}, {ASTRONAUT_CREDIT.license}.</p>}
+      </div>
+    </section>
+  );
+}
+
+/** Portal crossing points along the flight, as scroll fractions (the flight runs from 0.3 to 0.97 of the section). */
+const PORTAL_AT = [-46, -92, -138, -184].map((z) => 0.3 + (z / -206) * 0.67);
+
+/** The journey: a pinned 3D scene; captions arrive as the helper crosses each portal. Every number is from the evidence. */
+function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; modelUrl: string }) {
+  const ref = useRef<HTMLElement>(null);
+  const reduce = !!useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const [active, setActive] = useState(-1);
+  const stops = [
+    { at: 0.05, kicker: 'The journey', title: 'The helper', tail: 'takes a trip.', text: 'Before it can be trusted, it has to pass every check the project ran. Scroll to send it through them.' },
+    { at: 0.22, kicker: 'Lift-off', title: 'Every claim leaves', tail: 'the ground here.', text: 'Nothing on this page is taken on trust: each stop below is a file you can open.' },
+    { at: PORTAL_AT[0], kicker: 'Dimension 1 · development', title: `${runs.toLocaleString('en')} runs`, tail: 'recorded.', text: 'Every run kept with its tool trace and the scorer\'s verdict.' },
+    { at: PORTAL_AT[1], kicker: 'Dimension 2 · the sealed test', title: `${h.primary.pairs} paired tasks,`, tail: 'opened once.', text: 'Locked away before the guard was finished, then run a single time.' },
+    { at: PORTAL_AT[2], kicker: 'Dimension 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them; ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
+    { at: PORTAL_AT[3], kicker: 'Dimension 4 · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
+  ];
+  useMotionValueEvent(scrollYProgress, 'change', (v) => {
+    let a = -1;
+    stops.forEach((st, i) => { if (v >= st.at - 0.04) a = i; });
+    setActive(a);
+  });
+  if (reduce) {
+    return (
+      <section className="section wrap journey-static" aria-labelledby="journey-title">
+        <h2 id="journey-title" className="headline">The journey <span className="tail">through the checks.</span></h2>
+        <ol className="journey-list">{stops.map((st, i) => <li key={i}><p className="caps ink-2">{st.kicker}</p><p className="statement">{st.title} {st.tail}</p><p className="body ink-2">{st.text}</p></li>)}</ol>
+      </section>
+    );
+  }
+  const cur = stops[Math.max(0, active)];
+  return (
+    <section ref={ref} className="journey" aria-labelledby="journey-title">
+      <div className="journey-sticky">
+        <Suspense fallback={<div className="journey-canvas" />}><Journey progress={scrollYProgress} reduce={reduce} modelUrl={modelUrl} /></Suspense>
+        <div className="journey-copy wrap">
+          <AnimatePresence mode="wait">
+            <motion.div key={Math.max(0, active)} className="journey-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -24, filter: 'blur(10px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.6 }}>
+              <p className="caps">{cur.kicker}</p>
+              {active <= 0 ? <h2 id="journey-title" className="headline">{cur.title} <span className="tail">{cur.tail}</span></h2>
+                : <p className="headline" role="presentation">{cur.title} <span className="tail">{cur.tail}</span></p>}
+              <p className="body">{cur.text}</p>
+            </motion.div>
+          </AnimatePresence>
+          <ol className="journey-dots" aria-hidden="true">{stops.map((_, i) => <li key={i} className={i <= active ? 'on' : ''} />)}</ol>
+        </div>
+        {active > 0 && <h2 id="journey-title" className="sr-only">The journey through the checks</h2>}
+      </div>
+    </section>
   );
 }
 
@@ -160,10 +229,12 @@ function Work({ to, tags, title, children }: { to: string | null; tags: string[]
     </>
   );
   return (
-    <motion.article className="work roll-host" initial={{ opacity: 0, y: reduce ? 0 : 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '0px 0px -10% 0px' }}
-      transition={{ type: 'spring', bounce: 0, duration: 0.7 }}>
-      {to ? <Link to={to} className="work-link">{body}</Link> : body}
-    </motion.article>
+    <Barrel className="work-wrap">
+      <motion.article className="work roll-host" initial={{ opacity: 0, y: reduce ? 0 : 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.7 }}>
+        {to ? <Link to={to} className="work-link">{body}</Link> : body}
+      </motion.article>
+    </Barrel>
   );
 }
 
