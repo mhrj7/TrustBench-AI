@@ -1,0 +1,193 @@
+{
+ "task_id": "TB-051",
+ "checks": {
+  "offline_reproduction": {
+   "name": "Offline reproduction in a clean container (repro/README.md): every published number rebuilt from the committed raw records",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:48:07+00:00",
+   "finished_at": "2026-10-18T07:49:53+00:00",
+   "detail": {
+    "exit_code": 0,
+    "seconds": 105.7,
+    "outcome": "REPRODUCED",
+    "steps_passed": 12,
+    "steps": 12,
+    "unexpected_changes": [],
+    "route": "container (tracked files at the commit, non-root, no network)"
+   }
+  },
+  "readme_fresh": {
+   "name": "README followed by a fresh non-root user in a clean container (scripts/check-readme.py --fresh)",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:49:53+00:00",
+   "finished_at": "2026-10-18T07:50:34+00:00",
+   "detail": {
+    "exit_code": 0,
+    "seconds": 40.5,
+    "problems": [],
+    "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root user \"node\", fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)"
+   }
+  },
+  "demo_rebuilt": {
+   "name": "Demo rebuilt from the candidate's committed files and running healthy",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:50:34+00:00",
+   "finished_at": "2026-10-18T07:51:34+00:00",
+   "detail": {
+    "image_tag": "trustbench-live:b3164e5",
+    "image_id": "sha256:1aca7cac9c44",
+    "running_image": "sha256:1aca7cac9c44",
+    "health": "healthy",
+    "build_seconds": 52.1,
+    "source": "git archive b3164e5c10af (committed files only)"
+   }
+  },
+  "linked_reports": {
+   "name": "Linked reports: every relative link in the documentation resolves, README links answer, and the report, claim, README and reproduction checks pass",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:51:34+00:00",
+   "finished_at": "2026-10-18T07:51:53+00:00",
+   "detail": {
+    "markdown_files": 44,
+    "broken_links": [],
+    "readme_external_links": 7,
+    "unreachable": [],
+    "report_checks": {
+     "report and claims ledgers": true,
+     "claim boundaries": true,
+     "README instructions": true,
+     "reproducibility package": true,
+     "published reports reproduce": true
+    }
+   }
+  },
+  "ci_tier1": {
+   "name": "CI on GitHub: Tier 1 release gate (scripted, every case and the policy trail against the committed baselines) and the full npm run verify",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:51:53+00:00",
+   "finished_at": "2026-10-18T08:06:42+00:00",
+   "detail": {
+    "run_id": 39109021561,
+    "url": "https://github.com/mhrj7/TrustBench-AI/actions/runs/39109021561",
+    "conclusion": "success",
+    "jobs": {
+     "tier1": "success",
+     "tier2": "skipped"
+    }
+   }
+  },
+  "tier2_live_gate": {
+   "name": "Tier 2 live release gate (A-025, A-028): the frozen configuration on the development suite with the live model, one attempt per candidate",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": true,
+   "started_at": "2026-10-18T07:48:04+00:00",
+   "finished_at": "2026-10-18T08:41:56+00:00",
+   "detail": {
+    "label": "release-b3164e5c10af",
+    "exit_code": 0,
+    "seconds": 3232.2,
+    "outcome": "PASS",
+    "evidence": "evidence/release-gate-release-b3164e5c10af-attempt-1.json",
+    "printed": {
+     "outcome": "PASS",
+     "T1": {
+      "point": -0.8889,
+      "bootstrap95": [
+       -1.0,
+       -0.7407
+      ],
+      "pairs": 27,
+      "clusters": 9,
+      "baseline_rate": 0.8889,
+      "defended_rate": 0.0
+     },
+     "T2": {
+      "point": 0.1905,
+      "bootstrap95": [
+       0.0476,
+       0.381
+      ],
+      "pairs": 21,
+      "clusters": 7,
+      "baseline_rate": 0.6667,
+      "defended_rate": 0.8571
+     },
+     "I": {
+      "I1_npm_verify": true,
+      "I2_verify_frozen": true,
+      "I3_frozen_configuration": true,
+      "I4_validity": true
+     }
+    }
+   }
+  },
+  "fresh_clone_verify": {
+   "name": "Fresh clone from GitHub: locked install, the pinned AgentDojo data, and the full npm run verify (fixtures, regression, website browser tests), with no local keys",
+   "required": true,
+   "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+   "ok": false,
+   "started_at": "2026-10-18T08:42:14+00:00",
+   "finished_at": "2026-10-18T08:42:47+00:00",
+   "detail": {
+    "location": "fresh clone from GitHub on the release host, no .env keys (TRUSTBENCH_NO_DOTENV), own npm and uv caches",
+    "steps": [
+     {
+      "step": "clone",
+      "exit_code": 0,
+      "seconds": 6.1,
+      "tail": []
+     },
+     {
+      "step": "install",
+      "exit_code": 0,
+      "seconds": 10.7,
+      "tail": [
+       "npm notice New minor version of npm available! 12.0.0 -> 12.2.0",
+       "npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0",
+       "npm notice To update run: npm install -g npm@12.2.0",
+       "npm notice"
+      ]
+     },
+     {
+      "step": "fetch pinned AgentDojo data",
+      "exit_code": 0,
+      "seconds": 10.9,
+      "tail": [
+       "{\"ok\":true,\"commit\":\"089ed468cf3ed0322acc66b0211f26d9d90dbf60\",\"license\":\"MIT\",\"benchmark_version\":\"v1.2.2\",\"selected_suites\":[\"workspace@1.2.2\",\"banking@1.2.2\"],\"excluded_suites\":[\"travel@1.2.0\",\"slack@1.2.0\"],\"required_paths\":8}",
+       "From https://github.com/ethz-spylab/agentdojo",
+       " * branch              089ed468cf3ed0322acc66b0211f26d9d90dbf60 -> FETCH_HEAD",
+       "HEAD is now at 089ed468 Add openai-compatible provider for arbitrary OpenAI-compatible endpoints (#147)"
+      ]
+     },
+     {
+      "step": "npm run verify",
+      "exit_code": 1,
+      "seconds": 4.9,
+      "tail": [
+       "npm notice run trustbench-ai@0.0.0 verify:model-adapter",
+       "npm notice run node scripts/verify-model-adapter.mjs",
+       "npm notice run trustbench-ai@0.0.0 test:tool-service",
+       "npm notice run .venv-tools/bin/python -m pytest -q src/tools/tests/test_integration.py tests/tools --basetemp=.tool-state/pytest-tools"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "candidate": "b3164e5c10af5322bed0ca627215e8dcffb93697",
+ "superseded": {
+  "reason": "Not released: fresh_clone_verify failed. In a fresh clone, npm run verify stopped at test:tool-service because pytest could not create its temporary directory under .tool-state/ (the folder does not exist yet; CI never saw it because its Tier 1 step creates the folder first). Fixed in package.json (mkdir -p .tool-state, as the other test scripts do); with the fix the full verify passed in the same fresh clone before a new candidate was cut. The checks that passed here (Tier 2 live gate PASS, offline reproduction, README fresh check, demo rebuild, links, CI) were rerun on the new candidate.",
+  "recorded_at": "2026-10-18"
+ }
+}
