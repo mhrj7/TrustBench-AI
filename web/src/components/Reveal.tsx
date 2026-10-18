@@ -12,7 +12,7 @@ const TARGETS = [
   '.mini-term', '.mini-calls', '.work-tags', '.work-title', '.field', '.segmented', '.heatmap-cell', '.att-col', '.kv',
 ].map((t) => `main ${t}`).join(',');
 // Containers that already animate themselves, or hold long scrolling lists.
-const SKIP = '.hx, .stage, .drawer, .runlist, .runtable, table, .journey-copy, .space-copy, .next, .reel-rows, .sr-only, [data-no-reveal]';
+const SKIP = '.hx, .stage, .drawer, .runlist, .runtable, table, .journey, .journey-copy, .space-copy, .next, .reel-rows, .sr-only, [data-no-reveal]';
 
 export function useReveal() {
   const reduce = useReducedMotion();
