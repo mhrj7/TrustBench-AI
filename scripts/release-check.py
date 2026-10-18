@@ -219,13 +219,19 @@ def run(check_id: str, sha: str):
         ok, detail = CHECKS[check_id](sha)
     except Exception as e:  # recorded as a failure, never hidden
         ok, detail = False, {'error': f'{type(e).__name__}: {e}'}
+    import fcntl
+    with open(OUT.parent / '.checks.lock', 'w') as lock:  # checks run in parallel; each records under the lock
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        record(check_id, spec, sha, ok, detail, started)
+    print(json.dumps({'check': check_id, 'ok': bool(ok)}))
+    return ok
+
+
+def record(check_id, spec, sha, ok, detail, started):
     rec = load()
     rec['checks'][check_id] = {'name': spec['name'], 'required': spec['required'], 'candidate': sha, 'ok': bool(ok), 'started_at': started,
                                'finished_at': now(), 'detail': detail}
-    OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(rec, indent=1) + '\n')
-    print(json.dumps({'check': check_id, 'ok': bool(ok)}))
-    return ok
 
 
 def decide():
@@ -263,6 +269,7 @@ if __name__ == '__main__':
             sys.exit(f"release/checks.json is for candidate {rec['candidate'][:12]}; start a new file for a new candidate")
         rec['candidate'] = sha
         OUT.parent.mkdir(exist_ok=True)
+        (OUT.parent / '.gitignore').write_text('.checks.lock\n')
         OUT.write_text(json.dumps(rec, indent=1) + '\n')
         sys.exit(0 if run(a[1], sha) else 1)
     if a[:1] == ['decide']:
