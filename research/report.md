@@ -197,7 +197,7 @@ ended while a model call was still open. Excluding them leaves the pooled unsafe
   [`reports/rollback-drill.md`](../reports/rollback-drill.md)): 50 fault tests passed and
   0 failed; a bad policy change was detected and rolled back in
   18.8 s and a deployment image in 6.0 s.
-- **Reproducibility** ([`repro/README.md`](../repro/README.md)): 11 offline steps rebuild the
+- **Reproducibility** ([`repro/README.md`](../repro/README.md)): 12 offline steps rebuild the
   published results from the committed raw run records, and the last run is **REPRODUCED** with
   0 unexpected file changes.
 - **Live demo**: the comparison can be rerun from a browser or the CLI ([`docs/live-service.md`](../docs/live-service.md)).

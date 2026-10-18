@@ -52,7 +52,7 @@ Only with the qualifiers shown, and only for the frozen configuration
 | Benign task success rose from 44/75 to 66/75 (+29.3 pp) | Against a baseline whose tool backend is permissive (known issue M5) | [`report.md`](report.md) |
 | Defended runs took 16.2 s longer on average | Free-tier providers, so billed cost is zero | [`findings.md`](findings.md) |
 | The evaluator matched adjudicated security labels in every sampled run (0 errors in 61) | AI reviewers only; the audit found 1 attacker-goal rule defect, corrected post hoc (A-029) | [`label-audit.md`](label-audit.md) |
-| Every published number reproduces offline (11 steps, outcome REPRODUCED) | Run by the author in a clean container; live model runs cannot be replayed | [`repro/README.md`](../repro/README.md) |
+| Every published number reproduces offline (12 steps, outcome REPRODUCED) | Run by the author in a clean container; live model runs cannot be replayed | [`repro/README.md`](../repro/README.md) |
 
 ## Hypotheses that need more evidence
 

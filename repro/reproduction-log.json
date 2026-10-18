@@ -1,9 +1,9 @@
 {
  "task_id": "TB-046",
- "commit": "7285854e14294847a4ca2f72a7c6b1a3e3f43b03",
+ "commit": "d3a15fbef95d9987bcf84d19d688e8e126b575e4",
  "route": "container (tracked files at the commit, non-root, no network)",
- "started_at": "2026-10-18T02:15:17+00:00",
- "finished_at": "2026-10-18T02:16:11+00:00",
+ "started_at": "2026-10-18T03:07:13+00:00",
+ "finished_at": "2026-10-18T03:08:08+00:00",
  "environment": "Linux aarch64, Python 3.14.0, Node v26.5.0",
  "steps": [
   {
@@ -32,7 +32,7 @@
    "name": "scripted smoke suite and arm comparison",
    "command": "sh bin/trustbench smoke --check",
    "exit_code": 0,
-   "seconds": 30.3,
+   "seconds": 30.5,
    "tail": [
     "  }",
     " ]",
@@ -92,27 +92,36 @@
    "exit_code": 0,
    "seconds": 0.1,
    "tail": [
-    "{\"ok\": true, \"claims\": 137}"
+    "{\"ok\": true, \"claims\": {\"research/report.md\": 137, \"research/claims.md\": 21}}"
+   ]
+  },
+  {
+   "name": "TB-048 claim boundaries: no overclaim in the public text",
+   "command": ".venv-tools/bin/python scripts/check-claims.py",
+   "exit_code": 0,
+   "seconds": 0.2,
+   "tail": [
+    "{\"ok\": true, \"files_scanned\": 64, \"hits\": 49, \"allowed\": 49, \"unmatched\": 0, \"stale\": 0, \"portfolio_problems\": 0}"
    ]
   },
   {
    "name": "reproduction tests of the published reports",
    "command": "sh bin/trustbench report --check",
    "exit_code": 0,
-   "seconds": 5.3,
+   "seconds": 5.2,
    "tail": [
     ".........................................................                [100%]",
-    "57 passed in 3.78s"
+    "57 passed in 3.74s"
    ]
   },
   {
    "name": "research tests",
    "command": ".venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/research -k not last_recorded_reproduction",
    "exit_code": 0,
-   "seconds": 3.3,
+   "seconds": 4.4,
    "tail": [
-    ".................................                                        [100%]",
-    "33 passed, 1 deselected in 2.23s"
+    "................................................                         [100%]",
+    "48 passed, 1 deselected in 3.31s"
    ]
   }
  ],
