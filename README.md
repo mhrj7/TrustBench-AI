@@ -156,3 +156,7 @@ and is not part of the tested setup above.
 ## Hosting the demo yourself
 
 Docker Compose and Tailscale Funnel setup, limits, checks and operations: [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
+
+## License
+
+MIT ([`LICENSE`](LICENSE)). Third-party material and what is redistributed: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

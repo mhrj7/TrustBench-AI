@@ -123,3 +123,13 @@ def test_remote_account_flow_and_private_session_file(tmp_path, monkeypatch):
     f = tmp_path / 'cli-home' / 'sessions.json'
     assert stat.S_IMODE(f.stat().st_mode) == 0o600 and 'a strong cli passphrase 9' not in f.read_text()
     assert runner.invoke(cli.app, ['remote', 'logout', *url]).exit_code == 0 and json.loads(f.read_text()) == {}
+
+
+def test_smoke_check_baseline_without_git_history_is_the_shipped_file(monkeypatch):
+    # TB-053: a release archive has no .git, so `smoke --check` compares a fresh run with the file as shipped.
+    import src.cli as c
+    monkeypatch.setattr(c, 'committed', lambda path: None)
+    assert c.baseline('tests/smoke/report.json', '{"ok": true}') == {'ok': True}
+    assert c.baseline('tests/smoke/report.json', None) is None, 'with neither git nor a shipped file the check must fail'
+    monkeypatch.setattr(c, 'committed', lambda path: {'from': 'git'})
+    assert c.baseline('tests/smoke/report.json', '{"ok": true}') == {'from': 'git'}, 'in a checkout the committed file wins'

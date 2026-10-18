@@ -47,6 +47,15 @@ def committed(path: str):
     return json.loads(out.stdout) if out.returncode == 0 else None
 
 
+def baseline(path: str, shipped: str | None):
+    """The result a fresh run is compared with: the committed file in a git checkout, otherwise (a release archive has no
+    history, TB-053) the file as shipped, read before the run overwrote it."""
+    base = committed(path)
+    if base is None and shipped is not None:
+        base = json.loads(shipped)
+    return base
+
+
 def schema_errors(report: dict, schema_path: str) -> list[str]:
     from jsonschema import Draft202012Validator
     v = Draft202012Validator(json.loads((ROOT / schema_path).read_text()))
@@ -89,10 +98,12 @@ def smoke(check: Annotated[bool, typer.Option(help='compare each output with the
     """Credential-free smoke runs: environment fixture, scripted smoke suite and scripted arm comparison."""
     results = []
     for step in CFG['smoke']['steps']:
+        out_file = ROOT / step['output'] if step.get('output') else None
+        shipped = out_file.read_text() if out_file and out_file.exists() else None
         r = {'step': step['name'], 'ok': npm(step['npm'], quiet=True) == 0}
         if check and r['ok'] and step.get('output'):
             fresh = json.loads((ROOT / step['output']).read_text())
-            base = committed(step['output'])
+            base = baseline(step['output'], shipped)
             volatile = set(step.get('volatile_keys', []))
             r['matches_committed'] = base is not None and normalise(fresh, volatile) == normalise(base, volatile)
             r['ignored_volatile_keys'] = sorted(volatile)

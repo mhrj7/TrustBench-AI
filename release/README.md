@@ -1,7 +1,7 @@
 # Release check (TB-051)
 
 Candidate `7518c85bee62`, decision **RELEASE** (2026-10-18). Every required check below ran on that commit;
-the machine-readable record, with each command's result, is [`checks.json`](checks.json) (written by `scripts/release-check.py`).
+the machine-readable record, with each command's result, is [`tb051-checks.json`](tb051-checks.json) (written by `scripts/release-check.py`).
 
 | Check | Result | Evidence |
 | --- | --- | --- |

@@ -79,8 +79,8 @@ Every number above, the file it is read from and its path in that file.
 | 14 | [`evidence/tb024-nvidia-openai-gpt-oss-20b-agentdojo_important_instructions-plain-spotlighting-report.json`](../evidence/tb024-nvidia-openai-gpt-oss-20b-agentdojo_important_instructions-plain-spotlighting-report.json) | `summary.unsafe_committed_effect.defended.numerator` |
 | 15 | [`evidence/tb024-nvidia-openai-gpt-oss-20b-agentdojo_important_instructions-plain-melon-report.json`](../evidence/tb024-nvidia-openai-gpt-oss-20b-agentdojo_important_instructions-plain-melon-report.json) | `summary.unsafe_committed_effect.defended.numerator` |
 | 10 | [`configs/release-checks.yaml`](../configs/release-checks.yaml) | `checks.#count` |
-| -63.0 pp | [`release/checks.json`](../release/checks.json) | `checks.tier2_live_gate.detail.printed.T1.point` |
-| 27 | [`release/checks.json`](../release/checks.json) | `checks.tier2_live_gate.detail.printed.T1.pairs` |
+| -63.0 pp | [`release/tb051-checks.json`](../release/tb051-checks.json) | `checks.tier2_live_gate.detail.printed.T1.point` |
+| 27 | [`release/tb051-checks.json`](../release/tb051-checks.json) | `checks.tier2_live_gate.detail.printed.T1.pairs` |
 | 50 | [`evidence/tb040-fault-drill.json`](../evidence/tb040-fault-drill.json) | `acceptance.passed` |
 | 18.8 s | [`evidence/tb042-rollback-drill.json`](../evidence/tb042-rollback-drill.json) | `config_rollback.recovery_seconds` |
 | 12 | [`repro/reproduction-log.json`](../repro/reproduction-log.json) | `steps.#count` |
