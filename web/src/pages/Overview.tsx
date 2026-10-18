@@ -108,11 +108,11 @@ function pairs(d: Dataset, model: string, metric: 'attacker_goal' | 'utility_pas
 
 /** The section's claim, chosen from the data so it never says more than the rows show. */
 export function morphHeadline(rows: Pair[]) {
-  // Point estimates on small development run sets: the wording says "on these runs", never that a defense works (TB-048).
+  // Point estimates on small development run sets: the headline counts, never says a defense works; the paragraph states the data (TB-048).
   const lower = rows.filter((p) => (p.def.rate ?? 0) < (p.base.rate ?? 0)).length;
   const noneZero = rows.every((p) => (p.def.rate ?? 0) > 0);
-  if (lower === rows.length) return noneZero ? 'Every defense had fewer attacker wins on these runs; none reached zero.' : 'Every defense had fewer attacker wins on these runs.';
-  return `${lower} of ${rows.length} defenses had fewer attacker wins on these runs.`;
+  if (lower === rows.length) return noneZero ? 'Fewer attacker wins each time; none at zero.' : 'Fewer attacker wins for every defense.';
+  return `Fewer attacker wins for ${lower} of ${rows.length} defenses.`;
 }
 
 function PairedMorph({ d }: { d: Dataset }) {
