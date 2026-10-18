@@ -1,0 +1,198 @@
+{
+ "note": "TB-048 claim check (scripts/check-claims.py). JSON content (valid YAML). Records (evidence/, runs/, configs/frozen/, archived reports) are excluded: they are historical and must not be rewritten; configs/frozen/ and recorded reports still carry the working label 'novel candidate' for the directive-flow systems, which was a working name, not a claim (see research/claims.md).",
+ "scan": [
+  "README.md",
+  "AGENTS.md",
+  "docs/*.md",
+  "research/*.md",
+  "repro/*.md",
+  "protocol/*.md",
+  "src/**/*.md",
+  "web/src/*.tsx",
+  "web/src/**/*.tsx",
+  "web/index.html",
+  "configs/defenses.yaml",
+  "configs/deploy/*.json",
+  "portfolio/*.md",
+  "portfolio/**/*.md"
+ ],
+ "exclude": [
+  "research/*.template.md",
+  "research/related-work.md"
+ ],
+ "exclude_note": "Templates render into the scanned .md files. research/related-work.md describes other systems' guarantees (each row's claimed guarantee) and is built and checked by scripts/build-related-work.py.",
+ "patterns": {
+  "novelty": [
+   "\\bnovel(ty)?\\b",
+   "\\bfirst (to|ever|of its kind)\\b",
+   "state[- ]of[- ]the[- ]art",
+   "\\bbreakthrough\\b",
+   "\\bpioneer",
+   "\\bunprecedented\\b",
+   "\\bgroundbreaking\\b"
+  ],
+  "guarantee": [
+   "\\bguarantee[sd]?\\b",
+   "\\bprovabl[ey]\\b",
+   "\\bprove[sn]? (that )?(it|the system|the agent|the defense|trustbench)? ?(is )?(secure|safe|robust)\\b",
+   "\\b(fully|completely|totally) (secure|safe)\\b",
+   "\\bunbreakable\\b",
+   "\\bbulletproof\\b",
+   "\\bimmune\\b",
+   "\\b(blocks|stops|prevents|eliminates) (all|every)\\b",
+   "\\b100 ?% (secure|safe|protection)\\b",
+   "\\bzero risk\\b",
+   "\\bcannot be (bypassed|broken|fooled)\\b"
+  ],
+  "publication": [
+   "\\bpatent",
+   "\\bpeer[- ]reviewed\\b",
+   "\\baccepted (at|to|for) (a |the )?(conference|journal|publication|venue)",
+   "\\bpublished (at|in) (a|the) (conference|journal)"
+  ],
+  "resume": [
+   "\\btop[- ]?\\d+ ?%",
+   "\\btop (one|1) percent\\b",
+   "\\bguaranteed (job|hire|hiring|interview|offer)\\b",
+   "\\bworld[- ]class\\b",
+   "\\bindustry[- ]leading\\b"
+  ]
+ },
+ "ledgers": [
+  "research/report-claims.json",
+  "research/claims-ledger.json"
+ ],
+ "output": "research/claims-check.json",
+ "allow": [
+  {
+   "file": "docs/flow-check.md",
+   "contains": "no novelty claim yet",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/known-issues.md",
+   "contains": "No novelty claim is supported yet",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/model-usage-policy.md",
+   "contains": "novelty and claim audit",
+   "reason": "describes the claim-review process itself"
+  },
+  {
+   "file": "docs/scope.md",
+   "contains": "It does not claim universal agent security, guaranteed prompt-injection resistance, patentability",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/scope.md",
+   "contains": "A guarantee against every prompt-injection technique",
+   "reason": "negation: states that the claim is not made (listed under out of scope)"
+  },
+  {
+   "file": "docs/security-utility-holdout2.md",
+   "contains": "Zero observed unsafe effects is not zero risk",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/security-utility.md",
+   "contains": "Zero observed unsafe effects is not zero risk",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/threat-model.md",
+   "contains": "[CaMeL: Defeating Prompt Injections by Design]",
+   "reason": "describes another work or the comparison matrix, not a TrustBench claim"
+  },
+  {
+   "file": "docs/threat-model.md",
+   "contains": "claimed guarantee and a specific limitation for each",
+   "reason": "describes another work or the comparison matrix, not a TrustBench claim"
+  },
+  {
+   "file": "docs/threat-model.md",
+   "contains": "makes no claim of research novelty, patentability",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/threat-model.md",
+   "contains": "No novelty or universal-security claim is made",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "docs/uncertainty.md",
+   "contains": "zero observed is not zero risk",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "protocol/amendments.md",
+   "contains": "cannot be fooled by a tool output that carries",
+   "reason": "a narrow technical property of one mechanism, covered by tests (a forged trust field is downgraded to unknown: tests/gateway-adapter.test.ts)"
+  },
+  {
+   "file": "protocol/preregister.md",
+   "contains": "not a security guarantee",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "protocol/preregister.md",
+   "contains": "It may not claim universal prompt-injection resistance",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "public text is scanned for novelty, security-guarantee, publication",
+   "reason": "describes the claim-review process itself"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "it supports no patent",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "**Novelty.** Combining capability scoping",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "**Security guarantee.** No formal or universal guarantee",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "would still not mean zero risk",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/claims.md",
+   "contains": "**Patentability or publication.** Neither is claimed",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/findings.md",
+   "contains": "is not by itself novel",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/findings.md",
+   "contains": "would still not mean zero risk",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/report.md",
+   "contains": "It has not been peer reviewed",
+   "reason": "negation: states that the claim is not made"
+  },
+  {
+   "file": "research/report.md",
+   "contains": "give guarantees by construction or over a formal model, which TrustBench does not",
+   "reason": "describes another work or the comparison matrix, not a TrustBench claim; states TrustBench lacks it"
+  },
+  {
+   "file": "src/policy/README.md",
+   "contains": "This guarantees atomicity only for the local SQLite-backed synthetic actions",
+   "reason": "a narrow technical property of one mechanism, covered by tests (a database transaction property, tests/policy)"
+  }
+ ]
+}

@@ -16,14 +16,15 @@ def test_the_committed_report_and_ledger_are_what_the_artifacts_produce():
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-def test_every_number_in_the_rendered_report_is_covered_by_a_claim_on_its_line():
+@pytest.mark.parametrize('doc', NS['DOCS'], ids=lambda d: d['report'])
+def test_every_number_in_the_rendered_report_is_covered_by_a_claim_on_its_line(doc):
     # Independent of the template lint: scan the output itself. Identifiers (task, amendment and source IDs, holdout names,
     # dates, model and version names), code spans and link targets are not claims.
     by_line = {}
-    for c in LEDGER['items']:
+    for c in json.loads((ROOT / doc['claims']).read_text())['items']:
         by_line.setdefault(c['report_line'], []).append(c['rendered'])
     allowed = [re.compile(p) for p in CFG['allowed_identifier_patterns']]
-    for n, line in enumerate((ROOT / CFG['report']).read_text().splitlines(), 1):
+    for n, line in enumerate((ROOT / doc['report']).read_text().splitlines(), 1):
         text = re.sub(r'`[^`]*`', ' ', line)
         text = re.sub(r'\]\([^)]*\)', ']', text)
         for rendered in sorted(by_line.get(n, []), key=len, reverse=True):

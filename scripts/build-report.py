@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CFG = json.loads((ROOT / 'configs/report.yaml').read_text())
 PH = re.compile(r'\{\{([a-z0-9_]+):([^|}]*)\|([a-z0-9_]+)\}\}')
 _cache: dict = {}
+# The technical report (TB-047) and every further document built the same way (configs/report.yaml extra_documents).
+DOCS = [{'task_id': 'TB-047', 'template': CFG['template'], 'report': CFG['report'], 'claims': CFG['claims']}, *CFG.get('extra_documents', [])]
 
 
 def load(alias: str):
@@ -129,7 +131,8 @@ def fmt(v, f: str) -> str:
     raise SystemExit(f'unknown format {f}')
 
 
-def lint(template: str) -> list[str]:
+def lint(template: str, doc: dict | None = None) -> list[str]:
+    doc = doc or DOCS[0]
     problems = []
     prose = PH.sub(' ', template)
     prose_no_code = re.sub(r'`[^`]*`', ' ', prose)
@@ -144,21 +147,22 @@ def lint(template: str) -> list[str]:
         words = re.findall(r'\b(' + '|'.join(CFG['number_words']) + r')\b', stripped, flags=re.I)
         if words:
             problems.append(f'template line {n}: number word {words} outside a placeholder: {line.strip()[:120]}')
-    for phrase in CFG['forbidden_phrases']:
+    for phrase in [f for f in CFG['forbidden_phrases'] if f not in doc.get('forbidden_phrases_exempt', [])]:
         if re.search(phrase, template, flags=re.I):
             problems.append(f'forbidden overclaiming phrase: {phrase}')
     for target in re.findall(r'\]\(([^)#]+)(?:#[^)]*)?\)', template) + re.findall(r'`((?:[\w.-]+/)+[\w.-]+\.[a-z]{2,5})`', template):
-        if target.startswith('http') or target == Path(CFG['claims']).name:  # the ledger is written by this build
+        if target.startswith('http') or target in {Path(d['claims']).name for d in DOCS}:  # ledgers are written by this build
             continue
-        p = (ROOT / CFG['report']).parent / target if not (ROOT / target).exists() else ROOT / target
+        p = (ROOT / doc['report']).parent / target if not (ROOT / target).exists() else ROOT / target
         if not p.exists():
             problems.append(f'cited path does not exist: {target}')
     return problems
 
 
-def render() -> tuple[str, list[dict]]:
-    template = (ROOT / CFG['template']).read_text()
-    problems = lint(template)
+def render(doc: dict | None = None) -> tuple[str, list[dict]]:
+    doc = doc or DOCS[0]
+    template = (ROOT / doc['template']).read_text()
+    problems = lint(template, doc)
     claims, out_lines = [], []
     for n, line in enumerate(template.splitlines(), 1):
         def sub(m):
@@ -174,7 +178,7 @@ def render() -> tuple[str, list[dict]]:
             return text
         out_lines.append(PH.sub(sub, line))
     if problems:
-        sys.exit('report build failed:\n  ' + '\n  '.join(problems))
+        sys.exit(f"{doc['report']} build failed:\n  " + '\n  '.join(problems))
     report = '\n'.join(out_lines) + '\n'
     leftover = [n for n, l in enumerate(out_lines, 1) if '{{' in l or '}}' in l]
     if leftover:
@@ -200,20 +204,28 @@ def content_hash(src: str) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def main():
-    report, claims = render()
+def build(doc: dict) -> tuple[str, str]:
+    report, claims = render(doc)
     sources = {src: content_hash(src) for src in sorted({c['source'] for c in claims})}
-    ledger = json.dumps({'task_id': 'TB-047', 'report': CFG['report'], 'claims': len(claims),
+    ledger = json.dumps({'task_id': doc['task_id'], 'report': doc['report'], 'claims': len(claims),
                          'sources_content_sha256': sources, 'content_hash_note': CFG['content_hash_note'], 'items': claims}, indent=1) + '\n'
-    rp, lp = ROOT / CFG['report'], ROOT / CFG['claims']
-    if '--check' in sys.argv:
-        stale = [str(p.relative_to(ROOT)) for p, text in ((rp, report), (lp, ledger)) if not p.exists() or p.read_text() != text]
-        if stale:
-            sys.exit(f'out of date (run scripts/build-report.py): {stale}')
-        print(json.dumps({'ok': True, 'claims': len(claims)}))
-        return
-    rp.write_text(report); lp.write_text(ledger)
-    print(json.dumps({'claims': len(claims), 'sources': len({c['source'] for c in claims})}))
+    return report, ledger
+
+
+def main():
+    out, stale = {}, []
+    for doc in DOCS:
+        report, ledger = build(doc)
+        for path, text in ((doc['report'], report), (doc['claims'], ledger)):
+            if '--check' in sys.argv:
+                if not (ROOT / path).exists() or (ROOT / path).read_text() != text:
+                    stale.append(path)
+            else:
+                (ROOT / path).write_text(text)
+        out[doc['report']] = json.loads(ledger)['claims']
+    if stale:
+        sys.exit(f'out of date (run scripts/build-report.py): {stale}')
+    print(json.dumps({'ok': True, 'claims': out}))
 
 
 if __name__ == '__main__':

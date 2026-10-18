@@ -108,12 +108,11 @@ function pairs(d: Dataset, model: string, metric: 'attacker_goal' | 'utility_pas
 
 /** The section's claim, chosen from the data so it never says more than the rows show. */
 export function morphHeadline(rows: Pair[]) {
-  const allLower = rows.every((p) => (p.def.rate ?? 0) < (p.base.rate ?? 0));
+  // Point estimates on small development run sets: the wording says "on these runs", never that a defense works (TB-048).
+  const lower = rows.filter((p) => (p.def.rate ?? 0) < (p.base.rate ?? 0)).length;
   const noneZero = rows.every((p) => (p.def.rate ?? 0) > 0);
-  if (allLower && noneZero) return 'Each defense cut attacks; none to zero.';
-  if (allLower) return 'Each defense cut attacks.';
-  if (noneZero) return 'Most cut attacks; none to zero.';
-  return 'Defenses differ widely.';
+  if (lower === rows.length) return noneZero ? 'Every defense had fewer attacker wins on these runs; none reached zero.' : 'Every defense had fewer attacker wins on these runs.';
+  return `${lower} of ${rows.length} defenses had fewer attacker wins on these runs.`;
 }
 
 function PairedMorph({ d }: { d: Dataset }) {
@@ -132,7 +131,7 @@ function PairedMorph({ d }: { d: Dataset }) {
         <div className="grid" style={{ rowGap: 32 }}>
           <div className="span-5 stack-24">
             <h2 id="morph-title" className="headline">{morphHeadline(rows)}</h2>
-            <p className="body ink-2">Attacker goal reached on attack cases for {short(model)}, the model every defense was run on. Each defense is compared with the baseline arm of its own reports, on the same cases. Scroll to move each bar from its baseline to its defended rate.</p>
+            <p className="body ink-2">Attacker goal reached on attack cases for {short(model)}, the model every defense was run on. Each defense is compared with the baseline arm of its own reports, on the same cases. These are development runs and point estimates, not a confirmatory result (that is in the technical report). Scroll to move each bar from its baseline to its defended rate.</p>
             <MorphLegend t={t} reduce={!!reduce} />
           </div>
           <ol className="span-7 morph-bars" aria-label="Attacker goal rate, baseline and defended">
