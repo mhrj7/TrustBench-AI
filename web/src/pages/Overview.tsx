@@ -1,18 +1,20 @@
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
-import { Suspense, lazy, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { aggregate, type Group, type Run } from '../lib/aggregate';
 import { loadHeadline, loadSpans, runPath, useAsync, useDataset, type Dataset, type Headline } from '../lib/data';
 import { Bento, Card, Eyebrow } from '../components/Bento';
 import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
-import { CountUp, EASE_OUT, Reveal } from '../components/Motion';
+import { CountUp, Reveal } from '../components/Motion';
+import { GrowCard, Ribbon, Roll } from '../components/Interactive';
+import type { HeroScore } from '../components/PhysicsHero';
 import { RateBars } from '../components/Charts';
 import { useEvidence } from '../components/Shell';
 import { TimedWaterfall } from '../components/Waterfall';
 import { Loading } from './Common';
 
-const Hero3D = lazy(() => import('../components/Hero3D'));
+const PhysicsHero = lazy(() => import('../components/PhysicsHero'));
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 
 /** The defended system each report evaluates, read from its defended runs (baseline runs carry "baseline"). */
@@ -42,77 +44,183 @@ function OverviewBody({ d }: { d: Dataset }) {
   const fp = valid.filter((r) => r.utility_rule === 'call_denied_by_defense').length;
   const h = useAsync(loadHeadline, []);
   const reduce = !!useReducedMotion();
+  const [score, setScore] = useState<HeroScore>({ stopped: 0, total: 0 });
+  const touch = typeof window !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   return (
     <>
-      <section className="hero-x" aria-labelledby="hero-title">
-        <Suspense fallback={<div className="hero-canvas" aria-hidden="true" />}><Hero3D reduce={reduce} /></Suspense>
-        <div className="hero-x-copy wrap">
-          <motion.p className="pill" initial={{ opacity: 0, y: reduce ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={SPRING}>
-            <span className="pill-dot" />A benchmark for AI helpers that use tools
-          </motion.p>
-          <motion.h1 id="hero-title" className="display hero-title" initial={{ opacity: 0, y: reduce ? 0 : 24 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: 0.08 }}>
-            Can a guard stop a <span className="grad">tricked</span> AI?
+      <section className="hx wrap" aria-labelledby="hero-title">
+        <div className="hx-top">
+          <motion.h1 id="hero-title" className="display hx-title" initial={{ opacity: 0, y: reduce ? 0 : 24 }} animate={{ opacity: 1, y: 0 }} transition={SPRING}>
+            Can a guard stop a <span className="accent-word">tricked</span> AI?
           </motion.h1>
-          <motion.p className="statement ink-2 hero-lede" initial={{ opacity: 0, y: reduce ? 0 : 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: 0.16 }}>
-            AI helpers read documents and then act. If a document hides an instruction, the helper might obey it. TrustBench measures whether a guard stops that, without stopping the real work.
-          </motion.p>
-          <motion.div className="row hero-ctas" initial={{ opacity: 0, y: reduce ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: 0.24 }}>
-            <a className="btn btn-primary" href="#story">See how it works</a>
-            <Link className="btn btn-glass" to="/live">Run a live test</Link>
+          <motion.div className="hx-side" initial={{ opacity: 0, y: reduce ? 0 : 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: 0.12 }}>
+            <p className="body ink-2">AI helpers read documents and then act. If a document hides an instruction, the helper might obey it. TrustBench measures whether a guard stops that, without stopping the real work.</p>
+            <div className="row">
+              <a className="btn btn-primary roll-host" href="#story"><Roll>See how it works</Roll></a>
+              <Link className="btn btn-glass roll-host" to="/live"><Roll>Run a live test</Roll></Link>
+            </div>
           </motion.div>
+        </div>
+        <motion.div className="stage" initial={{ opacity: 0, scale: reduce ? 1 : 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ ...SPRING, duration: 0.9, delay: 0.1 }}>
+          <Suspense fallback={<div className="stage-canvas" aria-hidden="true" />}><PhysicsHero reduce={reduce} onScore={setScore} /></Suspense>
+          <p className="stage-tag"><span className="dot-red" />Red pieces are hidden tricks</p>
+          <p className="stage-hint">{reduce ? 'Motion is reduced: the pile stands still.' : touch ? 'Drag across the pile. Your finger is the guard.' : 'Move your cursor through the pile. You are the guard.'}</p>
+          <p className="stage-score" aria-live="polite"><span className="num">{score.stopped}</span> of {score.total} tricks stopped</p>
+        </motion.div>
+        <div className="crossrow" aria-hidden="true"><span>+</span><span>+</span><span className="crossrow-label">Scroll to explore</span><span>+</span><span>+</span></div>
+      </section>
+
+      <section className="sx wrap" aria-labelledby="sx-title">
+        <Ribbon />
+        <h2 id="sx-title" className="headline sx-title">Tricks hide. <span className="tail">Guards check.</span></h2>
+        <div className="sx-side">
+          <p className="body ink-2">A helper gets a job and a document. Hidden in the document is a sentence written for the helper, not for you. TrustBench runs the same job twice, with and without a guard that checks every action, and counts what the tools really did.</p>
           {h.state === 'ready' && (
-            <motion.dl className="hero-stats" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...SPRING, delay: 0.4 }}>
+            <dl className="sx-stats">
               <div><dt>runs recorded</dt><dd><CountUp to={runs.length} /></dd></div>
               <div><dt>sealed-test runs</dt><dd><CountUp to={h.value.confirmatory_runs} /></dd></div>
-              <div><dt>steps to rebuild every number</dt><dd><CountUp to={h.value.reproduction.steps} /></dd></div>
-            </motion.dl>
+              <div><dt>offline steps rebuild every number</dt><dd><CountUp to={h.value.reproduction.steps} /></dd></div>
+            </dl>
           )}
+          <a className="btn btn-glass roll-host" href="#story"><span className="btn-dot" /><Roll>How it works</Roll></a>
         </div>
       </section>
 
       <section id="story" className="section wrap" aria-labelledby="story-title">
         <div className="section-head">
           <Eyebrow>The story</Eyebrow>
-          <h2 id="story-title" className="headline">The trick, and the guard.</h2>
+          <h2 id="story-title" className="headline">The trick, <span className="tail">and the guard.</span></h2>
         </div>
         {h.state === 'ready' ? <Story ex={h.value.example} /> : <Loading state={h} />}
       </section>
 
-      {h.state === 'ready' && <Simulator h={h.value} />}
+      {h.state === 'ready' && (
+        <GrowCard left="FLIP" right="GUARD" label="Flip the guard">{() => <ReelCover h={h.value} />}</GrowCard>
+      )}
+
+      {h.state === 'ready' && <section id="sim" className="section wrap" aria-label="Flip the guard"><div className="sim-card"><Simulator h={h.value} /></div></section>}
 
       {h.state === 'ready' && <Results h={h.value} />}
 
-      <section className="section wrap" aria-labelledby="inside-title">
-        <div className="section-head">
-          <Eyebrow>For reviewers</Eyebrow>
-          <h2 id="inside-title" className="headline">Look inside the evidence.</h2>
-          <p className="body ink-2" style={{ maxWidth: '60ch' }}>Every chart below opens the runs behind it, and every run opens its raw record. These are development runs from the published store, not the sealed test.</p>
+      <section className="section wrap" aria-labelledby="work-title">
+        <div className="work-head">
+          <h2 id="work-title" className="headline">The evidence</h2>
+          <p className="caps ink-2">Every number on this site opens the runs behind it, and every run opens its raw record.</p>
         </div>
-        <Bento>
-          <Card span={7} label="A real run from the store">{hero ? <HeroTrace run={hero} /> : <p className="body ink-2">No timed run in the store.</p>}</Card>
-          <Card span={5} label="Browse the evidence">
-            <Eyebrow>Explore</Eyebrow>
-            <h3 className="statement">Every run, every reason.</h3>
-            <p className="body ink-2"><CountUp to={valid.length} /> valid runs across {new Set(runs.map((r) => r.model)).size} models, each with its tool trace and the evaluator's verdict.</p>
-            <div className="row" style={{ marginTop: 'auto' }}><Link className="btn btn-glass" to="/runs">All runs</Link><Link className="btn btn-glass" to="/compare">Compare defenses</Link><Link className="btn btn-glass" to="/policy">Why calls were stopped</Link></div>
-          </Card>
-        </Bento>
+        <div className="works">
+          <Work to={null} tags={['A real run', short(hero?.model ?? ''), hero?.system ?? '']} title="Replay a recorded run">
+            {hero ? <HeroTrace run={hero} /> : <p className="body ink-2">No timed run in the store.</p>}
+          </Work>
+          {h.state === 'ready' && (
+            <Work to="/compare" tags={['Defenses', 'Models', 'Heatmap']} title="Compare defenses">
+              <MiniRace h={h.value} />
+            </Work>
+          )}
+          <Work to="/runs" tags={['Store', `${new Set(runs.map((r) => r.model)).size} models`, 'Raw records']} title="Every run">
+            <div className="mini-count"><p className="figure"><CountUp to={valid.length} /></p><p className="small ink-2">valid runs, each with its tool trace and the evaluator's verdict</p></div>
+          </Work>
+          {h.state === 'ready' && (
+            <Work to="/policy" tags={['Gateway', 'Decisions', 'Reasons']} title="Why calls were stopped">
+              <ul className="mini-calls">{h.value.example.with_guard.decisions.map((c, i) => <li key={i} className={c.decision === 'deny' ? 'is-deny' : ''}><span className="mono">{c.tool.replaceAll('_', ' ')}</span><span className="small">{c.decision === 'deny' ? `stopped: ${(c.reason ?? '').replaceAll('_', ' ')}` : 'allowed'}</span></li>)}</ul>
+            </Work>
+          )}
+          <Work to="/attribution" tags={['Localizer', 'AI audit', 'Rounds']} title="The audit, round by round">
+            <MiniRounds d={d} />
+          </Work>
+          <Work to="/live" tags={['Your browser', 'No model', 'Free tier', 'Your key']} title="Run it live">
+            <div className="mini-term mono"><p><span className="ink-3">$</span> trustbench live --case doc-attack</p><p className="danger">baseline: attacker goal reached</p><p className="safe">guarded: call denied, task done</p></div>
+          </Work>
+        </div>
       </section>
 
       <PairedMorph d={d} />
 
       <UtilityCost d={d} fp={fp} />
 
-      <AttributionStrip d={d} />
-
       <section className="section wrap" aria-labelledby="cta-title">
-        <div className="cta-band">
-          <h2 id="cta-title" className="headline">Try to trick it yourself.</h2>
+        <div className="cta-x">
+          <p className="caps ink-2">Think you can beat it?</p>
+          <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
           <p className="body ink-2">Run the same comparison in your browser: instantly with no model, live on our free-tier key, or with your own key.</p>
-          <div className="row"><Link className="btn btn-primary" to="/live">Run it live</Link><Link className="btn btn-glass" to="/method">How to check a number</Link></div>
+          <div className="row"><Link className="btn btn-primary roll-host" to="/live"><Roll>Run it live</Roll></Link><Link className="btn btn-glass roll-host" to="/method"><Roll>How to check a number</Roll></Link></div>
         </div>
       </section>
     </>
+  );
+}
+
+/** One evidence card: a live picture on a stage, the tags, and a title that rolls on hover. */
+function Work({ to, tags, title, children }: { to: string | null; tags: string[]; title: string; children: ReactNode }) {
+  const reduce = useReducedMotion();
+  const body = (
+    <>
+      <div className="work-media">{children}</div>
+      <p className="work-tags">{tags.filter(Boolean).join(' • ')}</p>
+      <h3 className="work-title"><Roll>{title}</Roll></h3>
+    </>
+  );
+  return (
+    <motion.article className="work roll-host" initial={{ opacity: 0, y: reduce ? 0 : 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+      transition={{ type: 'spring', bounce: 0, duration: 0.7 }}>
+      {to ? <Link to={to} className="work-link">{body}</Link> : body}
+    </motion.article>
+  );
+}
+
+function MiniRace({ h }: { h: Headline }) {
+  const sorted = [...h.comparison.systems].sort((a, b) => a.defended.rate - b.defended.rate);
+  return (
+    <ul className="race race-mini">
+      {sorted.map((s, i) => (
+        <li key={s.id} className={i === 0 ? 'is-ours' : ''}>
+          <span className="small">{s.label}</span>
+          <span className="race-track"><motion.span className="race-fill" style={{ width: `${Math.max(s.defended.rate, 0.02) * 100}%` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }}
+            viewport={{ once: true }} transition={{ type: 'spring', bounce: 0, duration: 0.9, delay: 0.1 + i * 0.08 }} /></span>
+          <span className="num small">{s.defended.numerator}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function MiniRounds({ d }: { d: Dataset }) {
+  const a = d.store.attribution;
+  return (
+    <ol className="mini-rounds" aria-label="Audit accuracy by round">
+      {Object.entries(a.rounds).map(([r, v], i) => (
+        <li key={r}>
+          <motion.span className={Number(r) === a.measured.round ? 'is-measured' : ''} style={{ height: `${(v.summary.all.accuracy ?? 0) * 100}%` }}
+            initial={{ scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true }} transition={{ type: 'spring', bounce: 0, duration: 0.9, delay: i * 0.08 }} />
+          <span className="small num">{pct(v.summary.all.accuracy)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The cover of the growing card: tilted rows of the recorded run's real tool calls and guard decisions drifting past. */
+function ReelCover({ h }: { h: Headline }) {
+  const reduce = useReducedMotion();
+  const ex = h.example;
+  const items = [
+    ...ex.without_guard.tools.map((t) => ({ text: t.tool.replaceAll('_', ' '), tone: '' })),
+    ...ex.with_guard.decisions.map((c) => ({ text: `${c.tool.replaceAll('_', ' ')}: ${c.decision === 'deny' ? 'stopped' : 'allowed'}`, tone: c.decision === 'deny' ? 'is-safe' : '' })),
+    { text: 'hidden instruction', tone: 'is-danger' },
+    { text: ex.without_guard.attacker_goal_achieved ? 'without the guard: tricked' : 'without the guard: safe', tone: 'is-danger' },
+    { text: ex.with_guard.utility_pass ? 'with the guard: task done' : 'with the guard: stopped', tone: 'is-safe' },
+  ];
+  return (
+    <div className="reel">
+      <div className="reel-rows" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, r) => (
+          <motion.div key={r} className="reel-row" animate={reduce ? undefined : { x: r % 2 ? ['-50%', '0%'] : ['0%', '-50%'] }}
+            transition={{ duration: 38 + r * 6, ease: 'linear', repeat: Infinity }}>
+            {[...items, ...items, ...items, ...items].map((it, i) => <span key={i} className={`reel-chip ${it.tone}`}>{it.text}</span>)}
+          </motion.div>
+        ))}
+      </div>
+      <a className="reel-play roll-host" href="#sim"><span className="reel-play-icon" aria-hidden="true">▶</span><Roll>Flip it yourself</Roll></a>
+    </div>
   );
 }
 
@@ -125,58 +233,55 @@ function Simulator({ h }: { h: Headline }) {
   const tricked = side.attacker_goal_achieved;
   const denied = new Map(side.decisions.filter((x) => x.decision === 'deny').map((x) => [x.tool, x.reason]));
   return (
-    <section className="section wrap" aria-labelledby="sim-title">
-      <div className="section-head">
-        <Eyebrow>Flip the guard</Eyebrow>
-        <h2 id="sim-title" className="headline">Same task, same trick. You choose.</h2>
-        <p className="body ink-2" style={{ maxWidth: '62ch' }}>This is a real pair of recorded runs ({h.example.case_id}, repetition {h.example.repetition}), not an animation made up for the page. Switch the guard on and off to replay what the tools actually did.</p>
+    <div className="sim">
+      <div className="sim-top">
+        <div className="stack-8">
+          <h2 className="headline sim-title">You flip <span className="tail">the guard.</span></h2>
+          <p className="small sim-note">A real pair of recorded runs ({h.example.case_id}, repetition {h.example.repetition}): the same task and the same trick, replayed from what the tools actually did.</p>
+        </div>
+        <div className="row">
+          <div className="switch" role="group" aria-label="Guard">
+            <LayoutGroup id="guard-switch">
+              {[false, true].map((on) => (
+                <button key={String(on)} aria-pressed={guard === on} onClick={() => { setGuard(on); setTake((t) => t + 1); }}>
+                  {guard === on && <motion.span layoutId="switch-thumb" className="switch-thumb" transition={SPRING} />}
+                  <span className="switch-label">{on ? 'Guard on' : 'Guard off'}</span>
+                </button>
+              ))}
+            </LayoutGroup>
+          </div>
+          <button className="btn btn-glass" onClick={() => setTake((t) => t + 1)}>Replay</button>
+        </div>
       </div>
-      <Bento>
-        <Card span={12} className="sim" tone={tricked ? 'danger' : 'safe'} label="Flip the guard">
-          <div className="sim-top">
-            <div className="switch" role="group" aria-label="Guard">
-              <LayoutGroup id="guard-switch">
-                {[false, true].map((on) => (
-                  <button key={String(on)} aria-pressed={guard === on} onClick={() => { setGuard(on); setTake((t) => t + 1); }}>
-                    {guard === on && <motion.span layoutId="switch-thumb" className="switch-thumb" transition={SPRING} />}
-                    <span className="switch-label">{on ? 'Guard on' : 'Guard off'}</span>
-                  </button>
-                ))}
-              </LayoutGroup>
-            </div>
-            <button className="btn btn-glass" onClick={() => setTake((t) => t + 1)}>Replay</button>
-          </div>
-          <div className="sim-grid">
-            <div className="sim-doc">
-              <p className="small ink-2">The task</p>
-              <p className="body">{h.example.task}</p>
-              <p className="small ink-2" style={{ marginTop: 16 }}>Hidden in the document</p>
-              <p className="sim-trick mono">{h.example.hidden_text}</p>
-            </div>
-            <ol className="sim-steps" key={`${guard}-${take}`} aria-live="polite">
-              {side.tools.map((t, i) => {
-                const blocked = t.status !== 'succeeded';
-                return (
-                  <motion.li key={i} className={`sim-step ${blocked ? 'is-blocked' : ''}`} initial={{ opacity: 0, x: reduce ? 0 : -18 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ ...SPRING, delay: reduce ? 0 : 0.15 + i * 0.32 }}>
-                    <span className="sim-step-n mono">{i + 1}</span>
-                    <span className="mono">{t.tool.replaceAll('_', ' ')}</span>
-                    <span className="sim-step-v">{blocked ? `stopped by the guard (${(denied.get(t.tool) ?? t.error ?? 'not allowed').replaceAll('_', ' ')})` : 'done'}</span>
-                  </motion.li>
-                );
-              })}
-            </ol>
-            <AnimatePresence mode="wait">
-              <motion.div key={`${guard}-${take}`} className={`sim-verdict ${tricked ? 'tone-danger' : 'tone-safe'}`} initial={{ opacity: 0, scale: reduce ? 1 : 0.92 }}
-                animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ ...SPRING, delay: reduce ? 0 : 0.2 + side.tools.length * 0.32 }}>
-                <p className="figure-sm">{tricked ? 'Tricked' : 'Safe'}</p>
-                <p className="small">{tricked ? 'The hidden instruction ran a tool the task never allowed.' : side.utility_pass ? 'The forbidden tool was stopped and the real task still got done.' : 'The forbidden tool was stopped.'}</p>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </Card>
-      </Bento>
-    </section>
+      <div className="sim-grid">
+        <div className="sim-doc">
+          <p className="small sim-k">The task</p>
+          <p className="body">{h.example.task}</p>
+          <p className="small sim-k" style={{ marginTop: 16 }}>Hidden in the document</p>
+          <p className="sim-trick mono">{h.example.hidden_text}</p>
+        </div>
+        <ol className="sim-steps" key={`${guard}-${take}`} aria-live="polite">
+          {side.tools.map((t, i) => {
+            const blocked = t.status !== 'succeeded';
+            return (
+              <motion.li key={i} className={`sim-step ${blocked ? 'is-blocked' : ''}`} initial={{ opacity: 0, x: reduce ? 0 : -18 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ ...SPRING, delay: reduce ? 0 : 0.15 + i * 0.32 }}>
+                <span className="sim-step-n mono">{i + 1}</span>
+                <span className="mono">{t.tool.replaceAll('_', ' ')}</span>
+                <span className="sim-step-v">{blocked ? `stopped by the guard (${(denied.get(t.tool) ?? t.error ?? 'not allowed').replaceAll('_', ' ')})` : 'done'}</span>
+              </motion.li>
+            );
+          })}
+        </ol>
+        <AnimatePresence mode="wait">
+          <motion.div key={`${guard}-${take}`} className={`sim-verdict ${tricked ? 'tone-danger' : 'tone-safe'}`} initial={{ opacity: 0, scale: reduce ? 1 : 0.92 }}
+            animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ ...SPRING, delay: reduce ? 0 : 0.2 + side.tools.length * 0.32 }}>
+            <p className="figure-sm">{tricked ? 'Tricked' : 'Safe'}</p>
+            <p className="small">{tricked ? 'The hidden instruction ran a tool the task never allowed.' : side.utility_pass ? 'The forbidden tool was stopped and the real task still got done.' : 'The forbidden tool was stopped.'}</p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
 
@@ -235,7 +340,7 @@ function Results({ h }: { h: Headline }) {
     <section className="section wrap" aria-labelledby="found-title">
       <div className="section-head">
         <Eyebrow>What we found</Eyebrow>
-        <h2 id="found-title" className="headline">{h.primary.verdict === 'supported' ? 'Fewer tricks got through.' : 'No clear difference.'}</h2>
+        <h2 id="found-title" className="headline">{h.primary.verdict === 'supported' ? <>Fewer tricks <span className="tail">got through.</span></> : 'No clear difference.'}</h2>
         <p className="body ink-2" style={{ maxWidth: '62ch' }}>{h.primary.verdict === 'supported' ? 'And the real work still got done. ' : ''}These results are from the sealed test: tasks the project had never been tuned on, locked away before the guard was finished and run once.</p>
       </div>
       <Bento>
@@ -359,12 +464,12 @@ function PairedMorph({ d }: { d: Dataset }) {
     <section ref={ref} className="morph" style={{ height: reduce ? 'auto' : Math.round((vh * Math.max(180, 120 + rows.length * 6)) / 100) }} aria-labelledby="morph-title">
       <div className="morph-sticky wrap" style={reduce ? { position: 'static' } : undefined}>
         <div className="grid" style={{ rowGap: 32 }}>
-          <div className="span-5 stack-24">
+          <div className="span-6 stack-24">
             <h2 id="morph-title" className="headline">{morphHeadline(rows)}</h2>
             <p className="body ink-2">Attacker goal reached on attack cases for {short(model)}, the model every defense was run on. Each defense is compared with the baseline arm of its own reports, on the same cases. These are development runs and point estimates, not a confirmatory result (that is in the technical report). Scroll to move each bar from its baseline to its defended rate.</p>
             <MorphLegend t={t} reduce={!!reduce} />
           </div>
-          <ol className="span-7 morph-bars" aria-label="Attacker goal rate, baseline and defended">
+          <ol className="span-6 morph-bars" aria-label="Attacker goal rate, baseline and defended">
             {rows.map((p) => <MorphBar key={p.system} p={p} t={t} reduce={!!reduce}
               onOpen={() => open({ title: `${p.system} on ${short(model)}`, summary: <>Attacker goal reached: baseline {p.base.k}/{p.base.n} ({pct(p.base.rate)}), defended {p.def.k}/{p.def.n} ({pct(p.def.rate)}).</>,
                 runIds: [...p.defIds, ...p.baseIds], counted: Object.fromEntries([...p.def.hit_ids, ...p.base.hit_ids].map((id) => [id, 'yes' as const]).concat([...p.def.miss_ids, ...p.base.miss_ids].map((id) => [id, 'no' as const]))) })} />)}
@@ -426,37 +531,6 @@ function UtilityCost({ d, fp }: { d: Dataset; fp: number }) {
             reference={groups.find((g) => g.key.system === 'baseline')?.metrics.utility_pass.rate ?? undefined}
             onSelect={(g) => open({ title: `Benign utility, ${g.key.system}`, summary: <>{g.metrics.utility_pass.k} of {g.metrics.utility_pass.n} benign runs passed ({pct(g.metrics.utility_pass.rate)}).</>,
               runIds: g.run_ids, counted: Object.fromEntries(g.metrics.utility_pass.hit_ids.map((i) => [i, 'yes' as const]).concat(g.metrics.utility_pass.miss_ids.map((i) => [i, 'no' as const]))) })} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AttributionStrip({ d }: { d: Dataset }) {
-  const a = d.store.attribution;
-  const reduce = useReducedMotion();
-  const rounds = Object.entries(a.rounds);
-  return (
-    <section className="section wrap" aria-labelledby="att-title">
-      <div className="att panel">
-        <div className="grid" style={{ rowGap: 40 }}>
-          <div className="span-5 stack-24">
-            <Reveal><h2 id="att-title" className="headline">Where each failed run went wrong.</h2></Reveal>
-            <Reveal i={1}><p className="body ink-2">A deterministic localizer names the first step that left the task contract. An AI audit (an AI model, not a human) scored each version on fresh cases it was never fixed against.</p></Reveal>
-            <Reveal i={2}><Link className="btn btn-secondary" to="/attribution">Read the audit</Link></Reveal>
-          </div>
-          <ol className="start-7 att-rounds" aria-label="Audit accuracy by round">
-            {rounds.map(([r, v], i) => (
-              <li key={r} className="att-round">
-                <span className="small ink-2">Round {r} · localizer {v.localizer_version}</span>
-                <span className="att-track">
-                  <motion.span className="att-fill" style={{ width: `${(v.summary.all.accuracy ?? 0) * 100}%`, background: Number(r) === a.measured.round ? 'var(--data-1)' : 'var(--data-2)' }}
-                    initial={{ scaleX: reduce ? 1 : 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.8, ease: EASE_OUT, delay: i * 0.08 }} />
-                </span>
-                <span className="figure-sm num">{pct(v.summary.all.accuracy)}<span className="small ink-3 kn">{v.summary.all.correct}/{v.summary.all.judged}</span></span>
-              </li>
-            ))}
-          </ol>
         </div>
       </div>
     </section>

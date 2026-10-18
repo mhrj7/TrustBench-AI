@@ -4,92 +4,71 @@ Source of truth for the website (`web/`). Change values here first, then in `web
 
 ## Direction
 
-**A product page that tells a story, backed by an instrument.** TrustBench measures whether a guard stops AI helpers
-from being tricked by hidden instructions in what they read. The overview explains this so a ten-year-old can follow it:
-a hero with a live 3D scene (the helper, the documents it reads, one trap, and the guard's shield stopping each hidden
-instruction), a four-chapter story, a switch that replays a real recorded pair of runs with and without the guard, and a
-bento grid of results. Every number and every scene comes from the evidence files (`web/public/data/*.json`); nothing on
-the page is invented for the illustration. The evidence pages (Compare, Runs, Policy, Outcomes, Attribution, Evidence
-index) keep the instrument rule: each number, cell and bar opens into the runs it counts, down to the raw record.
+**An interactive studio site that tells one story: a helper, a hidden trick, and a guard.** The interaction model follows
+lusion.co (a physics stage you push around, a ribbon that trails the cursor, letter-roll labels, a pinned card that grows
+as you scroll, an evidence grid, and an endless scroll that rolls into the next page). The motion vocabulary follows the
+prompt-motion.com product-UI prompts (one continuous move, springs with no bounce, content swapping with a short blur).
+Every number, chip and scene comes from the evidence files (`web/public/data/*.json`); nothing on a page is invented for
+the illustration.
 
-Guidance applied: the Apple design skill (springs with no bounce, interruptible motion, press feedback, translucent
-materials for chrome, size-specific tracking, reduced motion / reduced transparency / increased contrast), the UI/UX Pro
-Max data (Bento Box Grid style, scroll-triggered storytelling landing pattern, three.js performance rules), the Vercel web
-interface guidelines (focus-visible, semantic controls, tabular numbers, URL reflects state) and Emil Kowalski's easing
-and duration rules.
+The overview, top to bottom:
+
+1. **Physics stage** (`components/PhysicsHero.tsx`): glossy blue, black and white pieces pulled into a pile (Rapier
+   physics in react-three-fiber). Red pieces are hidden tricks. The pointer is the guard: a kinematic ball that shoves the
+   pile, and every trick it touches turns blue and is counted ("3 of 6 tricks stopped"). New tricks arrive once all are
+   stopped. A child can play it without reading anything.
+2. **Statement** with the cursor ribbon (`Ribbon` in `components/Interactive.tsx`): "Tricks hide. Guards check."
+3. **Story**: four chapters beside a sticky dark stage that swaps scenes, built from the recorded example.
+4. **Growing card** (`GrowCard`): "FLIP ▶ GUARD"; tilted rows of the run's real tool calls drift across it while it grows
+   from an inset to full width.
+5. **Flip the guard**: the recorded pair of runs replayed with the guard off and on.
+6. **Results bento**, **evidence grid** (two-column cards with live mini visuals and rolling titles), the development
+   evidence (paired morph, utility cost), and the call to action.
+7. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
+   Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 
 ## Colour
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--ground` | `#06070B` | page field |
-| `--tone-1` / `--tone-2` / `--tone-3` | `#0C0E14` / `#131622` / `#1D2130` | raised surfaces, hover, chart tracks |
-| `--ink` / `--ink-2` / `--ink-3` | `#F5F5F7` / `#A4A8B8` / `#6B7084` | text, secondary text, axes |
-| `--accent` / `--accent-2` | `#7C83FF` / `#C084FC` | brand, primary action, focus, the guard |
-| `--gradient` | indigo → violet → pink | primary buttons, wordmark, one accent word per hero |
-| `--safe` | `#34D399` | the guard stopped something; task done |
-| `--danger` (= `--signal`) | `#FB7185` | attacker success: the trick worked |
-| `--data-1` / `--data-2` | `#7C83FF` / `#4A4F86` | neutral data series (two strengths) |
-| `--glass` / `--glass-strong` | translucent tone-1 + `blur(22px) saturate(160%)` | nav, cards, drawer |
+| `--ground` / `--floor-edge` | `#F0F1FA` / `#E7E8F4` | page floor (lavender white) |
+| `--tone-1` / `--tone-2` / `--tone-3` | `#FFFFFF` / `#E4E6EF` / `#D5D8E6` | cards, light pills, tracks |
+| `--ink` / `--ink-2` / `--ink-3` | `#0D0E13` / `#4B4E5F` / `#8A8DA0` | text; `--ink-3` is the quieter half of a headline |
+| `--stage` | `#14161D` | dark 3D stages and cards |
+| `--accent-2` | `#2B2E3A` | the dark pill (primary action) |
+| `--accent` = `--safe` | `#2433FF` | the guard: a stopped call, a safe outcome, focus |
+| `--danger` = `--signal` | `#EF3B24` | the trick: attacker success |
+| `--data-1` / `--data-2` | `#0D0E13` / `#B9BCCB` | neutral data series |
 
-Data encoding: danger is reserved for attacker success and the trick getting through; safe for a stopped call; every
-other series uses `--data-1` / `--data-2`. Heatmap rates ramp from `--tone-2` to `--danger` (bad outcomes) or to
-`--accent` (good ones). `prefers-reduced-transparency` replaces glass with solid tone-1; `prefers-contrast: more` raises
-line and secondary-ink contrast. `color-scheme: dark`.
+Blue and red keep one meaning each across every page. Heatmap rates ramp from `--tone-2` to red (bad outcomes) or blue
+(good ones). `prefers-reduced-transparency` replaces glass with solid white; `prefers-contrast: more` darkens lines and
+secondary ink.
 
 ## Type
 
-Families: **Instrument Sans** (variable) for everything; **JetBrains Mono** only for run IDs, hashes, JSON, tool names
-and the hidden instruction text. Tabular figures wherever numbers align. Tracking tightens as size grows (display
--0.035em, headline -0.03em, body 0).
+**Geist** (variable) for everything, **JetBrains Mono** for tool names, run IDs, hashes and the hidden instruction. Large
+sizes run light (450) and tight (-0.045em). Buttons, tags and labels are 12–13px uppercase with 0.04–0.06em tracking.
 
 | Style | Size | Weight |
 | --- | --- | --- |
-| Display | `clamp(48px, 7.2vw, 104px)` | 600 |
-| Headline | `clamp(32px, 4.2vw, 56px)` | 600 |
+| Display | `clamp(48px, 7.4vw, 120px)` | 450 |
+| Headline | `clamp(38px, 5.6vw, 92px)` | 450 |
 | Statement | `clamp(21px, 2vw, 27px)` | 500 |
 | Body | `clamp(17px, 1.2vw, 18px)` | 400 |
 | Small | 14px | 500 |
-| Figure | `clamp(44px, 4.8vw, 72px)` | 600, tabular |
 | Mono | 13px | 450 |
 
-Headlines stay at two lines or fewer at every width (`text-wrap: balance`). Sentence case.
+Headings stay within two lines at every width (the Playwright suite checks it).
 
 ## Space and layout
 
-Spacing scale (px): 4, 8, 12, 16, 24, 32, 48, 64, 96, 144, 200. Margins 32 / 24 / 16 (desktop / tablet / phone); max
-content width 1280; section gaps 144 / 112 / 88. Radius 14px for controls and small cards, 24px for bento cards and
-panels, pill for chips and switches. Bento grid: 12 columns on desktop, cards span 4 / 6 / 8 / 12; one column on phones.
-
-## Components
-
-- **Hero 3D** (`components/Hero3D.tsx`, react-three-fiber): the helper (a glowing face that blinks and looks toward the
-  pointer), seven orbiting documents, one red trap, hidden-instruction particles that stop at the shield, which flashes
-  safe-green on each hit. No external assets. DPR capped at 2; the loop pauses off screen or when the tab is hidden, and
-  renders a still frame under reduced motion. Lazy-loaded so the text paints first.
-- **Story** (`components/Story.tsx`): four chapters; on wide screens a sticky stage swaps scenes (blur cross-fade) with
-  the chapter in view; on phones each chapter carries its own scene. All scenes use the recorded example.
-- **Guard switch** (Overview `Simulator`): segmented switch with a shared-layout thumb; replays the real tool calls of
-  the chosen run and lands on a verdict.
-- **Bento card** (`components/Bento.tsx`): glass, pointer-following glow, spring tilt on hover, press scale, enters on
-  view. Holds dot grids, the interval bar, the split bar and the comparison race.
-- **Bar navigation:** glass when scrolled, wordmark, links, Evidence index, gradient primary action.
-- **Data table, evidence drawer:** glass panel, tabular numbers, drawer from the right with the drawer curve.
+Spacing scale (px): 4, 8, 12, 16, 24, 32, 48, 64, 96, 144, 200. Margins 32 / 24 / 16; max content width 1400; section gaps
+144 / 112 / 88. Radius 14px controls, 28px cards and stages, pill for buttons. "+" crosshair rules frame the stage and the
+growing card.
 
 ## Motion
 
-Springs first (`{ type: 'spring', bounce: 0, duration: 0.5 }`), so every animation can be interrupted mid-flight. CSS
-easings are only for colour and opacity:
-
-| Token | Value | Use |
-| --- | --- | --- |
-| `--ease-out` | `cubic-bezier(0.23, 1, 0.32, 1)` | colour, opacity, UI feedback |
-| `--ease-in-out` | `cubic-bezier(0.77, 0, 0.175, 1)` | chart morphs |
-| `--ease-drawer` | `cubic-bezier(0.32, 0.72, 0, 1)` | drawer |
-| `--dur-quick` / `--dur-standard` / `--dur-slow` | 160 / 280 / 700ms | press, transitions, reveals |
-
-Motion runs continuously where it explains something (the 3D scene, the story scenes, the replay), not only on scroll.
-Only transform, opacity and filter animate. `prefers-reduced-motion` keeps fades, removes travel and stops the 3D loop.
-Content is readable without JavaScript animation.
-
-The Figma reference file made for the earlier "instrument" direction (amber on graphite) no longer matches this system.
+Springs first (`{ type: 'spring', bounce: 0 }`), interruptible. Lenis smooth scrolling (lerp 0.085, its own frame loop,
+smooth in-page anchors, nested scrollers left native). Letter roll: each letter lifts to its copy, 14ms apart. The 3D loop
+pauses off screen and in hidden tabs. `prefers-reduced-motion`: native scrolling, physics stands still, no ribbon, no
+roll, the growing card and the hand-off render as plain blocks.

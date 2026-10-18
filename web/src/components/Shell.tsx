@@ -6,6 +6,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Run } from '../lib/aggregate';
 import { runPath, useDataset } from '../lib/data';
 import { short } from '../lib/format';
+import { Roll } from './Interactive';
 
 const LINKS = [['/compare', 'Compare'], ['/runs', 'Runs'], ['/policy', 'Policy'], ['/outcomes', 'Outcomes'], ['/attribution', 'Attribution'], ['/account', 'Account']] as const;
 
@@ -33,10 +34,10 @@ export function Nav() {
       <div className="wrap">
         <Link to="/" className="wordmark" aria-label="TrustBench, home"><span className="wordmark-mark" aria-hidden="true" />TrustBench</Link>
         <nav className="nav-links" aria-label="Main">
-          {LINKS.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
+          {LINKS.map(([to, label]) => <NavLink key={to} to={to} className="roll-host"><Roll>{label}</Roll></NavLink>)}
         </nav>
-        <Link to="/method" className="btn btn-secondary">Evidence index</Link>
-        <Link to="/live" className="btn btn-primary">Run it live</Link>
+        <Link to="/method" className="btn btn-secondary roll-host"><Roll>Evidence index</Roll></Link>
+        <Link to="/live" className="btn btn-primary roll-host"><span className="btn-dot" /><Roll>Run it live</Roll></Link>
         <button className="nav-toggle" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen((o) => !o)}>{open ? 'Close' : 'Menu'}</button>
         {open && (
           <nav id="mobile-nav" className="nav-links" aria-label="Main (mobile)">
@@ -77,10 +78,11 @@ export function useSmoothScroll() {
   const lenis = useRef<Lenis | null>(null);
   useEffect(() => {
     if (reduce) return;
-    const l = new Lenis({ duration: 1.05, easing: (t) => 1 - Math.pow(1 - t, 3), smoothWheel: true });
+    // lerp-based smoothing (Lenis default feel), its own frame loop, smooth in-page anchor links offset under the bar,
+    // and nested scrollers (drawer, run lists, menu sheet) keep their native scrolling.
+    const l = new Lenis({ lerp: 0.085, smoothWheel: true, autoRaf: true, anchors: { offset: -72 }, allowNestedScroll: true });
     lenis.current = l;
-    let id = requestAnimationFrame(function raf(t) { l.raf(t); id = requestAnimationFrame(raf); });
-    return () => { cancelAnimationFrame(id); l.destroy(); lenis.current = null; };
+    return () => { l.destroy(); lenis.current = null; };
   }, [reduce]);
   useEffect(() => { lenis.current ? lenis.current.scrollTo(0, { immediate: true }) : window.scrollTo(0, 0); }, [loc.pathname]);
 }
