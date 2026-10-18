@@ -27,9 +27,12 @@ The overview, top to bottom:
 7. **Sticker sky** (`components/StickerSpace.tsx`, art in `components/stickers.ts`): the call to action floats on a dark
    sky of die-cut stickers (shield, lock, check, bug, trick, key, stars, bolt, document, helper, eye) that drift in zero
    gravity and flick away from the pointer; the white footer follows.
-8. **Journey** (`components/Journey.tsx`): a pinned 3D flight through four portals (development, sealed test, the audit,
-   reproduction) with captions from the evidence. It renders only when the astronaut model is present in
-   `src/assets/astronaut.glb` (see `lib/models.ts` for its source and CC BY 4.0 credit, shown on the page).
+8. **Journey** (`components/Journey.tsx`, `components/Shaders.tsx`): after the reference site's device sequence. An
+   iPad with a liquid-metal frame (Paper Shaders `LiquidMetal`, Apache-2.0) shows the astronaut above a glowing planet;
+   scrolling tips it flat and grows it to the full screen over a ShaderGradient nebula (MIT); "step inside the test"
+   splits apart; the camera flies through a chrome lattice whose rings turn in opposite directions, with captions from the
+   evidence; a white flash opens into a blue corridor cut with the site's shapes; the device shrinks back to its slot.
+   The astronaut is "Astronaut" by Poly (Google), CC BY 2.0 (`lib/models.ts`, credited on the page).
 9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 

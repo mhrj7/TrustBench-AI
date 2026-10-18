@@ -18,6 +18,8 @@ import { Loading } from './Common';
 const PhysicsHero = lazy(() => import('../components/PhysicsHero'));
 const Journey = lazy(() => import('../components/Journey'));
 const StickerSpace = lazy(() => import('../components/StickerSpace'));
+const SpaceGradient = lazy(() => import('../components/Shaders').then((m) => ({ default: m.SpaceGradient })));
+const DeviceMetal = lazy(() => import('../components/Shaders').then((m) => ({ default: m.DeviceMetal })));
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 
 /** The defended system each report evaluates, read from its defended runs (baseline runs carry "baseline"). */
@@ -165,57 +167,103 @@ function SpaceCta() {
   );
 }
 
-/** Portal crossing points along the flight, as scroll fractions (the flight runs from 0.3 to 0.97 of the section). */
-const PORTAL_AT = [-46, -92, -138, -184].map((z) => 0.3 + (z / -206) * 0.67);
-
-/** The journey: a pinned 3D scene; captions arrive as the helper crosses each portal. Every number is from the evidence. */
+/** The journey, after the reference site's device sequence: an iPad beside the intro shows the astronaut in space; as you
+ *  scroll it tips flat and grows to fill the screen, the words "step inside" fly apart, the camera dives through a chrome
+ *  tunnel (captions from the evidence arrive on the way), flashes into a blue corridor, and the device shrinks back.
+ *  Every number in the captions is from the evidence. */
 function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; modelUrl: string }) {
   const ref = useRef<HTMLElement>(null);
   const reduce = !!useReducedMotion();
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const { scrollYProgress: p } = useScroll({ target: ref, offset: ['start start', 'end end'] });
   const [active, setActive] = useState(-1);
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 900;
   const stops = [
-    { at: 0.05, kicker: 'The journey', title: 'The helper', tail: 'takes a trip.', text: 'Before it can be trusted, it has to pass every check the project ran. Scroll to send it through them.' },
-    { at: 0.22, kicker: 'Lift-off', title: 'Every claim leaves', tail: 'the ground here.', text: 'Nothing on this page is taken on trust: each stop below is a file you can open.' },
-    { at: PORTAL_AT[0], kicker: 'Dimension 1 · development', title: `${runs.toLocaleString('en')} runs`, tail: 'recorded.', text: 'Every run kept with its tool trace and the scorer\'s verdict.' },
-    { at: PORTAL_AT[1], kicker: 'Dimension 2 · the sealed test', title: `${h.primary.pairs} paired tasks,`, tail: 'opened once.', text: 'Locked away before the guard was finished, then run a single time.' },
-    { at: PORTAL_AT[2], kicker: 'Dimension 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them; ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
-    { at: PORTAL_AT[3], kicker: 'Dimension 4 · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
+    { at: 0.48, kicker: 'Lane 1 · development', title: `${runs.toLocaleString('en')} runs`, tail: 'recorded.', text: 'Every run kept with its tool trace and the scorer\'s verdict.' },
+    { at: 0.57, kicker: 'Lane 2 · the sealed test', title: `${h.primary.pairs} paired tasks,`, tail: 'opened once.', text: 'Locked away before the guard was finished, then run a single time.' },
+    { at: 0.66, kicker: 'Lane 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them: ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
+    { at: 0.84, kicker: 'The way out · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
   ];
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
+  useMotionValueEvent(p, 'change', (v) => {
     let a = -1;
-    stops.forEach((st, i) => { if (v >= st.at - 0.04) a = i; });
+    stops.forEach((st, i) => { if (v >= st.at - 0.03 && v < (stops[i + 1]?.at ?? 0.97) - 0.03) a = i; });
     setActive(a);
   });
+  // The device: grows from its slot to the full screen, and shrinks back at the end.
+  const g = useTransform(p, [0.03, 0.17, 0.93, 1], [0, 1, 1, 0]);
+  const s0 = narrow ? 0.78 : 0.46;
+  const scale = useTransform(g, [0, 1], [s0, 1]);
+  const x = useTransform(g, [0, 1], [narrow ? '0vw' : '23vw', '0vw']);
+  const y = useTransform(g, [0, 1], [narrow ? '16svh' : '6svh', '0svh']);
+  const rotateX = useTransform(g, [0, 1], [12, 0]);
+  const rotateY = useTransform(g, [0, 1], [narrow ? 0 : -14, 0]);
+  const bezel = useTransform(g, (v) => `${((1 - v) * 16) / (s0 + (1 - s0) * v)}px`);
+  const radius = useTransform(g, (v) => `${((1 - v) * 40) / (s0 + (1 - s0) * v)}px`);
+  const intro = useTransform(p, [0, 0.1, 1], [1, 0, 0]);
+  const outro = useTransform(p, [0.94, 1], [0, 1]);
+  const introY = useTransform(p, [0, 0.12], ['0px', '-80px']);
+  const words = useTransform(p, [0.2, 0.26, 0.36, 0.42], [0, 1, 1, 0]);
+  const spread = useTransform(p, [0.26, 0.42], [0, 1]);
+  const flash = useTransform(p, [0.76, 0.785, 0.82], [0, 1, 0]);
   if (reduce) {
     return (
       <section className="section wrap journey-static" aria-labelledby="journey-title">
-        <h2 id="journey-title" className="headline">The journey <span className="tail">through the checks.</span></h2>
+        <h2 id="journey-title" className="headline">Every claim <span className="tail">meets a test.</span></h2>
         <ol className="journey-list">{stops.map((st, i) => <li key={i}><p className="caps ink-2">{st.kicker}</p><p className="statement">{st.title} {st.tail}</p><p className="body ink-2">{st.text}</p></li>)}</ol>
       </section>
     );
   }
-  const cur = stops[Math.max(0, active)];
+  const LINES = [['STEP', 'INSIDE', 'THE', 'TEST'], ['AND', 'WATCH', 'WHAT'], ['THE', 'GUARD', 'STOPS']];
+  const cur = active >= 0 ? stops[active] : null;
   return (
     <section ref={ref} className="journey" aria-labelledby="journey-title">
       <div className="journey-sticky">
-        <Suspense fallback={<div className="journey-canvas" />}><Journey progress={scrollYProgress} reduce={reduce} modelUrl={modelUrl} /></Suspense>
-        <div className="journey-copy wrap">
-          <AnimatePresence mode="wait">
-            <motion.div key={Math.max(0, active)} className="journey-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -24, filter: 'blur(10px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.6 }}>
-              <p className="caps">{cur.kicker}</p>
-              {active <= 0 ? <h2 id="journey-title" className="headline">{cur.title} <span className="tail">{cur.tail}</span></h2>
-                : <p className="headline" role="presentation">{cur.title} <span className="tail">{cur.tail}</span></p>}
-              <p className="body">{cur.text}</p>
+        <motion.div className="journey-intro wrap" style={{ opacity: intro, y: introY }}>
+          <h2 id="journey-title" className="headline">Every claim <span className="tail">meets a test.</span></h2>
+          <p className="body ink-2">A benchmark is only worth what you can check. So the helper goes through every stage the project ran: the development runs, the sealed test, the second look by two reviewers, and a rebuild from scratch. Scroll to send it in.</p>
+        </motion.div>
+        <motion.div className="journey-intro journey-outro wrap" style={{ opacity: outro }}>
+          <p className="headline" role="presentation">Back where <span className="tail">it started.</span></p>
+          <p className="body ink-2">Every stop on that trip is a file in the repository. The evidence index lists them, with the hash and the command that rebuilds each number.</p>
+          <Link className="btn btn-primary roll-host" to="/method" style={{ pointerEvents: 'auto', alignSelf: 'flex-start' }}><Roll>Open the evidence index</Roll></Link>
+        </motion.div>
+        <motion.div className="device" style={{ scale, x, y, rotateX, rotateY, borderRadius: radius, transformPerspective: 1600 }}>
+          <Suspense fallback={null}><DeviceMetal /></Suspense>
+          <motion.div className="device-screen" style={{ inset: bezel, borderRadius: radius }}>
+            <Suspense fallback={null}><SpaceGradient /></Suspense>
+            <Suspense fallback={<div className="journey-canvas" />}><Journey progress={p} reduce={reduce} modelUrl={modelUrl} /></Suspense>
+            <motion.div className="journey-words" aria-hidden="true" style={{ opacity: words }}>
+              {LINES.map((line, li) => (
+                <div key={li} className="journey-line">
+                  {line.map((w, wi) => <SpreadWord key={wi} word={w} offset={(wi - (line.length - 1) / 2) * 1} spread={spread} />)}
+                </div>
+              ))}
             </motion.div>
-          </AnimatePresence>
-          <ol className="journey-dots" aria-hidden="true">{stops.map((_, i) => <li key={i} className={i <= active ? 'on' : ''} />)}</ol>
-        </div>
-        {active > 0 && <h2 id="journey-title" className="sr-only">The journey through the checks</h2>}
+            <motion.div className="journey-flash" style={{ opacity: flash }} />
+            <div className="journey-copy">
+              <AnimatePresence mode="wait">
+                {cur && (
+                  <motion.div key={active} className="journey-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, y: -24, filter: 'blur(10px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.6 }}>
+                    <p className="caps">{cur.kicker}</p>
+                    <p className="headline">{cur.title} <span className="tail">{cur.tail}</span></p>
+                    <p className="body">{cur.text}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        </motion.div>
+        <p className="journey-credit small">Astronaut: <a href={ASTRONAUT_CREDIT.url}>{ASTRONAUT_CREDIT.title}</a> by {ASTRONAUT_CREDIT.author}, {ASTRONAUT_CREDIT.license}.</p>
       </div>
     </section>
   );
+}
+
+/** One word of the "step inside" line; words move away from the centre as the line spreads. */
+function SpreadWord({ word, offset, spread }: { word: string; offset: number; spread: MotionValue<number> }) {
+  const x = useTransform(spread, [0, 1], ['0vw', `${offset * 26}vw`]);
+  const blur = useTransform(spread, [0.5, 1], ['blur(0px)', 'blur(6px)']);
+  return <motion.span style={{ x, filter: blur }}>{word}</motion.span>;
 }
 
 /** One evidence card: a live picture on a stage, the tags, and a title that rolls on hover. */

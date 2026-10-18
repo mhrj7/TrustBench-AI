@@ -401,23 +401,36 @@ td.args { max-width: 520px; min-width: 260px; }
 .water { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; contain: strict; }
 .water-layer { position: absolute; inset: 0; pointer-events: none; }
 
-/* The journey (components/Journey.tsx) */
-.journey { position: relative; height: 640vh; margin-top: var(--section-gap); }
-.journey-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #0b0c10; color: #fff; }
-.journey-canvas { position: absolute; inset: 0; }
+/* The journey (components/Journey.tsx): the device grows from its slot to the full screen */
+.journey { position: relative; height: 900vh; margin-top: var(--section-gap); }
+.journey-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+.journey-intro { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-24); z-index: 1; pointer-events: none; }
+.journey-intro .headline { max-width: 12ch; }
+.journey-intro .body { max-width: 34ch; }
+@media (max-width: 899px) { .journey-intro { justify-content: flex-start; padding-top: calc(var(--nav-h) + 24px); } .journey-intro .headline { max-width: 12ch; } }
+.device { position: absolute; inset: 0; z-index: 2; overflow: hidden; transform-origin: 50% 50%; will-change: transform; background: #0b0c10;
+  box-shadow: 0 60px 120px -40px rgba(13, 14, 19, 0.55); }
+.device-metal { position: absolute; inset: 0; }
+.device-screen { position: absolute; overflow: hidden; background: #05060d; isolation: isolate; }
+.space-gradient { position: absolute; inset: 0; z-index: 0; }
+.journey-canvas { position: absolute; inset: 0; z-index: 1; }
 .journey-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
-.journey-copy { position: absolute; inset: auto 0 0 0; z-index: 2; padding-bottom: 56px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
-.journey-cap { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.journey-words { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1em; pointer-events: none;
+  color: #fff; font-size: clamp(30px, 5.4vw, 92px); font-weight: 450; letter-spacing: -0.02em; line-height: 1; }
+.journey-line { display: flex; gap: 0.32em; }
+.journey-line span { display: inline-block; }
+.journey-flash { position: absolute; inset: 0; z-index: 3; background: #fff; pointer-events: none; }
+.journey-copy { position: absolute; inset: auto 0 0 0; z-index: 4; padding: 0 var(--margin) 56px; max-width: calc(var(--max) + 2 * var(--margin)); margin: 0 auto; pointer-events: none; }
+.journey-copy::before { content: ''; position: absolute; inset: -140px -50vw 0 -50vw; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.7)); }
+.journey-cap { display: flex; flex-direction: column; gap: 14px; max-width: 760px; color: #fff; }
 .journey-cap .headline { font-size: clamp(34px, 4.4vw, 72px); color: #fff; }
 .journey-cap .tail { color: rgba(255, 255, 255, 0.5); }
 .journey-cap .caps { color: rgba(255, 255, 255, 0.7); }
-.journey-cap .body { color: rgba(255, 255, 255, 0.75); max-width: 48ch; }
-.journey-dots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.journey-dots li { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); transition: background-color var(--dur-standard) ease, transform var(--dur-standard) var(--ease-out); }
-.journey-dots li.on { background: #fff; }
-.journey-copy::before { content: ''; position: absolute; inset: -120px 0 0 0; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.75)); }
+.journey-cap .body { color: rgba(255, 255, 255, 0.78); max-width: 48ch; }
+.journey-credit { position: absolute; right: var(--margin); bottom: 14px; z-index: 5; color: rgba(255, 255, 255, 0.55); margin: 0; }
+.journey-credit a { color: inherit; }
 .journey-list { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 32px; }
-@media (max-width: 640px) { .journey-copy { padding-bottom: 32px; } .journey-dots { display: none; } }
+@media (max-width: 640px) { .journey-copy { padding-bottom: 32px; } .journey-credit { left: var(--margin); right: auto; } }
 
 /* The ending: floating stickers on a dark sky (components/StickerSpace.tsx) */
 .space { position: relative; min-height: min(100svh, 1000px); margin-top: var(--section-gap); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #07080c; color: #fff; }
