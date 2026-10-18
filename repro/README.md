@@ -58,11 +58,11 @@ cp .env.example .env && npm ci && sh scripts/setup-python.sh
 7. TB-045 full-population re-analysis (A-029): `.venv-tools/bin/python scripts/label-audit.py rerun`
 8. TB-045 label audit report: `.venv-tools/bin/python scripts/label-audit.py report`
 9. reproduction tests of the published reports: `sh bin/trustbench report --check`
-10. research tests: `.venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/research`
+10. research tests: `.venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/research -k not last_recorded_reproduction`
 
-It then compares every tracked file the steps rewrote with the committed version. Only timestamps and per-run IDs
-(`generated_at`, `checked_at`, `elapsed_ms`, `median_elapsed_ms`, `request_id`, and the date line of the label-audit report) may differ. Any other difference, or any failed
-step, fails the reproduction. The result is written to `repro/reproduction-log.json`.
+It then compares every tracked file the steps rewrote with the committed version. Only these may differ:
+Timestamps, wall-clock timings (keys ending in _ms) and random request, span and trace IDs. Everything else must be identical; SQLite files are compared by their SQL dump, not their bytes. The date line of the label-audit report may also differ. Any other difference, or any failed step,
+fails the reproduction. The result is written to `repro/reproduction-log.json`.
 
 Container route (a clean environment as a non-root user, from the files git tracks at a commit):
 

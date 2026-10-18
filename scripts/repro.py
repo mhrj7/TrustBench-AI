@@ -137,9 +137,9 @@ cp .env.example .env && npm ci && sh scripts/setup-python.sh
 
 {steps}
 
-It then compares every tracked file the steps rewrote with the committed version. Only timestamps and per-run IDs
-(`{'`, `'.join(CFG['volatile_json_keys'])}`, and the date line of the label-audit report) may differ. Any other difference, or any failed
-step, fails the reproduction. The result is written to `{CFG['reproduction_log']}`.
+It then compares every tracked file the steps rewrote with the committed version. Only these may differ:
+{CFG['volatile_note']} The date line of the label-audit report may also differ. Any other difference, or any failed step,
+fails the reproduction. The result is written to `{CFG['reproduction_log']}`.
 
 Container route (a clean environment as a non-root user, from the files git tracks at a commit):
 
@@ -193,6 +193,11 @@ def check():
 
 
 def strip(path: str, text: str):
+    if path.endswith('.jsonl'):
+        try:
+            return [drop(json.loads(l)) for l in text.splitlines() if l.strip()]
+        except json.JSONDecodeError:
+            pass
     if path.endswith('.json'):
         try:
             return drop(json.loads(text))
@@ -204,10 +209,27 @@ def strip(path: str, text: str):
 
 def drop(v):
     if isinstance(v, dict):
-        return {k: drop(x) for k, x in v.items() if k not in CFG['volatile_json_keys']}
+        return {k: drop(x) for k, x in v.items() if k not in CFG['volatile_json_keys'] and not any(re.search(p, k) for p in CFG['volatile_json_key_patterns'])}
     if isinstance(v, list):
         return [drop(x) for x in v]
     return v
+
+
+def sqlite_dump(path) -> list[str]:
+    import sqlite3
+    con = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    try:
+        return list(con.iterdump())
+    finally:
+        con.close()
+
+
+def sqlite_dump_at_head(f: str) -> list[str]:
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / 'head.sqlite'
+        p.write_bytes(subprocess.run(['git', 'show', f'HEAD:{f}'], cwd=ROOT, capture_output=True, check=True).stdout)
+        return sqlite_dump(p)
 
 
 def reproduce():
@@ -223,8 +245,11 @@ def reproduce():
     changed = [l[3:] for l in git('status', '--porcelain', '--untracked-files=no').splitlines()]
     volatile_only, unexpected = [], []
     for f in changed:
-        committed = git('show', f'HEAD:{f}') if f.endswith(('.json', '.md', '.csv', '.jsonl', '.txt', '.xml')) else None
-        same = committed is not None and (ROOT / f).exists() and strip(f, committed) == strip(f, (ROOT / f).read_text())
+        if f.endswith('.sqlite'):
+            same = sqlite_dump_at_head(f) == sqlite_dump(ROOT / f)
+        else:
+            committed = git('show', f'HEAD:{f}') if f.endswith(('.json', '.md', '.csv', '.jsonl', '.txt', '.xml')) else None
+            same = committed is not None and (ROOT / f).exists() and strip(f, committed) == strip(f, (ROOT / f).read_text())
         (volatile_only if same else unexpected).append(f)
     log = {'task_id': 'TB-046', 'commit': git('rev-parse', 'HEAD').strip(), 'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
            'environment': f"{platform.system()} {platform.machine()}, Python {platform.python_version()}, "
