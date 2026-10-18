@@ -1,0 +1,115 @@
+{
+ "task_id": "TB-050",
+ "commit": "7db2c667a1abe05b262fba94c1732a401ca9b80a",
+ "started_at": "2026-10-18T06:38:14+00:00",
+ "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root user \"node\", fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)",
+ "install_block": [
+  "git clone https://github.com/mhrj7/TrustBench-AI.git",
+  "cd TrustBench-AI",
+  "git checkout -q 7db2c667a1abe05b262fba94c1732a401ca9b80a  # the harness pins the commit under test",
+  "export TRUSTBENCH_STORAGE_ROOT=\"$(dirname \"$PWD\")\" npm_config_cache=\"$(dirname \"$PWD\")/.cache/npm\"",
+  "cp .env.example .env",
+  "npm ci",
+  "npm run setup"
+ ],
+ "install_ok": true,
+ "checks": [
+  {
+   "command": "sh bin/trustbench validate",
+   "exit_code": 0,
+   "output_tail": [
+    "   \"step\": \"verify:data\",",
+    "   \"ok\": true,",
+    "   \"skipped\": \"Needs the pinned AgentDojo checkout (trustbench fetch-data).\"",
+    "  }",
+    " ]",
+    "}"
+   ],
+   "expected": [
+    "\"ok\": true",
+    "\"step\": \"verify:frozen\""
+   ],
+   "expected_found": {
+    "\"ok\": true": true,
+    "\"step\": \"verify:frozen\"": true
+   }
+  },
+  {
+   "command": "sh bin/trustbench smoke --check",
+   "exit_code": 0,
+   "output_tail": [
+    "   ],",
+    "   \"schema\": \"schemas/arm-report.schema.json\",",
+    "   \"schema_errors\": []",
+    "  }",
+    " ]",
+    "}"
+   ],
+   "expected": [
+    "\"ok\": true",
+    "\"matches_committed\": true"
+   ],
+   "expected_found": {
+    "\"ok\": true": true,
+    "\"matches_committed\": true": true
+   }
+  },
+  {
+   "command": "sh bin/trustbench manifest",
+   "exit_code": 0,
+   "output_tail": [
+    "{",
+    " \"ok\": true,",
+    " \"files\": 18,",
+    " \"changed\": []",
+    "}"
+   ],
+   "expected": [
+    "\"ok\": true",
+    "\"changed\": []"
+   ],
+   "expected_found": {
+    "\"ok\": true": true,
+    "\"changed\": []": true
+   }
+  },
+  {
+   "command": "sh bin/trustbench report --check",
+   "exit_code": 0,
+   "output_tail": [
+    "............................................................             [100%]",
+    "60 passed in 3.75s"
+   ],
+   "expected": [
+    "passed",
+    "failed"
+   ],
+   "expected_found": {
+    "passed": true,
+    "no failed": true
+   }
+  },
+  {
+   "command": "sh bin/trustbench benchmark dev-frozen --dry-run",
+   "exit_code": 0,
+   "output_tail": [
+    "  \".tool-state/cli-dev-frozen\",",
+    "  \"--reliability\",",
+    "  \"configs/frozen/reliability-override.json\"",
+    " ],",
+    " \"credential_env\": \"NVIDIA_API_KEY\"",
+    "}"
+   ]
+  },
+  {
+   "command": "sh bin/trustbench benchmark dev-frozen",
+   "exit_code": 2,
+   "output_tail": [
+    "NVIDIA_API_KEY is not set in the environment or .env; a live run needs your own provider key and budget"
+   ]
+  }
+ ],
+ "problems": [],
+ "ok": true,
+ "log_tail": []
+}

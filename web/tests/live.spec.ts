@@ -62,6 +62,11 @@ test('live page: the command-line tab gives runnable commands for this site', as
   const keyEnv = catalog.modes.own_key.models.find((m: any) => m.id === catalog.frozen.model).key_env;
   expect(text).toContain(`--key-env ${keyEnv}`);
   expect(text).toContain(catalog.frozen.system);
+  // TB-050: the HTTP example must create a session first (runs need one), and the local path needs the storage root.
+  expect(text).toContain('/api/session');
+  expect(text).toContain('authorization: Bearer $TOKEN');
+  expect(text).toContain('export TRUSTBENCH_STORAGE_ROOT=');
+  expect(text).toContain('sh scripts/setup-python.sh');
 });
 
 test('live page: without a reachable service it says so and points to the published results', async ({ page }) => {

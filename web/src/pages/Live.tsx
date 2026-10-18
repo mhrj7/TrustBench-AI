@@ -278,13 +278,14 @@ function CliGuide({ origin, catalog }: { origin: string; catalog: Catalog | null
   const model = catalog?.frozen.model ?? '<provider:model>';
   const keyEnv = catalog?.modes.own_key.models.find((m) => m.id === model)?.key_env ?? '<KEY_ENV>';
   const blocks: [string, string][] = [
+    ['Install the client once (git and uv; see the README)', 'git clone https://github.com/mhrj7/TrustBench-AI.git && cd TrustBench-AI && sh scripts/setup-python.sh'],
     ['See what this service offers', `sh bin/trustbench remote catalog --url ${origin}`],
     ['Instant run, no model and no key', `sh bin/trustbench remote run --url ${origin} --mode scripted --system gateway_capability --cases doc-benign,doc-attack --wait`],
     ['Live run with the project key', `sh bin/trustbench remote run --url ${origin} --mode hosted --system ${system} --model ${model} --cases doc-benign,doc-attack --wait`],
     ['Live run with your own key (read from an environment variable, never a flag)', `${keyEnv}=... sh bin/trustbench remote run --url ${origin} --mode own_key --key-env ${keyEnv} --system ${system} --model ${model} --cases doc-benign,doc-attack --wait`],
     ['Fetch a finished run', 'sh bin/trustbench remote report <run-id> --url ' + origin + ' --out report.json'],
-    ['The same over plain HTTP', `curl -s -X POST ${origin}/api/runs -H 'content-type: application/json' -d '{"mode":"scripted","system":"gateway_capability","cases":["doc-benign","doc-attack"]}'`],
-    ['Everything locally, from a checkout (README quickstart)', 'npm ci && npm run setup && sh bin/trustbench smoke --check'],
+    ['The same over plain HTTP: a guest session, then the run', `TOKEN=$(curl -s -X POST ${origin}/api/session | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')\ncurl -s -X POST ${origin}/api/runs -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"mode":"scripted","system":"gateway_capability","cases":["doc-benign","doc-attack"]}'`],
+    ['Everything locally, from the checkout (README, Install)', 'export TRUSTBENCH_STORAGE_ROOT="$(dirname "$PWD")" npm_config_cache="$(dirname "$PWD")/.cache/npm"\ncp .env.example .env && npm ci && npm run setup && sh bin/trustbench smoke --check'],
   ];
   return (
     <Reveal className="stack-24">
