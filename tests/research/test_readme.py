@@ -25,7 +25,7 @@ def test_the_static_check_catches_each_kind_of_broken_instruction():
     assert any('--no-such-flag' in p for p in problems)
     wrong_limit = readme.replace('| 34 paired runs |', '| 99 paired runs |')
     assert any('does not match the configs' in p for p in run_static(wrong_limit))
-    assert any('absolute path' in p for p in run_static(readme + '\nRun `/Users/someone/TrustBench-AI/bin/trustbench`.\n'))
+    assert any('absolute path' in p for p in run_static(readme + '\nRun `/Volumes/SomeDrive/TrustBench-AI/bin/trustbench`.\n'))
 
 
 def test_the_fresh_clone_check_passed_on_exactly_this_readme():
