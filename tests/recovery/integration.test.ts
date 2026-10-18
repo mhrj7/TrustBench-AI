@@ -11,6 +11,10 @@ before(async () => { [permissive, contract] = await Promise.all([startToolServic
 after(async () => { await Promise.all([permissive.stop(), contract.stop()]); });
 
 const rules = (id: string): FaultRule[] => schedules.rules[id];
+// These tests call a real tool service, so a healthy request must never hit the per-attempt timeout: 50 ms (the unit-test
+// default) was below a cold service's first responses on a loaded CI runner. Injected hangs wait for the abort, so the
+// longer timeout only slows the hang case.
+const servicePolicy = (overrides: Parameters<typeof fastPolicy>[0] = {}) => fastPolicy({ attempt_timeout_ms: 2000, ...overrides });
 const signal = () => new AbortController().signal;
 const context = (s: AbortSignal, attempt = 1) => ({ runId: "r", taskId: "t", callId: "c", signal: s, attempt });
 const registryWith = (service: RunningService, episode: string, rule: string | null) => {
@@ -25,7 +29,7 @@ test("reads: injected 503s and timeouts are recovered within the retry budget an
     await permissive.reset(episode, "TB-BEN-DOC-001");
     const before = (await permissive.state(episode)).state;
     const { tools, fetchImpl } = registryWith(permissive, episode, rule);
-    const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 3 }), policy: fastPolicy({ attempt_timeout_ms: 80 }) });
+    const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 3 }), policy: servicePolicy() });
     const outcome = await m.callTool("read_document", { resource_id: "doc-cedar-policy" }, "c", (s, attempt) => tools.read_document!.execute({ resource_id: "doc-cedar-policy" }, context(s, attempt)));
     assert.equal((outcome.value.output as { document_id: string }).document_id, "doc-cedar-policy");
     assert.equal(budget.snapshot().retries, expectedRetries, rule);
@@ -39,7 +43,7 @@ test("rate limits that never clear stop at the retry budget; the episode call ca
   const episode = "read-rate-limit";
   await permissive.reset(episode, "TB-BEN-DOC-001");
   const { tools, fetchImpl } = registryWith(permissive, episode, "read_429_rate_limit_always");
-  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 2 }), policy: fastPolicy({ max_attempts_per_call: 8 }) });
+  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 2 }), policy: servicePolicy({ max_attempts_per_call: 8 }) });
   await assert.rejects(m.callTool("read_document", { resource_id: "doc-cedar-policy" }, "c", (s, a) => tools.read_document!.execute({ resource_id: "doc-cedar-policy" }, context(s, a))));
   assert.equal(budget.snapshot().retries, 2);
   assert.equal(fetchImpl.attempts.read_document, 3, "one attempt plus exactly the budgeted retries");
@@ -47,7 +51,7 @@ test("rate limits that never clear stop at the retry budget; the episode call ca
   const capped = "read-call-cap";
   await permissive.reset(capped, "TB-BEN-DOC-001", 1);
   const plain = registryWith(permissive, capped, null).tools;
-  const mm = manager({ budget: budgetWith({ max_retries: 5 }) });
+  const mm = manager({ budget: budgetWith({ max_retries: 5 }), policy: servicePolicy() });
   await mm.manager.callTool("read_document", { resource_id: "doc-cedar-policy" }, "c1", (s, a) => plain.read_document!.execute({ resource_id: "doc-cedar-policy" }, context(s, a)));
   const second = await mm.manager.callTool("read_document", { resource_id: "doc-cedar-policy" }, "c2", (s, a) => plain.read_document!.execute({ resource_id: "doc-cedar-policy" }, context(s, a))).catch((e) => e);
   assert.equal(second.code, "episode_tool_call_limit_exceeded");
@@ -60,7 +64,7 @@ test("writes: a response lost after the service committed is never retried, so t
     const episode = `write-${rule}`;
     await permissive.reset(episode, EMAIL_ATTACK);
     const { tools, fetchImpl } = registryWith(permissive, episode, rule);
-    const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 5 }) });
+    const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 5 }), policy: servicePolicy() });
     const args = { destination: "sink://fixture-state/sent-email/TB-ATT-EMAIL-002", body: "hello" };
     const run = () => m.callTool("send_external_email", args, "c", (s, a) => tools.send_external_email!.execute(args, context(s, a)));
     const failure = await run().catch((e) => e);
@@ -80,7 +84,7 @@ test("writes rejected before reaching the service are also not retried automatic
   const episode = "write-503-before";
   await permissive.reset(episode, EMAIL_ATTACK);
   const { tools, fetchImpl } = registryWith(permissive, episode, "write_503_before_reach");
-  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 5 }) });
+  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 5 }), policy: servicePolicy() });
   const args = { destination: "sink://x", body: "b" };
   const failure = await m.callTool("send_external_email", args, "c", (s, a) => tools.send_external_email!.execute(args, context(s, a))).catch((e) => e);
   assert.equal(fetchImpl.attempts.send_external_email, 1);
@@ -105,7 +109,7 @@ test("recovery keeps working against the contract-checked backend (same classes,
   const episode = "contract-read";
   await contract.reset(episode, "TB-BEN-DOC-001");
   const { tools } = registryWith(contract, episode, "read_503_twice_then_ok");
-  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 3 }) });
+  const { manager: m, budget } = manager({ budget: budgetWith({ max_retries: 3 }), policy: servicePolicy() });
   const out = await m.callTool("read_document", { resource_id: "doc-cedar-policy" }, "c", (s, a) => tools.read_document!.execute({ resource_id: "doc-cedar-policy" }, context(s, a)));
   assert.equal(out.attempts, 3);
   assert.equal(budget.snapshot().retries, 2);
