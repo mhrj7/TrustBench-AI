@@ -5,21 +5,23 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[2]
 W = json.loads((ROOT / 'evidence/tb049-walkthrough.json').read_text())
-IDX = json.loads((ROOT / 'web/public/data/runs.json').read_text())
-ROWS = {r[0]: dict(zip(IDX['fields'], r)) for r in IDX['rows']}
 
 
 def examples():
     return [W['benign_run'], W['blocked_attack']['defended'], W['blocked_attack']['paired_undefended'], W['failure']]
 
 
-def test_every_example_is_a_run_in_the_published_store_with_its_raw_record():
-    store = json.loads((ROOT / 'web/public/data/store.json').read_text())
+def test_every_example_resolves_to_the_same_run_in_its_committed_raw_report():
+    # The site's run store (web/public/data) is generated from these reports and is not committed; check the source.
     for x in examples():
-        row = ROWS[x['run_id']]
-        assert unquote(x['site_path'].split('/runs/', 1)[1]) == x['run_id']
-        assert store['reports'][row['report']]['path'] == x['report']
-        assert x['pointer'] in json.loads((ROOT / f"web/public/data/records/{row['report']}.json").read_text())['runs']
+        report = json.loads((ROOT / x['report']).read_text())
+        _, cases, i, arm = x['pointer'].split('/')
+        case = report[cases][int(i)]
+        assert (case['case_id'], case['repetition'], arm) == (x['case_id'], x['repetition'], x['arm'])
+        ev = case[arm]['evaluation']
+        assert (ev['utility_pass'], ev['security_pass'], ev['attacker_goal_achieved']) == (x['utility_pass'], x['security_pass'], x['attacker_goal_achieved'])
+        assert [t['tool'] for t in case[arm]['tool_trace']] == [t['tool'] for t in x['tool_calls']]
+        assert unquote(x['site_path'].split('/runs/', 1)[1]) == x['run_id'] and x['run_id'].endswith(f"|{x['case_id']}|r{x['repetition']}|{arm}")
 
 
 def test_each_example_meets_its_selection_rule():
