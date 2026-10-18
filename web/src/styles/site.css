@@ -399,9 +399,7 @@ td.args { max-width: 520px; min-width: 260px; }
 
 /* Water ripples under the cursor (components/Water.tsx) */
 .water { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; contain: strict; }
-.ripple { position: absolute; left: 0; top: 0; border-radius: 50%; opacity: 0; pointer-events: none; will-change: transform, opacity;
-  --t: 0; --r: calc(6% + var(--t) * 39%);
-  background: radial-gradient(circle, transparent calc(var(--r) - 4%), rgba(255, 255, 255, 0.28) var(--r), rgba(36, 51, 255, 0.05) calc(var(--r) + 2%), transparent calc(var(--r) + 6%)); }
+.water-layer { position: absolute; inset: 0; pointer-events: none; }
 
 /* The journey (components/Journey.tsx) */
 .journey { position: relative; height: 640vh; margin-top: var(--section-gap); }
@@ -440,3 +438,16 @@ td.args { max-width: 520px; min-width: 260px; }
 /* The footer sits on white, below the dark ending (as on the reference site). */
 .footer { background: #fff; }
 main:has(> .space:last-child) + .footer { margin-top: 0; border-top: 0; }
+
+/* Site-wide reveal (components/Reveal.tsx): rise out of a short blur, staggered within the container. */
+html.rv-ready [data-rv='wait'] { opacity: 0; translate: 0 22px; filter: blur(8px); }
+html.rv-ready [data-rv='wait'], html.rv-ready [data-rv='in'] { transition: opacity 700ms var(--ease-out), translate 800ms var(--ease-out), filter 700ms var(--ease-out);
+  transition-delay: calc(var(--rv-i, 0) * 70ms); }
+html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
+@media (prefers-reduced-motion: reduce) { html.rv-ready [data-rv] { opacity: 1 !important; translate: none !important; filter: none !important; transition: none; } }
+
+/* Charts sit in cards like the rest of the page. */
+.chart-card { background: var(--tone-1); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: var(--space-48); }
+@media (max-width: 640px) { .chart-card { padding: var(--space-24) var(--space-16); } }
+.chapter-inner { display: flex; flex-direction: column; gap: var(--space-16); }
+.clip-x { overflow-x: hidden; }

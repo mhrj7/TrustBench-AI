@@ -10,6 +10,7 @@ import { EvidenceProvider, Footer, Nav, useSmoothScroll } from './components/She
 import Overview from './pages/Overview';
 import { NextPage } from './components/Interactive';
 import { WaterCursor } from './components/Water';
+import { useReveal } from './components/Reveal';
 
 const Compare = lazy(() => import('./pages/Compare'));
 const Runs = lazy(() => import('./pages/Runs'));
@@ -27,6 +28,7 @@ const NotFound = lazy(() => import('./pages/Method').then((m) => ({ default: m.N
 function Layout() {
   useSmoothScroll();
   const loc = useLocation();
+  useReveal();
   return (
     <EvidenceProvider>
       <a className="skip" href="#main">Skip to content</a>
