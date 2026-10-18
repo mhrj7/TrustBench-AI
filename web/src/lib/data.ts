@@ -107,5 +107,7 @@ export type Pipeline = {
   outcomes: Record<string, number>; denial_codes: string[];
   guard_layers: { id: string; label: string; denies_with: string; what: string; source: string }[];
   stages: { id: string; title: string; code: string[] }[];
+  live: { modes: { id: string; label: string; live: boolean; max_pairs_per_run: number }[]; agents: { id: string; label: string; status: string }[]; workers: Record<string, number>; systems: string[] };
+  flow: { id: string; title: string; code: string[]; what: string }[];
 };
 export const loadPipeline = () => getJson<Pipeline>('pipeline.json');

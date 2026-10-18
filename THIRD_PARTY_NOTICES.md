@@ -9,7 +9,6 @@ Third-party material, and what is and is not redistributed:
 | The `injecagent` wording | the same template, as AgentDojo ships it (it cites the InjecAgent paper, arXiv:2403.02691) | covered by AgentDojo's MIT notice | the one template string |
 | npm and Python dependencies | `package-lock.json`, `web/package-lock.json`, `src/tools/requirements.lock`, `requirements/analysis.lock` | each package's own license | no: only the hash-pinned lockfiles; `npm ci` and `npm run setup` download them from their registries |
 | "Astronaut" 3D model by Poly (Google), as shipped in google/model-viewer `packages/shared-assets` | `web/src/assets/astronaut.glb`, shown in the website's journey and ending scenes | CC BY 2.0 (attribution in model-viewer's `ATTRIBUTIONS.md`; credited on the page) | yes: the unmodified GLB file |
-| Anatomy skill drawing kit (`kit/iso-kit.ts`, its `ISO_CSS`) by Ryan, github.com/wheresryan22/anatomy | `web/src/iso/iso-kit.ts`, `web/src/iso/iso.css` (the How it works figure) | MIT, notice in [`web/src/iso/LICENSE-anatomy`](web/src/iso/LICENSE-anatomy) | yes: the two files, unmodified |
 | Base container images (Node, uv) | `Dockerfile.*`, `repro/run-in-container.sh` | their own licenses | no: referenced by digest, pulled by Docker |
 
 Published papers and systems compared in `research/related-work.csv` are cited, not redistributed.
