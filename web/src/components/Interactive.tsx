@@ -95,6 +95,7 @@ export function GrowCard({ left, right, children, label }: { left: string; right
 /** The site's page order for the endless scroll: the last page hands back to the first. */
 export const TOUR: { path: string; title: string }[] = [
   { path: '/', title: 'The story' },
+  { path: '/how', title: 'How it works' },
   { path: '/compare', title: 'Compare defenses' },
   { path: '/runs', title: 'Every run' },
   { path: '/policy', title: 'Why calls were stopped' },

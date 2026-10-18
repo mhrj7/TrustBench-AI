@@ -100,3 +100,12 @@ export type Headline = {
   comparison: { note: string; systems: { id: string; label: string; defended: { numerator: number; denominator: number; rate: number }; baseline: { numerator: number; denominator: number; rate: number } }[] };
 };
 export const loadHeadline = () => getJson<Headline>('headline.json');
+
+export type Pipeline = {
+  source: string; tasks: number; attacks: number; oracles: number; renderings: string[]; tools: string[]; providers: string[]; models: string[];
+  systems: string[]; case_groups: number; holdouts: Record<string, number>; reports: number; runs: number; valid_runs: number;
+  outcomes: Record<string, number>; denial_codes: string[];
+  guard_layers: { id: string; label: string; denies_with: string; what: string; source: string }[];
+  stages: { id: string; title: string; code: string[] }[];
+};
+export const loadPipeline = () => getJson<Pipeline>('pipeline.json');

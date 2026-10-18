@@ -1,0 +1,109 @@
+{
+  "note": "Sources for web/public/data/pipeline.json, the numbers on the How it works page (scripts/export-site-data.py). Every count is read from the files named here; each stage names the code that implements it. The export fails if a guard layer's name is not in the gateway source or its denial code is not in the layer's own source file.",
+  "tasks": "data/benign.jsonl",
+  "attacks": "data/attacks.jsonl",
+  "renderings": "data/attack-renderings.json",
+  "oracles": "data/attack-oracles.json",
+  "splits": "data/splits.json",
+  "holdouts": [
+    "data/holdout-suite.json",
+    "data/holdout2-attack-suite.json",
+    "data/holdout2-benign-suite.json"
+  ],
+  "tools": "configs/tool-descriptions.json",
+  "providers": "configs/providers.yaml",
+  "gateway_source": "src/gateway/app.py",
+  "guard_layers": [
+    {
+      "id": "tool_allowlist",
+      "label": "Allow-list",
+      "denies_with": "tool_not_allowed",
+      "what": "Each task is bound to the tools it may use. A call to any other tool is refused before it reaches the tool.",
+      "source": "src/gateway/app.py"
+    },
+    {
+      "id": "contract_scope",
+      "label": "Contract scope",
+      "denies_with": "argument_scope_denied",
+      "what": "Strict argument schemas and the task contract: a permitted tool still cannot be pointed at records, people or addresses outside the task.",
+      "source": "src/policy/capabilities.py"
+    },
+    {
+      "id": "approval",
+      "label": "Exact-argument approval",
+      "denies_with": "idempotency_arguments_changed",
+      "what": "Tools that change things need an approval bound to the exact arguments; a changed argument voids it.",
+      "source": "src/policy/approvals.py"
+    }
+  ],
+  "stages": [
+    {
+      "id": "tasks",
+      "title": "Tasks and tricks",
+      "code": [
+        "data/benign.jsonl",
+        "data/attacks.jsonl",
+        "scripts/verify-attack-data.mjs"
+      ]
+    },
+    {
+      "id": "render",
+      "title": "Writing the trick",
+      "code": [
+        "data/attack-renderings.json",
+        "data/attack-materialization.json"
+      ]
+    },
+    {
+      "id": "agent",
+      "title": "The helper",
+      "code": [
+        "src/agent/runner.ts",
+        "src/models",
+        "configs/providers.yaml"
+      ]
+    },
+    {
+      "id": "guard",
+      "title": "The guard",
+      "code": [
+        "src/gateway/app.py",
+        "src/policy",
+        "configs/policy.yaml"
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "The tools",
+      "code": [
+        "src/tools/app.py",
+        "configs/tool-descriptions.json"
+      ]
+    },
+    {
+      "id": "score",
+      "title": "The scorer",
+      "code": [
+        "src/evaluators/outcomes_v2.py",
+        "data/attack-oracles.json"
+      ]
+    },
+    {
+      "id": "store",
+      "title": "The run store",
+      "code": [
+        "app/store.py",
+        "evidence/"
+      ]
+    },
+    {
+      "id": "analysis",
+      "title": "The verdict",
+      "code": [
+        "configs/hypothesis.yaml",
+        "evidence/tb044-hypothesis.json",
+        "scripts/build-report.py"
+      ]
+    }
+  ]
+}

@@ -22,6 +22,7 @@ const Live = lazy(() => import('./pages/Live'));
 const Account = lazy(() => import('./pages/Account'));
 const Verify = lazy(() => import('./pages/Account').then((m) => ({ default: m.Verify })));
 const Reset = lazy(() => import('./pages/Account').then((m) => ({ default: m.Reset })));
+const How = lazy(() => import('./pages/How'));
 const Method = lazy(() => import('./pages/Method').then((m) => ({ default: m.Method })));
 const NotFound = lazy(() => import('./pages/Method').then((m) => ({ default: m.NotFound })));
 
@@ -49,6 +50,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Overview />} />
+          <Route path="how" element={<How />} />
           <Route path="live" element={<Live />} />
           <Route path="account" element={<Account />} />
           <Route path="account/verify" element={<Verify />} />

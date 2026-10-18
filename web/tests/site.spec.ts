@@ -13,6 +13,7 @@ const untimed = runs.find((r: { timed: boolean; utility_rule: string | null; inv
 
 const PAGES: [string, string, RegExp][] = [
   ['overview', '/', /Can a guard stop a tricked AI/],
+  ['how', '/how', /How it works/],
   ['compare', '/compare', /Compare defenses/],
   ['runs', '/runs', /Every run in the store/],
   ['run-timed', `/runs/${encodeURIComponent(heroRun)}`, new RegExp(heroCase)],
