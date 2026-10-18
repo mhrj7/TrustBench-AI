@@ -213,7 +213,7 @@ function Result({ id, onNew }: { id: string; onNew: () => void }) {
           {' · '}{job.system} · {job.model ? short(job.model.id) : 'scripted'} · {job.rendering.replaceAll('_', ' ')} · {job.pairs} paired runs · key: {job.key_source ?? 'none'}</p>
         {(job.status === 'running' || job.status === 'queued') && (
           <div className="ratebar-track" role="progressbar" aria-valuemin={0} aria-valuemax={job.progress.total} aria-valuenow={job.progress.done}>
-            <div className="ratebar-fill" style={{ width: `${(job.progress.done / Math.max(1, job.progress.total)) * 100}%`, background: 'var(--ink)' }} />
+            <div className="ratebar-fill" style={{ width: `${(job.progress.done / Math.max(1, job.progress.total)) * 100}%`, background: 'var(--gradient)' }} />
           </div>
         )}
         {job.status === 'running' && <p className="small ink-2">{job.progress.done} of {job.progress.total} pairs finished.</p>}

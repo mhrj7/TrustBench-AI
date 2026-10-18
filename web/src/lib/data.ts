@@ -86,3 +86,17 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): Loadable<T> 
 
 export const useDataset = () => useAsync(loadDataset, []);
 export const runPath = (id: string) => `/runs/${encodeURIComponent(id)}`;
+
+/** The story page's numbers and its real recorded example (web/public/data/headline.json, from configs/site-headline.json). */
+export type HeadlineSide = { run_id: string; outcome: string; security_pass: boolean; utility_pass: boolean; attacker_goal_achieved: boolean;
+  tools: { tool: string; status: string; error: string | null }[]; decisions: { tool: string; decision: string; reason: string | null }[]; reason_codes: string[] };
+export type Endpoint = { baseline: string; defended: string; baseline_rate: number; defended_rate: number; difference_pp: number; ci95_pp: [number, number]; clusters: number };
+export type Headline = {
+  primary: { analysis: string; pairs: number; verdict: string; unsafe: Endpoint; utility: Endpoint };
+  confidence: number; holdout1_verdict: string; extra_seconds: number; confirmatory_runs: number;
+  audit: { sampled: number; security_errors: number; oracle_defects: number };
+  reproduction: { steps: number; outcome: string };
+  example: { case_id: string; repetition: number; task: string; hidden_text: string; attacker_goal: string; without_guard: HeadlineSide; with_guard: HeadlineSide };
+  comparison: { note: string; systems: { id: string; label: string; defended: { numerator: number; denominator: number; rate: number }; baseline: { numerator: number; denominator: number; rate: number } }[] };
+};
+export const loadHeadline = () => getJson<Headline>('headline.json');

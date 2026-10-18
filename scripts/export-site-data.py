@@ -73,6 +73,40 @@ store = {
                     'constructed': {k: accuracy['constructed_ground_truth'][k] for k in ('cases', 'correct')}, 'reviewer': accuracy['ai_audit']['reviewer']},
 }
 (out / 'store.json').write_text(json.dumps(store, indent=1, ensure_ascii=False))
+
+
+def headline() -> dict:
+    """The story page's numbers and its real example (configs/site-headline.json): read from evidence, never typed in."""
+    hc = json.loads((ROOT / 'configs/site-headline.json').read_text())
+    h = json.loads((ROOT / hc['hypothesis']).read_text())
+    la = json.loads((ROOT / hc['label_audit']).read_text())
+    rp = json.loads((ROOT / hc['reproduction']).read_text())
+    wt = json.loads((ROOT / hc['walkthrough']).read_text())
+    ep = lambda e: {k: e[k] for k in ('baseline', 'defended', 'baseline_rate', 'defended_rate', 'difference_pp', 'ci95_pp', 'clusters')}
+    attack_id = wt['blocked_attack']['defended']['fixture_id'].split('--')[1]
+    attack = next(a for a in map(json.loads, filter(str.strip, (ROOT / hc['attacks']).read_text().splitlines())) if a['attack_id'] == attack_id)
+    side = lambda x: {'run_id': x['run_id'], 'outcome': x['outcome'], 'security_pass': x['security_pass'], 'utility_pass': x['utility_pass'],
+                      'attacker_goal_achieved': x['attacker_goal_achieved'], 'tools': x['tool_calls'], 'decisions': x['policy_decisions'], 'reason_codes': x['reason_codes']}
+    comparison = []
+    for sysd in hc['comparison']['systems']:
+        rep = json.loads((ROOT / sysd['report']).read_text())['summary']['unsafe_committed_effect']
+        comparison.append({'id': sysd['id'], 'label': sysd['label'], 'defended': rep['defended'], 'baseline': rep['baseline']})
+    return {'source': 'configs/site-headline.json', 'primary': {'analysis': h['primary']['analysis'], 'pairs': h['primary']['pairs'], 'verdict': h['primary']['verdict'],
+                                                              'unsafe': ep(h['primary']['unsafe_committed_effect']), 'utility': ep(h['primary']['benign_utility_pass'])},
+            'confidence': h['bootstrap']['level'], 'holdout1_verdict': next(x['verdict'] for x in h['per_holdout'] if x['analysis'].startswith('holdout1/')),
+            'extra_seconds': round(h['cost']['paired_descriptive_primary_pool']['elapsed_ms']['paired_difference_mean'] / 1000, 1),
+            'confirmatory_runs': la['method']['population_runs'], 'audit': {'sampled': la['evaluator_error']['security_pass']['n'],
+                                                                          'security_errors': la['evaluator_error']['security_pass']['errors'],
+                                                                          'oracle_defects': la['evaluator_error']['attacker_goal_achieved']['errors']},
+            'reproduction': {'steps': len(rp['steps']), 'outcome': rp['outcome']},
+            'example': {'case_id': wt['blocked_attack']['defended']['case_id'], 'repetition': wt['blocked_attack']['defended']['repetition'],
+                        'task': red.scrub(next(f for f in map(json.loads, filter(str.strip, (ROOT / 'data/benign.jsonl').read_text().splitlines())) if f['fixture_id'] == attack['base_fixture_id'])['task_contract']['request']),
+                        'hidden_text': red.scrub(attack['untrusted_text']), 'attacker_goal': red.scrub(attack['attacker_goal']),
+                        'without_guard': side(wt['blocked_attack']['paired_undefended']), 'with_guard': side(wt['blocked_attack']['defended'])},
+            'comparison': {'note': hc['comparison']['note'], 'systems': comparison}}
+
+
+(out / 'headline.json').write_text(json.dumps(headline(), indent=1, ensure_ascii=False))
 (out / 'runs.json').write_text(json.dumps({'fields': FIELDS, 'rows': rows}, separators=(',', ':'), ensure_ascii=False))
 leaks = [p.name for p in out.rglob('*.json') if red.find(p.read_text())]
 digest = hashlib.sha256(b''.join((out / p).read_bytes() for p in sorted(str(x.relative_to(out)) for x in out.rglob('*.json')))).hexdigest()
