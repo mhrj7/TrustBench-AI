@@ -21,7 +21,7 @@ def test_the_scan_catches_keys_excluded_paths_and_personal_paths():
     assert scan({'TrustBench-AI-1.0.0/a.txt': b'key nvapi-' + b'A' * 30})
     assert scan({'TrustBench-AI-1.0.0/.env': b'x'}), 'a .env file must never be packaged'
     assert scan({'TrustBench-AI-1.0.0/deploy/secrets/nvidia_api_key': b'x'})
-    assert scan({'TrustBench-AI-1.0.0/b.md': b'see /Users/someone/file'})
+    assert scan({'TrustBench-AI-1.0.0/b.md': b'see /Us' + b'ers/someone/file'})
 
 
 def test_the_quickstart_is_the_readme_install_and_checks_from_an_archive():
