@@ -1,0 +1,147 @@
+{
+ "task_id": "TB-051",
+ "checks": {
+  "offline_reproduction": {
+   "name": "Offline reproduction in a clean container (repro/README.md): every published number rebuilt from the committed raw records",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": false,
+   "started_at": "2026-10-18T14:19:54+00:00",
+   "finished_at": "2026-10-18T14:21:41+00:00",
+   "detail": {
+    "exit_code": 1,
+    "seconds": 107.0,
+    "outcome": "NOT REPRODUCED",
+    "steps_passed": 11,
+    "steps": 12,
+    "unexpected_changes": [],
+    "route": "container (tracked files at the commit, non-root, no network)"
+   }
+  },
+  "readme_fresh": {
+   "name": "README followed by a fresh non-root user in a clean container (scripts/check-readme.py --fresh)",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": true,
+   "started_at": "2026-10-18T14:21:41+00:00",
+   "finished_at": "2026-10-18T14:22:22+00:00",
+   "detail": {
+    "exit_code": 0,
+    "seconds": 41.1,
+    "problems": [],
+    "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root user \"node\", fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)"
+   }
+  },
+  "demo_rebuilt": {
+   "name": "Demo rebuilt from the candidate's committed files and running healthy",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": true,
+   "started_at": "2026-10-18T14:22:22+00:00",
+   "finished_at": "2026-10-18T14:23:22+00:00",
+   "detail": {
+    "image_tag": "trustbench-live:88f1781",
+    "image_id": "sha256:b43d0f7399bc",
+    "running_image": "sha256:b43d0f7399bc",
+    "health": "healthy",
+    "build_seconds": 51.2,
+    "source": "git archive 88f1781bae44 (committed files only)"
+   }
+  },
+  "linked_reports": {
+   "name": "Linked reports: every relative link in the documentation resolves, README links answer, and the report, claim, README and reproduction checks pass",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": true,
+   "started_at": "2026-10-18T14:23:22+00:00",
+   "finished_at": "2026-10-18T14:23:43+00:00",
+   "detail": {
+    "markdown_files": 44,
+    "broken_links": [],
+    "readme_external_links": 7,
+    "unreachable": [],
+    "report_checks": {
+     "report and claims ledgers": true,
+     "claim boundaries": true,
+     "README instructions": true,
+     "reproducibility package": true,
+     "published reports reproduce": true
+    }
+   }
+  },
+  "ci_tier1": {
+   "name": "CI on GitHub: Tier 1 release gate (scripted, every case and the policy trail against the committed baselines) and the full npm run verify",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": false,
+   "started_at": "2026-10-18T14:23:43+00:00",
+   "finished_at": "2026-10-18T14:34:11+00:00",
+   "detail": {
+    "run_id": 39135493507,
+    "url": "https://github.com/mhrj7/TrustBench-AI/actions/runs/39135493507",
+    "conclusion": "failure",
+    "jobs": {
+     "tier1": "failure",
+     "tier2": "skipped"
+    }
+   }
+  },
+  "fresh_clone_verify": {
+   "name": "Fresh clone from GitHub: locked install, the pinned AgentDojo data, and the full npm run verify (fixtures, regression, website browser tests), with no local keys",
+   "required": true,
+   "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+   "ok": false,
+   "started_at": "2026-10-18T14:34:11+00:00",
+   "finished_at": "2026-10-18T14:44:23+00:00",
+   "detail": {
+    "location": "fresh clone from GitHub on the release host, no .env keys (TRUSTBENCH_NO_DOTENV), own npm and uv caches",
+    "steps": [
+     {
+      "step": "clone",
+      "exit_code": 0,
+      "seconds": 7.1,
+      "tail": []
+     },
+     {
+      "step": "install",
+      "exit_code": 0,
+      "seconds": 7.8,
+      "tail": [
+       "npm notice New minor version of npm available! 12.0.0 -> 12.2.0",
+       "npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0",
+       "npm notice To update run: npm install -g npm@12.2.0",
+       "npm notice"
+      ]
+     },
+     {
+      "step": "fetch pinned AgentDojo data",
+      "exit_code": 0,
+      "seconds": 10.6,
+      "tail": [
+       "{\"ok\":true,\"commit\":\"089ed468cf3ed0322acc66b0211f26d9d90dbf60\",\"license\":\"MIT\",\"benchmark_version\":\"v1.2.2\",\"selected_suites\":[\"workspace@1.2.2\",\"banking@1.2.2\"],\"excluded_suites\":[\"travel@1.2.0\",\"slack@1.2.0\"],\"required_paths\":8}",
+       "From https://github.com/ethz-spylab/agentdojo",
+       " * branch              089ed468cf3ed0322acc66b0211f26d9d90dbf60 -> FETCH_HEAD",
+       "HEAD is now at 089ed468 Add openai-compatible provider for arbitrary OpenAI-compatible endpoints (#147)"
+      ]
+     },
+     {
+      "step": "npm run verify",
+      "exit_code": 1,
+      "seconds": 586.3,
+      "tail": [
+       "npm notice run trustbench-ai@0.0.0 test:rollback",
+       "npm notice run .venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/rollback && node --test tests/rollback/run-store.test.ts",
+       "npm notice run trustbench-ai@0.0.0 test:research",
+       "npm notice run .venv-tools/bin/python -m pytest -q -p no:cacheprovider tests/research"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "candidate": "88f1781bae4449d0dfb45fd88fbcced0f8cf6997",
+ "superseded": {
+  "reason": "Not released: offline_reproduction, ci_tier1 and fresh_clone_verify all failed on one test. The candidate added a License section to the README, and the committed README fresh-clone evidence still named the previous README, so tests/research/test_readme.py failed in every route. The README check then passed on this candidate (its evidence is committed with the next candidate). The Tier 2 attempt for this candidate (release-88f1781bae44 in evidence/release-gate-ledger.json) was stopped before a result. A full local npm run verify now runs before a candidate is cut.",
+  "recorded_at": "2026-10-18"
+ }
+}
