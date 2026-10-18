@@ -73,3 +73,26 @@ def test_correlated_repeats_are_measured():
     perfectly_clustered = [case('T1', None, r, d_ok=True) for r in (1, 2, 3)] + [case('T2', None, r, d_ok=False) for r in (1, 2, 3)]
     arm = evaluate(load_runs([report(perfectly_clustered)]))['systems']['sys']['metrics']['benign']['arms']['defended']
     assert arm['intra_cluster_correlation'] == 1.0, 'repeats of one task are fully correlated here'
+
+
+def test_two_different_cases_on_one_task_and_attack_are_separate_units_not_duplicates():
+    # The scripted suite runs two trajectories against one attack (email-attack-recipient and email-attack-marker-body on
+    # TB-BEN-EMAIL-001--TB-ATT-EMAIL-001); a live-service instant run with every case failed on it (TB-049).
+    a, b = case('T1', 'A1', 1), dict(case('T1', 'A1', 1), case_id='other-trajectory')
+    units = sorted({r['unit_id'] for r in load_runs([report([a, b])])})
+    assert units == ['T1|A1|T1-A1|r1', 'T1|A1|other-trajectory|r1']
+    with pytest.raises(ValueError, match='duplicate'):
+        load_runs([report([a, a])])  # the same case twice is still a duplicate
+
+
+def test_registered_unit_ids_are_unchanged_when_units_are_unique():
+    assert {r['unit_id'] for r in load_runs([report(CASES)])} >= {'T1|none|r1', 'T1|A1|r1', 'T3|A2|r3'}
+
+
+def test_the_committed_scripted_suite_report_can_be_analysed():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('eu', ROOT / 'scripts/estimate-uncertainty.py')
+    eu = importlib.util.module_from_spec(spec); spec.loader.exec_module(eu)
+    rep = json.loads((ROOT / 'reports/tests/tb024-scripted-as_authored-plain-gateway_capability-report.json').read_text())
+    assert len(rep['cases']) == 17
+    assert eu.analyse('live', [rep], 'live service run')['repeatability']

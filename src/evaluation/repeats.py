@@ -70,13 +70,22 @@ def build_schedule(cases: list[dict[str, Any]], *, repetitions: int | None = Non
 
 
 def load_runs(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One record per (unit, arm) from arm-comparison reports; duplicates are an error, never silently merged."""
+    """One record per (unit, arm) from arm-comparison reports; duplicates are an error, never silently merged.
+
+    A unit is (task, attack variant, repetition). When one report holds two different cases on the same task and attack
+    variant (the scripted test suite does: two trajectories against one attack), each becomes its own unit, named by its
+    case id; the same case appearing twice is still a duplicate. Registered schedules never share a unit
+    (build_schedule refuses it), so their unit ids are unchanged."""
     variant_none = config()['benign_variant_id']
     out, seen = [], set()
     for report in reports:
+        cases_per_unit: dict[tuple[str, str], set[str]] = {}
+        for case in report['cases']:
+            cases_per_unit.setdefault(unit_of(case, variant_none), set()).add(case.get('case_id', ''))
         for case in report['cases']:
             task, variant = unit_of(case, variant_none)
-            unit = f"{task}|{variant}|r{case['repetition']}"
+            shared = len(cases_per_unit[(task, variant)]) > 1
+            unit = f"{task}|{variant}|{case['case_id']}|r{case['repetition']}" if shared else f"{task}|{variant}|r{case['repetition']}"
             for arm in ('baseline', 'defended'):
                 key = (report.get('defended_system') or report.get('defended_variant') or 'capability_only', unit, arm)  # older reports name only the gateway variant
                 if key in seen:
