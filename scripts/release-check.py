@@ -36,23 +36,39 @@ def last_json(text: str):
     return found
 
 
+def gh_json(args: list[str]):
+    """gh output as JSON, retried: a transient gh or network error prints nothing, which is not a result."""
+    for _ in range(5):
+        out = subprocess.run(args, cwd=ROOT, capture_output=True, text=True).stdout
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            time.sleep(10)
+    raise RuntimeError(f"gh returned no JSON for: {' '.join(args[:3])}")
+
+
 def gh_run(workflow: str, sha: str, inputs: dict | None = None, dispatch=False) -> dict:
     if dispatch:
+        # A dispatched workflow runs on the head of main, so it only tests the candidate if main is the candidate.
+        subprocess.run(['git', 'fetch', '-q', 'origin', 'main'], cwd=ROOT, capture_output=True)
+        head = subprocess.run(['git', 'rev-parse', 'origin/main'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if head != sha:
+            return {'conclusion': 'not run', 'jobs': {}, 'reason': f'origin/main is {head[:12]}, not the candidate {sha[:12]}: '
+                                                                    'a dispatched run would test another commit'}
         args = ['gh', 'workflow', 'run', workflow, '--ref', 'main'] + [x for k, v in (inputs or {}).items() for x in ('-f', f'{k}={v}')]
         subprocess.run(args, cwd=ROOT, check=True, capture_output=True)
         time.sleep(20)
     for _ in range(60):
-        runs = json.loads(subprocess.run(['gh', 'run', 'list', '--workflow', workflow, '--limit', '20', '--json', 'databaseId,headSha,event,status,conclusion,createdAt'],
-                                         cwd=ROOT, capture_output=True, text=True).stdout)
+        runs = gh_json(['gh', 'run', 'list', '--workflow', workflow, '--limit', '20', '--json', 'databaseId,headSha,event,status,conclusion,createdAt'])
         mine = [r for r in runs if r['headSha'] == sha and (r['event'] == 'workflow_dispatch') == dispatch]
         if mine:
             run = mine[0]
             subprocess.run(['gh', 'run', 'watch', str(run['databaseId']), '--exit-status'], cwd=ROOT, capture_output=True, timeout=7200)
-            view = json.loads(subprocess.run(['gh', 'run', 'view', str(run['databaseId']), '--json', 'conclusion,jobs,url'], cwd=ROOT, capture_output=True, text=True).stdout)
+            view = gh_json(['gh', 'run', 'view', str(run['databaseId']), '--json', 'conclusion,jobs,url'])
             return {'run_id': run['databaseId'], 'url': view['url'], 'conclusion': view['conclusion'],
                     'jobs': {j['name']: j['conclusion'] for j in view['jobs']}}
         time.sleep(30)
-    return {'conclusion': 'not found'}
+    return {'conclusion': 'not found', 'jobs': {}}
 
 
 def check_ci_tier1(sha):
