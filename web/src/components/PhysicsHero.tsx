@@ -1,4 +1,5 @@
-// The hero stage: a pile of glossy pieces held together by a pull toward the centre (Rapier physics, react-three-fiber).
+// The hero stage: glossy pieces packed edge to edge across the whole stage (Rapier physics, react-three-fiber), each held
+// near its own home on a jittered grid sized to the stage, so the pile fills the frame at any width.
 // Blue, black and white pieces are the helper's ordinary actions; the red ones are hidden tricks. The pointer is the guard:
 // a kinematic ball that shoves the pile around, and every trick it touches is stopped (turns blue) and counted. When all
 // tricks are stopped, new ones arrive after a pause, so the scene never runs out. No external assets: the reflections come
@@ -9,12 +10,13 @@ import { Environment, Lightformer } from '@react-three/drei';
 import { BallCollider, CuboidCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FluidFX } from './FluidFX';
+import { AdaptiveResolution, budgetDpr } from '../lib/gpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 const PALETTE = { blue: '#2433ff', black: '#0d0e13', white: '#e9eaf2', red: '#ef3b24' } as const;
 type Kind = 'cross';
-type Piece = { id: number; kind: Kind; color: keyof typeof PALETTE; scale: number; start: [number, number, number]; spin: [number, number, number] };
+type Piece = { id: number; kind: Kind; color: keyof typeof PALETTE; scale: number; start: [number, number, number]; home: [number, number, number]; spin: [number, number, number] };
 
 /** One hollow tube along y: an outer wall with rounded lips and an inner bore, turned on a lathe (normals come out right). */
 function tube(R = 0.42, r = 0.2, h = 1.2, e = 0.07) {
@@ -29,18 +31,27 @@ const CROSS = (() => {
 
 const seeded = (s: number) => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
 
-function makePieces(n: number, tricks: number): Piece[] {
-  const rnd = seeded(7);
+/** Pieces on a jittered grid that covers the visible stage (w x h at the depth of the pile), two layers deep; one in
+ *  about seven is a hidden trick. Each starts a little out from its home, so the pile settles in on load. */
+function makePieces(w: number, h: number): Piece[] {
+  const rnd = seeded(7), GAP = 2.25;
+  const cols = Math.max(3, Math.round((w * 0.96) / GAP)), rows = Math.max(3, Math.round((h * 0.96) / GAP));
   const colors: (keyof typeof PALETTE)[] = ['blue', 'black', 'white'];
-  return Array.from({ length: n }, (_, i) => ({
-    id: i,
-    kind: 'cross' as Kind,
-    color: i < tricks ? 'red' : colors[Math.floor(rnd() * 3)],
-    scale: 0.95 + rnd() * 0.35,
-    start: (() => { const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, rr = 3.2 * Math.cbrt(rnd()), s2 = Math.sqrt(1 - u * u);
-      return [Math.cos(th) * s2 * rr, Math.sin(th) * s2 * rr, u * rr] as [number, number, number]; })(),
-    spin: [rnd() * 6, rnd() * 6, rnd() * 6] as [number, number, number],
-  }));
+  const out: Piece[] = [];
+  for (let layer = 0; layer < 2; layer++) for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const id = out.length, off = layer ? 0.5 : 0;
+    const home: [number, number, number] = [
+      ((c + off + 0.5) / cols - 0.5) * w * 0.96 + (rnd() - 0.5) * 0.6,
+      ((r + off + 0.5) / rows - 0.5) * h * 0.96 + (rnd() - 0.5) * 0.6,
+      layer ? -1.3 : 1.1,
+    ];
+    out.push({
+      id, kind: 'cross', color: rnd() < 0.15 ? 'red' : colors[Math.floor(rnd() * 3)], scale: 1.05 + rnd() * 0.45,
+      home, start: [home[0] * 1.15 + (rnd() - 0.5) * 2, home[1] * 1.15 + (rnd() - 0.5) * 2, home[2] + (rnd() - 0.5) * 3],
+      spin: [rnd() * 6, rnd() * 6, rnd() * 6],
+    });
+  }
+  return out;
 }
 
 function Body({ piece, tricked, onStop, still }: { piece: Piece; tricked: boolean; onStop: (id: number) => void; still: boolean }) {
@@ -52,9 +63,9 @@ function Body({ piece, tricked, onStop, still }: { piece: Piece; tricked: boolea
   useFrame((_, dt) => {
     const b = api.current;
     if (b && !still) {
-      // Pull toward the centre: a weak spring with damping, so the pile breathes instead of collapsing.
+      // Pull toward its home: a weak spring with damping, so the pile breathes and closes up again after a push.
       const t = b.translation();
-      pull.set(-t.x, -t.y, -t.z).multiplyScalar(0.55 * piece.scale ** 3);
+      pull.set(piece.home[0] - t.x, piece.home[1] - t.y, piece.home[2] - t.z).multiplyScalar(0.55 * piece.scale ** 3);
       b.applyImpulse(pull, true);
     }
     if (mat.current) {
@@ -101,18 +112,26 @@ function Guard({ active }: { active: boolean }) {
 
 export type HeroScore = { stopped: number; total: number };
 
+/** The pieces, laid out for the stage's visible size at the pile's depth. */
+function Pile({ still, stopped, onStop, onPieces }: { still: boolean; stopped: Set<number>; onStop: (id: number) => void; onPieces: (ids: number[]) => void }) {
+  const { viewport } = useThree();
+  const w = Math.round(viewport.width * 2) / 2, h = Math.round(viewport.height * 2) / 2;
+  const pieces = useMemo(() => makePieces(w, h), [w, h]);
+  useEffect(() => { onPieces(pieces.filter((p) => p.color === 'red').map((p) => p.id)); }, [pieces, onPieces]);
+  return <>{pieces.map((p) => <Body key={`${w}x${h}-${p.id}`} piece={p} still={still} tricked={p.color === 'red' && !stopped.has(p.id)} onStop={onStop} />)}</>;
+}
+
 export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onScore?: (s: HeroScore) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(true);
   const [pointerIn, setPointerIn] = useState(false);
-  const small = typeof window !== 'undefined' && window.innerWidth < 760;
-  const pieces = useMemo(() => makePieces(small ? 26 : 46, small ? 4 : 7), [small]);
-  const tricks = pieces.filter((p) => p.color === 'red').map((p) => p.id);
+  const [tricks, setTricks] = useState<number[]>([]);
+  const [dpr] = useState(() => budgetDpr(2.2e6, 1.5));
   const [stopped, setStopped] = useState<Set<number>>(new Set());
   useEffect(() => { onScore?.({ stopped: stopped.size, total: tricks.length }); }, [stopped, tricks.length, onScore]);
   // Every trick stopped: new tricks arrive a few seconds later.
   useEffect(() => {
-    if (stopped.size < tricks.length) return;
+    if (!tricks.length || stopped.size < tricks.length) return;
     const t = setTimeout(() => setStopped(new Set()), 4200);
     return () => clearTimeout(t);
   }, [stopped, tricks.length]);
@@ -129,13 +148,14 @@ export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onSc
   return (
     <div ref={host} className="stage-canvas" aria-hidden="true" onPointerEnter={() => setPointerIn(true)} onPointerLeave={() => setPointerIn(false)}
       onPointerDown={() => setPointerIn(true)}>
-      <Canvas dpr={[1, 1.5]} camera={{ position: [0, 0, 20], fov: 32, near: 1, far: 60 }} gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
+      <Canvas dpr={dpr} camera={{ position: [0, 0, 18], fov: 32, near: 1, far: 60 }} gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
         frameloop={reduce ? 'demand' : visible ? 'always' : 'never'} onCreated={({ gl }) => gl.setClearColor('#14161d')}>
+        <AdaptiveResolution base={dpr} />
         <ambientLight intensity={0.5} />
         <spotLight position={[18, 18, 18]} angle={0.25} penumbra={1} intensity={600} castShadow />
         <Physics gravity={[0, 0, 0]} paused={reduce || !visible} timeStep="vary">
           <Guard active={pointerIn && !reduce} />
-          {pieces.map((p) => <Body key={p.id} piece={p} still={reduce} tricked={p.color === 'red' && !stopped.has(p.id)} onStop={stop} />)}
+          <Pile still={reduce} stopped={stopped} onStop={stop} onPieces={setTricks} />
         </Physics>
         <Environment resolution={256}>
           <group rotation={[-Math.PI / 3, 0, 1]}>

@@ -12,6 +12,7 @@ import type { MotionValue } from 'motion/react';
 import * as THREE from 'three';
 import type { Pipeline } from '../lib/data';
 import { FluidFX } from './FluidFX';
+import { AdaptiveResolution, budgetDpr } from '../lib/gpu';
 
 export const STEPS = ['browser', 'service', 'queue', 'runner', 'fixtures', 'agent', 'arms', 'gateway', 'tools', 'score', 'report'] as const;
 export type StepId = (typeof STEPS)[number];
@@ -381,6 +382,7 @@ function Rig({ progress, f, onStep }: { progress: MotionValue<number>; f: F; onS
 export default function SystemModel({ pl, progress, reduce, onStep }: { pl: Pipeline; progress: MotionValue<number>; reduce: boolean; onStep: (i: number) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [dpr] = useState(() => budgetDpr(2.2e6, 1.6));
   const f = useRef<number[]>(STEPS.map(() => 0));
   useEffect(() => {
     const el = host.current; if (!el) return;
@@ -390,8 +392,9 @@ export default function SystemModel({ pl, progress, reduce, onStep }: { pl: Pipe
   const layers = [...pl.guard_layers.map((l) => l.label), 'Flow guard'];
   return (
     <div ref={host} className="sm-canvas" aria-hidden="true">
-      <Canvas dpr={[1, 1.6]} camera={{ position: [14, 46, 62], fov: 38, near: 0.1, far: 500 }} gl={{ antialias: true, powerPreference: 'high-performance' }}
+      <Canvas dpr={dpr} camera={{ position: [14, 46, 62], fov: 38, near: 0.1, far: 500 }} gl={{ antialias: true, powerPreference: 'high-performance' }}
         frameloop={reduce ? 'demand' : visible ? 'always' : 'never'} onCreated={({ gl, scene }) => { gl.setClearColor('#07080c'); scene.fog = new THREE.Fog('#07080c', 60, 150); }}>
+        <AdaptiveResolution base={dpr} />
         <ambientLight intensity={0.4} />
         <directionalLight position={[20, 30, 20]} intensity={2.2} />
         <directionalLight position={[-20, 10, -10]} intensity={0.6} color="#7f8cff" />
