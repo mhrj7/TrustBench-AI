@@ -79,7 +79,7 @@ def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from src.service.app import Service, create_app
     api = TestClient(create_app(Service(data_dir=tmp_path)))
-    def http(method, url, body=None, token=None, headers=None):
+    def http(method, url, body=None, token=None, headers=None, raise_401=False):
         r = api.request(method, urlparse(url).path, json=body, headers=headers or {})
         assert r.status_code < 400, r.text
         return r.json()
@@ -90,6 +90,34 @@ def test_remote_run_against_the_service_api(tmp_path, monkeypatch):
     out = tmp_path / 'r.json'
     assert runner.invoke(cli.app, ['remote', 'report', run_id, '--url', 'http://svc', '--out', str(out)]).exit_code == 0
     assert len(json.loads(out.read_text())['cases']) == 2
+
+
+def test_remote_replaces_an_expired_saved_session(tmp_path, monkeypatch):
+    """A saved guest session the service no longer accepts (past session_ttl_hours, or a rebuilt service) is replaced by a new
+    guest session instead of failing every command with 401; other 401s (a wrong access token) still fail."""
+    import os
+    from urllib.parse import urlparse
+    monkeypatch.setenv('TRUSTBENCH_CLI_HOME', str(tmp_path / 'cli-home'))
+    os.environ['TRUSTBENCH_SERVICE_NO_AUTOSTART'] = '1'
+    from fastapi.testclient import TestClient
+    from src.service.app import Service, create_app
+    api = TestClient(create_app(Service(data_dir=tmp_path / 'svc')))
+    def http(method, url, body=None, token=None, headers=None, raise_401=False):
+        r = api.request(method, urlparse(url).path, json=body, headers=headers or {})
+        detail = r.json().get('detail', '') if r.status_code >= 400 else ''
+        if raise_401 and r.status_code == 401 and detail.startswith('a session is required'):
+            raise cli.Unauthorized(detail)
+        assert r.status_code < 400, r.text
+        return r.json()
+    monkeypatch.setattr(cli, 'http', http)
+    cli.save_session('http://svc', 'a-token-this-service-never-issued')
+    r = runner.invoke(cli.app, ['remote', 'run', '--url', 'http://svc', '--mode', 'scripted', '--cases', 'doc-benign', '--wait'])
+    assert r.exit_code == 0, r.output
+    assert 'saved session for this service has expired' in r.output
+    fresh = cli.load_sessions()['http://svc']
+    assert fresh != 'a-token-this-service-never-issued'
+    r = runner.invoke(cli.app, ['remote', 'runs', '--url', 'http://svc'])
+    assert r.exit_code == 0 and 'expired' not in r.output and cli.load_sessions()['http://svc'] == fresh
 
 
 def test_remote_own_key_reads_the_key_from_an_environment_variable_only(monkeypatch):
@@ -109,7 +137,7 @@ def test_remote_account_flow_and_private_session_file(tmp_path, monkeypatch):
     from src.service.app import CFG as SCFG, Service, create_app
     svc = Service(data_dir=tmp_path / 'svc')
     api = TestClient(create_app(svc))
-    monkeypatch.setattr(cli, 'http', lambda method, url, body=None, token=None, headers=None: (lambda r: (r.status_code < 400 or (_ for _ in ()).throw(AssertionError(r.text))) and r.json())(
+    monkeypatch.setattr(cli, 'http', lambda method, url, body=None, token=None, headers=None, raise_401=False: (lambda r: (r.status_code < 400 or (_ for _ in ()).throw(AssertionError(r.text))) and r.json())(
         api.request(method, urlparse(url).path, json=body, headers=headers or {})))
     url = ['--url', 'http://svc']
     assert runner.invoke(cli.app, ['remote', 'run', *url, '--mode', 'scripted', '--cases', 'doc-benign', '--wait']).exit_code == 0

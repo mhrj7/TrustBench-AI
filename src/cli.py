@@ -208,7 +208,11 @@ remote = typer.Typer(help='Run benchmarks on a TrustBench live-test service (the
 app.add_typer(remote, name='remote')
 
 
-def http(method: str, url: str, body: Optional[dict] = None, token: Optional[str] = None, headers: Optional[dict] = None):
+class Unauthorized(Exception):
+    pass
+
+
+def http(method: str, url: str, body: Optional[dict] = None, token: Optional[str] = None, headers: Optional[dict] = None, raise_401: bool = False):
     import urllib.error, urllib.request
     headers = {'content-type': 'application/json', **({'x-trustbench-token': token} if token else {}), **(headers or {})}
     req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
@@ -217,6 +221,8 @@ def http(method: str, url: str, body: Optional[dict] = None, token: Optional[str
             return json.loads(r.read() or b'null')
     except urllib.error.HTTPError as e:
         detail = json.loads(e.read() or b'{}').get('detail', e.reason)
+        if raise_401 and e.code == 401 and str(detail).startswith('a session is required'):
+            raise Unauthorized(detail)
         typer.echo(f'{e.code}: {detail}', err=True)
         raise typer.Exit(1)
 
@@ -250,15 +256,23 @@ def api(method: str, url: str, path: str, body: Optional[dict] = None, token_env
     base = url.rstrip('/')
     token = os.environ.get(token_env) if token_env else None
     headers = {}
-    if session:
-        current = load_sessions().get(base)
-        if not current:
-            current = http('POST', f'{base}/api/session', None, token)['token']
-            save_session(base, current)
-        headers['Authorization'] = f'Bearer {current}'
     if share:
         headers['X-TrustBench-Share'] = share
-    return http(method, f'{base}{path}', body, token, headers)
+    if not session:
+        return http(method, f'{base}{path}', body, token, headers)
+    saved = load_sessions().get(base)
+    if saved:
+        try:
+            return http(method, f'{base}{path}', body, token, {**headers, 'Authorization': f'Bearer {saved}'}, raise_401=True)
+        except Unauthorized:
+            # The saved session expired (sessions last session_ttl_hours) or the service no longer has it: start a new guest
+            # session rather than failing every later command. An account session has to sign in again to keep its runs.
+            typer.echo('trustbench: the saved session for this service has expired; continuing with a new guest session '
+                       '(`trustbench remote login` signs back in to an account)', err=True)
+            save_session(base, None)
+    current = http('POST', f'{base}/api/session', None, token)['token']
+    save_session(base, current)
+    return http(method, f'{base}{path}', body, token, {**headers, 'Authorization': f'Bearer {current}'})
 
 
 def password_from(env: Optional[str], prompt: str) -> str:
