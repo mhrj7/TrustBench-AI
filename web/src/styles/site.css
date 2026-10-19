@@ -168,15 +168,15 @@ td.args { max-width: 520px; min-width: 260px; }
 
 /* Hero */
 .hx { padding-top: calc(var(--nav-h) + 40px); }
-.hx-top { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: var(--space-48); align-items: end; margin-bottom: var(--space-32); }
-.hx-title { max-width: 11ch; }
-.hx-side { display: flex; flex-direction: column; gap: var(--space-24); padding-bottom: 10px; }
+/* One column at every width (title, then the lede and actions), as on narrower screens: it reads best on wide ones too. */
+.hx-top { display: grid; grid-template-columns: 1fr; gap: var(--space-24); margin-bottom: var(--space-32); }
+.hx-title { max-width: 12ch; font-size: clamp(44px, 6.2vw, 96px); }
+.hx-side { display: flex; flex-direction: column; gap: var(--space-24); max-width: 560px; }
 .hx-side .body { max-width: 40ch; }
-@media (max-width: 1024px) { .hx-top { grid-template-columns: 1fr; gap: var(--space-24); } }
 @media (max-width: 640px) { .hx-title { font-size: clamp(40px, 11.5vw, 54px); } }
 .stage { position: relative; height: min(76svh, 820px); min-height: 440px; border-radius: var(--radius-lg); overflow: hidden; background: var(--stage); isolation: isolate; }
-.stage-canvas { position: absolute; inset: 0; cursor: none; touch-action: pan-y; }
-@media (pointer: coarse) { .stage-canvas { cursor: auto; } }
+.stage-canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
+.stage-canvas:active { cursor: grabbing; }
 .stage-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
 .stage-tag, .stage-hint, .stage-score { position: absolute; z-index: 2; margin: 0; pointer-events: none; color: #fff; font-size: 13px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
 .stage-tag { top: 22px; left: 24px; display: inline-flex; align-items: center; gap: 10px; }

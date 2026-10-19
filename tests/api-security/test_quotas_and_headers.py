@@ -50,6 +50,14 @@ def test_security_headers_no_store_and_size_limit(world):
     assert u.post('/api/session', content=b'x' * (CFG['max_request_bytes'] + 1), headers={'content-length': str(CFG['max_request_bytes'] + 1)}).status_code == 413
 
 
+def test_pages_are_revalidated_and_hashed_assets_kept(world):
+    # A browser must never keep an old page (with its old security policy) pointing at assets from an earlier build.
+    u = world.user('u')
+    assert u.get('/').headers['cache-control'] == 'no-cache'
+    assert u.get('/how').headers['cache-control'] == 'no-cache'
+    assert u.get('/assets/index-0000.js').headers['cache-control'] == 'public, max-age=31536000, immutable'
+
+
 def test_unauthenticated_account_actions_fail(world):
     u = world.user('u')
     assert u.get('/api/auth/me').status_code == 401
