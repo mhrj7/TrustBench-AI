@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MotionValue } from 'motion/react';
 import * as THREE from 'three';
 import type { Pipeline } from '../lib/data';
+import { FluidFX } from './FluidFX';
 
 export const STEPS = ['browser', 'service', 'queue', 'runner', 'fixtures', 'agent', 'arms', 'gateway', 'tools', 'score', 'report'] as const;
 export type StepId = (typeof STEPS)[number];
@@ -414,6 +415,7 @@ export default function SystemModel({ pl, progress, reduce, onStep }: { pl: Pipe
         <Node id="report" f={f}>{(o) => <Report open={o} />}</Node>
         <Links f={f} gates={layers.length} />
         <Rig progress={progress} f={f} onStep={onStep} />
+        {!reduce && <FluidFX />}
       </Canvas>
     </div>
   );

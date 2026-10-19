@@ -6,7 +6,7 @@ import { loadHeadline, loadSpans, runPath, useAsync, useDataset, type Dataset, t
 import { Bento, Card, Eyebrow } from '../components/Bento';
 import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
-import { ASTRONAUT_CREDIT, ASTRONAUT_URL } from '../lib/models';
+import { ASTRONAUT_CREDIT, ASTRONAUT_URL, WAVE_CREDIT, WAVE_URL } from '../lib/models';
 import { CountUp, Reveal } from '../components/Motion';
 import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
@@ -15,7 +15,11 @@ import { useEvidence } from '../components/Shell';
 import { TimedWaterfall } from '../components/Waterfall';
 import { Loading } from './Common';
 
-const PhysicsHero = lazy(() => import('../components/PhysicsHero'));
+// The hero's 3D code is the heaviest download on the page: start fetching it as soon as the app boots on the home page,
+// instead of waiting for the hero to render.
+const loadHero = () => import('../components/PhysicsHero');
+const heroEarly = typeof window !== 'undefined' && window.location.pathname === '/' ? loadHero() : null;
+const PhysicsHero = lazy(() => heroEarly ?? loadHero());
 const Journey = lazy(() => import('../components/Journey'));
 const StickerSpace = lazy(() => import('../components/StickerSpace'));
 const SpaceGradient = lazy(() => import('../components/Shaders').then((m) => ({ default: m.SpaceGradient })));
@@ -107,8 +111,6 @@ function OverviewBody({ d }: { d: Dataset }) {
 
       {h.state === 'ready' && <Results h={h.value} />}
 
-      {h.state === 'ready' && ASTRONAUT_URL && <JourneySection h={h.value} runs={runs.length} modelUrl={ASTRONAUT_URL} />}
-
       <section className="section wrap" aria-labelledby="work-title">
         <div className="work-head">
           <h2 id="work-title" className="headline">The evidence</h2>
@@ -144,6 +146,8 @@ function OverviewBody({ d }: { d: Dataset }) {
 
       <UtilityCost d={d} fp={fp} />
 
+      {h.state === 'ready' && ASTRONAUT_URL && <JourneySection h={h.value} runs={runs.length} modelUrl={ASTRONAUT_URL} />}
+
       <SpaceCta />
     </>
   );
@@ -155,13 +159,13 @@ function SpaceCta() {
   const reduce = !!useReducedMotion();
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
-      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>
+      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={WAVE_URL ?? ASTRONAUT_URL} /></Suspense>
       <div className="space-copy wrap">
         <p className="caps">Think you can beat it?</p>
         <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
         <p className="body">Run the same comparison in your browser: instantly with no model, live on our free-tier key, or with your own key.</p>
         <div className="row"><Link className="btn btn-light roll-host" to="/live"><span className="btn-dot" /><Roll>Run it live</Roll></Link><Link className="btn btn-ghost roll-host" to="/method"><Roll>How to check a number</Roll></Link></div>
-        {ASTRONAUT_URL && <p className="space-credit small">Astronaut: <a href={ASTRONAUT_CREDIT.url}>{ASTRONAUT_CREDIT.title}</a> by {ASTRONAUT_CREDIT.author}, {ASTRONAUT_CREDIT.license}.</p>}
+        {(WAVE_URL || ASTRONAUT_URL) && <p className="space-credit small">Astronaut: {(() => { const c = WAVE_URL ? WAVE_CREDIT : ASTRONAUT_CREDIT; return <><a href={c.url}>{c.title}</a> by {c.author}, {c.license}.</>; })()}</p>}
       </div>
     </section>
   );
@@ -239,6 +243,7 @@ function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; mode
               ))}
             </motion.div>
             <motion.div className="journey-flash" style={{ opacity: flash }} />
+            <Shatter p={p} />
             <div className="journey-copy">
               <AnimatePresence mode="wait">
                 {cur && (
@@ -257,6 +262,44 @@ function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; mode
       </div>
     </section>
   );
+}
+
+/** The screen breaking as the astronaut comes through it: shards cut from the glass around the point of impact fly outward
+ *  and spin, driven by the scroll (so the break plays forward and backward with it). */
+const SHARDS = (() => {
+  const rnd = (() => { let x = 41; return () => ((x = (x * 16807) % 2147483647) - 1) / 2147483646; })();
+  const c: [number, number] = [50, 54], ring: [number, number][] = [];
+  const N = 14;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2 + rnd() * 0.3, r = 120;
+    ring.push([Math.max(-5, Math.min(105, c[0] + Math.cos(a) * r)), Math.max(-5, Math.min(105, c[1] + Math.sin(a) * r))]);
+  }
+  const out: { poly: string; dx: number; dy: number; rot: number }[] = [];
+  ring.forEach((pt, i) => {
+    const nx = ring[(i + 1) % N], mid: [number, number] = [c[0] + (pt[0] - c[0]) * (0.35 + rnd() * 0.25), c[1] + (pt[1] - c[1]) * (0.35 + rnd() * 0.25)];
+    const tri = (a: [number, number], b: [number, number], d: [number, number]) => {
+      const cx = (a[0] + b[0] + d[0]) / 3 - c[0], cy = (a[1] + b[1] + d[1]) / 3 - c[1], l = Math.hypot(cx, cy) || 1;
+      out.push({ poly: `polygon(${a[0]}% ${a[1]}%, ${b[0]}% ${b[1]}%, ${d[0]}% ${d[1]}%)`, dx: (cx / l) * (60 + rnd() * 60), dy: (cy / l) * (60 + rnd() * 60), rot: (rnd() - 0.5) * 140 });
+    };
+    tri(c, mid, nx); tri(mid, pt, nx);
+  });
+  return out;
+})();
+
+function Shatter({ p }: { p: MotionValue<number> }) {
+  const s = useTransform(p, [0.875, 0.95], [0, 1], { clamp: true });
+  const crack = useTransform(p, [0.86, 0.875, 0.95], [0, 1, 0]);
+  return (
+    <motion.div className="shatter" aria-hidden="true" style={{ opacity: crack }}>
+      {SHARDS.map((sh, i) => <Shard key={i} sh={sh} s={s} />)}
+    </motion.div>
+  );
+}
+
+function Shard({ sh, s }: { sh: (typeof SHARDS)[number]; s: MotionValue<number> }) {
+  const x = useTransform(s, (v) => `${sh.dx * v}vw`), y = useTransform(s, (v) => `${sh.dy * v}vh`), rotate = useTransform(s, (v) => sh.rot * v);
+  const scale = useTransform(s, [0, 1], [1, 1.3]);
+  return <motion.span className="shard" style={{ clipPath: sh.poly, x, y, rotate, scale }} />;
 }
 
 /** One word of the "step inside" line; words move away from the centre as the line spreads. */

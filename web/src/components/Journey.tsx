@@ -6,6 +6,8 @@
 // The astronaut is a downloaded model (lib/models.ts). The loop pauses off screen and renders one frame under reduced motion.
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, useGLTF } from '@react-three/drei';
+import { Bloom } from '@react-three/postprocessing';
+import { FluidFX } from './FluidFX';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { MotionValue } from 'motion/react';
 import * as THREE from 'three';
@@ -35,9 +37,13 @@ function Astronaut({ url, p }: { url: string; p: P }) {
     if (!el) return;
     const z = cameraZ(v);
     // In space it floats in front of the camera and slowly recedes; in the tunnel and corridor it flies just ahead.
-    const ahead = v < 0.42 ? 7 + smooth(0.22, 0.42, v) * 14 : 9;
-    el.position.set(Math.sin(t * 0.4) * 0.3, -0.2 + Math.sin(t * 0.8) * 0.18, z - ahead);
-    el.rotation.set(-0.15 + (v > 0.42 ? -0.9 : 0) + Math.sin(t * 0.6) * 0.05, Math.sin(t * 0.3) * 0.5 + (v > 0.42 ? Math.PI : 0), Math.sin(t * 0.5) * 0.12);
+    // At the end it turns and comes straight at the camera: out through the glass (the page shatters the screen).
+    const out = smooth(0.84, 0.93, v);
+    const ahead = (v < 0.42 ? 7 + smooth(0.22, 0.42, v) * 14 : 9) * (1 - out) + 0.6 * out;
+    el.position.set(Math.sin(t * 0.4) * 0.3 * (1 - out), -0.2 + Math.sin(t * 0.8) * 0.18 - out * 0.6, z - ahead);
+    el.visible = v < 0.935;
+    const out2 = smooth(0.84, 0.9, v);
+    el.rotation.set(-0.15 + (v > 0.42 ? -0.9 * (1 - out2) : 0) + Math.sin(t * 0.6) * 0.05, Math.sin(t * 0.3) * 0.5 * (1 - out2) + (v > 0.42 ? Math.PI * (1 - out2) : 0), Math.sin(t * 0.5) * 0.12);
   });
   return (
     <group ref={g}>
@@ -77,50 +83,72 @@ function Stars({ count }: { count: number }) {
   return <points geometry={geo}><pointsMaterial size={0.14} color="#ffffff" transparent opacity={0.85} depthWrite={false} /></points>;
 }
 
-/** The chrome lattice: rings of struts on a cylinder; each ring ("lane") turns its own way as you scroll. */
+/** The block tunnel, after the reference site: rings of dark glossy blocks of varied size around the flight path, each with
+ *  glowing inset panels whose colour shifts along the tunnel and with the scroll (pink, violet, cyan). Neighbouring rings
+ *  turn in opposite directions, and a bright burst waits at the far end. Bloom (in the canvas) makes the panels glow. */
 function Lattice({ p }: { p: P }) {
-  const group = useRef<THREE.Group>(null);
-  const BANDS = 32, NODES = 10, R = 6.5, STEP = (TUNNEL_START - TUNNEL_END) / BANDS;
-  const strut = useMemo(() => new THREE.CylinderGeometry(0.09, 0.09, 1, 6, 1), []);
-  const chrome = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#d9dcea', metalness: 1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1.4 }), []);
-  const glowPink = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ff4fa3', toneMapped: false }), []);
-  const glowBlue = useMemo(() => new THREE.MeshBasicMaterial({ color: '#57d1ff', toneMapped: false }), []);
-  const bands = useMemo(() => {
-    const up = new THREE.Vector3(0, 1, 0), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), mid = new THREE.Vector3(), dir = new THREE.Vector3();
-    const node = (i: number, z: number, twist: number) => { const a = (i / NODES) * Math.PI * 2 + twist; return new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, z); };
-    const place = (a: THREE.Vector3, b: THREE.Vector3, w = 1) => {
-      mid.addVectors(a, b).multiplyScalar(0.5); dir.subVectors(b, a); q.setFromUnitVectors(up, dir.clone().normalize()); s.set(w, dir.length(), w);
-      return m.compose(mid, q, s).clone();
-    };
-    return Array.from({ length: BANDS }, (_, k) => {
-      const z0 = TUNNEL_START - k * STEP, z1 = z0 - STEP, tw = (k % 2) * (Math.PI / NODES);
-      const mats: THREE.Matrix4[] = [], glow: THREE.Matrix4[] = [];
-      for (let i = 0; i < NODES; i++) {
-        const a = node(i, z0, tw), b = node(i + 1, z0, tw), c = node(i, z1, tw + Math.PI / NODES), d = node(i + 1, z1, tw + Math.PI / NODES);
-        mats.push(place(a, b), place(a, c), place(b, c));
-        if ((i + k) % 4 === 0) glow.push(place(a.clone().multiplyScalar(0.985), d.clone().multiplyScalar(0.985), 0.45));
+  const group = useRef<THREE.Group>(null), burst = useRef<THREE.Mesh>(null);
+  const RINGS = 34, PER = 18, R = 6.2, STEP = (TUNNEL_START - TUNNEL_END) / RINGS;
+  const box = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+  const dark = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#0d0e16', metalness: 0.4, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 1.2 }), []);
+  const glowMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), []);
+  const rings = useMemo(() => {
+    const rnd = seeded(23), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), pos = new THREE.Vector3(), sc = new THREE.Vector3();
+    return Array.from({ length: RINGS }, (_, k) => {
+      const z = TUNNEL_START - k * STEP, blocks: THREE.Matrix4[] = [], panels: THREE.Matrix4[] = [], hues: number[] = [];
+      for (let i = 0; i < PER; i++) {
+        if (rnd() < 0.12) continue;                                    // gaps, so the walls read as separate blocks
+        const a = (i / PER) * Math.PI * 2 + rnd() * 0.12, depth = 0.6 + rnd() * 2.2, w = 1.4 + rnd() * 1.4, len = STEP * (0.5 + rnd() * 0.9);
+        const rr = R + depth / 2 + rnd() * 0.6;
+        pos.set(Math.cos(a) * rr, Math.sin(a) * rr, z + (rnd() - 0.5) * STEP * 0.4);
+        e.set(rnd() * 0.12, rnd() * 0.12, a + Math.PI / 2); q.setFromEuler(e); sc.set(w, depth, len);
+        blocks.push(m.compose(pos, q, sc).clone());
+        // One or two glowing panels on the inner face of the block: thin plates, slightly proud of the surface.
+        const n = rnd() < 0.55 ? 1 : 2;
+        for (let j = 0; j < n; j++) {
+          const inner = rr - depth / 2 - 0.02, off = (j - (n - 1) / 2) * w * 0.4;
+          const tang = new THREE.Vector3(-Math.sin(a), Math.cos(a), 0).multiplyScalar(off);
+          pos.set(Math.cos(a) * inner, Math.sin(a) * inner, z).add(tang);
+          sc.set(w * (n === 1 ? 0.7 : 0.32) * (0.6 + rnd() * 0.4), 0.05, len * (0.3 + rnd() * 0.6));
+          panels.push(m.compose(pos, q, sc).clone());
+          hues.push(rnd());
+        }
       }
-      return { mats, glow, dir: k % 2 ? 1 : -1, speed: 0.6 + (k % 3) * 0.35 };
+      return { blocks, panels, hues, dir: k % 2 ? 1 : -1, speed: 0.5 + (k % 3) * 0.3 };
     });
-  }, [BANDS, STEP]);
-  const refs = useRef<(THREE.Group | null)[]>([]);
+  }, [RINGS, STEP]);
+  const groups = useRef<(THREE.Group | null)[]>([]), panelMeshes = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const col = useMemo(() => new THREE.Color(), []);
+  const PINK = useMemo(() => new THREE.Color('#ff3d9a'), []), VIOLET = useMemo(() => new THREE.Color('#8b5cff'), []), CYAN = useMemo(() => new THREE.Color('#38d9ff'), []);
   useFrame(({ clock }) => {
     const v = p.current, t = clock.elapsedTime;
     if (group.current) group.current.visible = v > 0.34 && v < 0.84;
-    bands.forEach((b, i) => { const g = refs.current[i]; if (g) g.rotation.z = b.dir * (v * 9 * b.speed + t * 0.05 * b.speed); });
+    rings.forEach((r, i) => {
+      const g = groups.current[i]; if (g) g.rotation.z = r.dir * (v * 7 * r.speed + t * 0.04 * r.speed);
+      const im = panelMeshes.current[i]; if (!im) return;
+      // Colour along the tunnel and with the scroll: pink near the entrance, violet, then cyan deeper in; panels flicker.
+      r.hues.forEach((h, j) => {
+        const u = (i / RINGS + v * 1.4 + h * 0.25) % 1;
+        if (u < 0.5) col.copy(PINK).lerp(VIOLET, u * 2); else col.copy(VIOLET).lerp(CYAN, (u - 0.5) * 2);
+        col.multiplyScalar(1.6 + Math.sin(t * 3 + h * 30) * 0.5 + 0.5);
+        im.setColorAt(j, col);
+      });
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    });
+    if (burst.current) { const near = smooth(0.6, 0.78, v); burst.current.scale.setScalar(4 + near * 26 + Math.sin(t * 2) * 0.6); (burst.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + near * 0.65; }
   });
   return (
     <group ref={group}>
-      {bands.map((b, i) => (
-        <group key={i} ref={(el) => { refs.current[i] = el; }}>
-          <instancedMesh args={[strut, chrome, b.mats.length]} onUpdate={(im) => { b.mats.forEach((m, j) => im.setMatrixAt(j, m)); im.instanceMatrix.needsUpdate = true; }} />
-          {b.glow.length > 0 && (
-            <instancedMesh args={[strut, i % 2 ? glowPink : glowBlue, b.glow.length]} onUpdate={(im) => { b.glow.forEach((m, j) => im.setMatrixAt(j, m)); im.instanceMatrix.needsUpdate = true; }} />
-          )}
+      {rings.map((r, i) => (
+        <group key={i} ref={(el) => { groups.current[i] = el; }}>
+          <instancedMesh args={[box, dark, r.blocks.length]} onUpdate={(im) => { r.blocks.forEach((m, j) => im.setMatrixAt(j, m)); im.instanceMatrix.needsUpdate = true; }} />
+          <instancedMesh ref={(el) => { panelMeshes.current[i] = el; }} args={[box, glowMat, r.panels.length]}
+            onUpdate={(im) => { r.panels.forEach((m, j) => { im.setMatrixAt(j, m); im.setColorAt(j, new THREE.Color('#ff3d9a')); }); im.instanceMatrix.needsUpdate = true; }} />
         </group>
       ))}
-      <pointLight position={[0, 0, -60]} color="#ff4fa3" intensity={120} distance={60} />
-      <pointLight position={[0, 0, -130]} color="#57d1ff" intensity={120} distance={60} />
+      <mesh ref={burst} position={[0, 0, TUNNEL_END - 6]}><circleGeometry args={[1, 64]} /><meshBasicMaterial color="#e8f4ff" transparent opacity={0.4} toneMapped={false} /></mesh>
+      <pointLight position={[0, 0, -60]} color="#ff3d9a" intensity={140} distance={60} />
+      <pointLight position={[0, 0, -130]} color="#38d9ff" intensity={140} distance={60} />
     </group>
   );
 }
@@ -209,6 +237,7 @@ export default function Journey({ progress, reduce, modelUrl }: { progress: Moti
         <Corridor p={p} />
         <Suspense fallback={null}><Astronaut url={modelUrl} p={p} /></Suspense>
         <Rig progress={progress} p={p} />
+        {!reduce && <FluidFX><Bloom intensity={1.4} luminanceThreshold={0.6} luminanceSmoothing={0.2} mipmapBlur radius={0.75} /></FluidFX>}
       </Canvas>
     </div>
   );

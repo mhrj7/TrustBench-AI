@@ -4,8 +4,9 @@
 // stops off screen, and the heap lies still under reduced motion.
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { BallCollider, CuboidCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
-import { useGLTF } from '@react-three/drei';
+import { useAnimations, useGLTF } from '@react-three/drei';
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { FluidFX } from './FluidFX';
 import * as THREE from 'three';
 import { STICKERS } from './stickers';
 
@@ -41,22 +42,35 @@ function Bounds() {
   );
 }
 
-/** The astronaut model, floating above the heap and turning slowly. */
+/** The astronaut arrives from the journey: it drops in from above, lands on the sticker heap and waves. A rigged model
+ *  plays its own wave; the plain model rocks a hello. */
 function Floater({ url }: { url: string }) {
   const g = useRef<THREE.Group>(null);
-  const { scene } = useGLTF(url);
+  const { scene, animations } = useGLTF(url);
   const { viewport } = useThree();
-  const model = useMemo(() => scene.clone(true), [scene]);
+  const model = useMemo(() => (animations.length ? scene : scene.clone(true)), [scene, animations.length]);
+  const { actions } = useAnimations(animations, g);
+  const born = useRef<number | null>(null);
   const fit = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    return { s: (viewport.height * 0.26) / Math.max(size.y, 1e-3), c };
+    return { s: (viewport.height * 0.3) / Math.max(size.y, 1e-3), c };
   }, [model, viewport.height]);
+  useEffect(() => {
+    const clip = Object.keys(actions).find((n) => /wave|hello|greet/i.test(n)) ?? Object.keys(actions)[0];
+    if (clip) actions[clip]?.reset().fadeIn(0.4).play();
+  }, [actions]);
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    if (g.current) { g.current.position.y = viewport.height * 0.3 + Math.sin(t * 0.8) * 0.25; g.current.rotation.y = Math.sin(t * 0.25) * 0.6; g.current.rotation.z = Math.sin(t * 0.5) * 0.08; }
+    const el = g.current; if (!el) return;
+    if (born.current === null) born.current = clock.elapsedTime;
+    const t = clock.elapsedTime - born.current, land = Math.min(1, t / 2.2), e = 1 - Math.pow(1 - land, 3);
+    const top = viewport.height * 0.9, rest = -viewport.height * 0.06;
+    el.position.y = top + (rest - top) * e + (land >= 1 ? Math.sin(t * 1.2) * 0.08 : 0);
+    el.rotation.y = Math.sin(t * 0.3) * 0.35;
+    // Without its own animation, the model says hello by rocking side to side for a few seconds after it lands.
+    if (!animations.length) el.rotation.z = land >= 1 ? Math.sin(t * 5) * 0.16 * Math.max(0, 1 - (t - 2.2) / 5) : 0;
   });
   return (
-    <group ref={g} position={[0, 0, -4]}>
+    <group ref={g} position={[viewport.width * (viewport.aspect > 1 ? 0.3 : 0.18), viewport.height, -2]}>
       <primitive object={model} scale={fit.s} position={[-fit.c.x * fit.s, -fit.c.y * fit.s, -fit.c.z * fit.s]} />
     </group>
   );
@@ -123,6 +137,7 @@ export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boo
             {!reduce && <Pointer />}
             <Suspense fallback={null}><Heap count={small ? 30 : 64} /></Suspense>
           </Physics>
+          {!reduce && <FluidFX />}
         </Canvas>
       )}
     </div>
