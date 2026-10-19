@@ -1,7 +1,7 @@
 // Whether the 3D scenes should run in their light form: the person asked for reduced motion, or the browser has no
 // graphics processor and draws WebGL in software (SwiftShader, llvmpipe and the like), where a full scene takes seconds
 // per frame and freezes the page. The light form is the same as under reduced motion: still scenes and the journey as a
-// plain list. Kept apart from lib/gpu.ts so the page does not pull the 3D libraries into the main bundle.
+// plain list (and, without a graphics processor, the heaviest scenes are not mounted at all). Kept apart from lib/gpu.ts so the page does not pull the 3D libraries into the main bundle.
 import { useReducedMotion } from 'motion/react';
 
 export const SOFTWARE_GL: boolean = (() => {
