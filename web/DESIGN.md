@@ -52,8 +52,9 @@ opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.j
 
 Across the site: **water** under the cursor or finger, from one shared field (`lib/fluid.ts`), as on the reference site: every
 browser draws the wake as a light, smoky WebGL trail over the page (`components/Water.tsx`) and every 3D scene bends what it
-draws by the same field with a thin rainbow edge (`components/FluidFX.tsx`, a postprocessing effect). The page's text is
-not refracted (as on the reference site; a full-window SVG filter halved Chrome's frame rate). Every canvas draws within a
+draws by the same field with a thin rainbow edge (`components/FluidFX.tsx`, a postprocessing effect). In Chromium with a
+mouse the page under the water ripples too: an SVG displacement filter as `backdrop-filter` on a box around the moving
+water only (filtering the whole window halved Chrome's frame rate). Every canvas draws within a
 pixel budget and lowers its resolution while frames are slow (`lib/gpu.ts`). A browser without a graphics processor
 (WebGL drawn in software, as on CI runners) gets the light form, as under reduced motion (`lib/lite3d.ts`). **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
