@@ -297,6 +297,36 @@ td.args { max-width: 520px; min-width: 260px; }
 .reel-play { position: relative; z-index: 3; display: inline-flex; align-items: center; gap: 14px; height: 64px; padding: 0 30px 0 12px; border-radius: var(--radius-pill); background: #fff; color: var(--ink); text-decoration: none;
   font-size: 13px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; transition: transform var(--dur-quick) var(--ease-out); }
 .reel-play:active { transform: scale(0.96); }
+button.reel-play { border: 0; cursor: pointer; font-family: inherit; }
+
+/* Launch film: full-screen player (components/FilmPlayer.tsx) */
+.film { position: fixed; inset: 0; z-index: 1000; background: #000; color: #fff; cursor: none; overscroll-behavior: contain; }
+.film-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.film-missing { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; font-size: var(--size-body); color: rgba(255, 255, 255, 0.7); text-align: center; padding: 0 24px; }
+.film [data-film-control] { cursor: pointer; }
+.film-mark { position: absolute; left: 48px; top: 44px; width: 40px; height: 40px; border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 10px; color: #fff; display: grid; place-items: center; }
+.film-mark svg { width: 28px; height: 28px; }
+.film-cta { position: absolute; right: 48px; top: 44px; height: 40px; padding: 0 20px; border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: var(--radius-pill); color: #fff; text-decoration: none;
+  display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.film-cta:hover, .film-mark:hover { background: #fff; color: #000; }
+.film-bar { position: absolute; left: 0; right: 0; bottom: 36px; display: flex; align-items: center; gap: 40px; padding: 0 15%; }
+.film-btn { background: none; border: 0; padding: 8px 0; color: #fff; font: inherit; font-size: 17px; letter-spacing: 0.02em; text-transform: uppercase; min-width: 64px; }
+.film-btn:last-child { text-align: right; }
+.film-track { position: relative; flex: 1; height: 24px; display: flex; align-items: center; touch-action: none; }
+.film-track::before { content: ''; position: absolute; left: 0; right: 0; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.28); }
+.film-fill { position: absolute; left: 0; right: 0; height: 5px; border-radius: 3px; background: #fff; transform-origin: 0 50%; }
+.film-track:focus-visible, .film-btn:focus-visible, .film-cta:focus-visible, .film-mark:focus-visible, .film-close:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.film-cursor { position: fixed; left: 0; top: 0; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; background: #fff; color: #0d0e13; display: grid; place-items: center; pointer-events: none; }
+.film-cursor svg, .film-close svg { width: 44px; height: 44px; }
+.film-close { border: 0; background: #fff; color: #0d0e13; border-radius: 50%; display: grid; place-items: center; }
+.film-close.is-fixed { position: absolute; right: 20px; top: 20px; width: 56px; height: 56px; }
+.film-close.is-fixed svg { width: 24px; height: 24px; }
+.film-close.is-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+.film-close.is-sr:focus-visible { clip-path: none; width: 56px; height: 56px; right: 20px; top: 92px; overflow: visible; }
+@media (max-width: 640px) {
+  .film-mark { left: 20px; top: 20px; } .film-cta { right: 88px; top: 28px; height: 36px; }
+  .film-bar { padding: 0 20px; gap: 16px; bottom: 24px; } .film-btn { font-size: 16px; min-width: 56px; }
+}
 .reel-play-icon { width: 42px; height: 42px; border-radius: 50%; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
 .sim-card { background: var(--stage); color: #fff; border-radius: var(--radius-lg); overflow: hidden; }
 
