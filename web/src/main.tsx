@@ -1,6 +1,6 @@
-import '@fontsource-variable/geist';
+import '@fontsource-variable/google-sans';
 import 'lenis/dist/lenis.css';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/google-sans-code';
 import './styles/base.css';
 import './styles/site.css';
 import { StrictMode, Suspense, lazy } from 'react';
