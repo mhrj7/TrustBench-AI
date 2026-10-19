@@ -495,7 +495,7 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 /* The 3D system model (components/SystemModel.tsx), pinned while you scroll */
 .sm { position: relative; height: 1300vh; margin-top: var(--space-64); }
 .sm-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #07080c; color: #fff; }
-.sm-canvas { position: absolute; inset: 0; }
+.sm-canvas { position: absolute; inset: 0; z-index: 0; isolation: isolate; }   /* the scene's labels stay beneath the caption */
 .sm-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
 .sm-copy { position: absolute; inset: auto 0 0 0; z-index: 20; padding-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
 .sm-copy::before { content: ''; position: absolute; inset: -160px -50vw 0 -50vw; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.85)); }
@@ -510,7 +510,7 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 .sm-code a { color: rgba(255, 255, 255, 0.55); text-decoration: none; }
 .sm-code a:hover { color: #fff; }
 .sm-dots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.sm-dots li { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background-color var(--dur-standard) ease; }
+.sm-dots li { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background-color var(--dur-standard) ease; }
 .sm-dots li.on { background: #fff; }
 .sm-label-wrap { pointer-events: none; }
 .sm-label { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; border-radius: 999px; white-space: nowrap; font-family: var(--font-sans);
@@ -521,6 +521,12 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 .sm-list { list-style: none; margin: 48px 0 0; padding: 0; display: grid; gap: 40px; }
 @media (max-width: 640px) {
   .sm-copy { padding-bottom: 20px; }
+  /* Phones: the caption takes the full width and a few lines; the replay button sits in the top corner. */
+  .sm-side { top: calc(var(--nav-h) + 12px); bottom: auto; right: 16px; }
+  .sm-replay { padding: 8px 14px; font-size: 12px; }
+  .sm-cap .body { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  /* The bottom spacing is a border in the box's own colour: padding would sit inside the clip and show a cut line. */
+  .sm-case { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; padding: 10px 12px 0; border: 0; border-bottom: 10px solid rgba(255, 255, 255, 0.07); background-clip: padding-box; }
   .sm-copy::before { inset: -40px -50vw 0 -50vw; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.92) 28%); }
   .sm-dots { display: none; }
   .sm-cap { gap: 8px; }
@@ -529,6 +535,19 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
   .sm-more, .sm-code { display: none; }
 }
 .sm-tag { padding: 2px 8px; border-radius: 6px; background: rgba(13, 14, 19, 0.7); color: rgba(255, 255, 255, 0.85); font-size: 11px; white-space: nowrap; font-family: var(--font-mono); }
+.sm-tag.is-red { background: rgba(239, 59, 36, 0.85); color: #fff; }
+.sm-tag.is-blue { background: rgba(36, 51, 255, 0.85); color: #fff; }
+.sm-tag.is-planned { background: transparent; border: 1px dashed rgba(255, 255, 255, 0.4); }
+.sm-label.is-blue { border-color: rgba(107, 123, 255, 0.8); }
+.sm-case { margin: 0; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.86); font-size: 15px; line-height: 1.45; }
+.sm-case .caps { display: block; margin-bottom: 4px; color: rgba(255, 255, 255, 0.55); font-size: 11px; }
+.sm-case code, .sm-cap .body code { font-size: 12.5px; background: rgba(255, 255, 255, 0.1); padding: 1px 6px; border-radius: 6px; margin-right: 4px; }
+.sm-case a { color: #fff; }
+.sm-red { color: #ff8a7a; }
+.sm-side { position: absolute; z-index: 21; right: var(--margin); bottom: 40px; display: flex; flex-direction: column; align-items: flex-end; gap: 16px; pointer-events: auto; }
+.sm-replay { white-space: nowrap; }
+.sm-dots button { all: unset; display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
+.sm-dots li { cursor: pointer; }
 .water-wake { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 69; pointer-events: none; }
 /* The ripple of the page under the water (Chromium): a box that follows the moving water. */
 .water { position: fixed; inset: 0; z-index: 68; pointer-events: none; overflow: hidden; }
@@ -536,3 +555,4 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
    the map's outer cells are still water (components/Water.tsx). */
 .water-layer { position: absolute; pointer-events: none; }
 
+.how-credits { margin-top: var(--space-16); }
