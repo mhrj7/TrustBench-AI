@@ -8,7 +8,7 @@ import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
 import { ASTRONAUT_CREDIT, ASTRONAUT_URL, EARTH_URL, IMAC_URL, IPAD_URL, JOURNEY_CREDITS, JOURNEY_READY } from '../lib/models';
 import { T } from '../lib/journey';
-import { useLite3D } from '../lib/lite3d';
+import { SOFTWARE_GL, useLite3D } from '../lib/lite3d';
 import { CountUp, Reveal } from '../components/Motion';
 import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
@@ -72,7 +72,8 @@ function OverviewBody({ d }: { d: Dataset }) {
           </motion.div>
         </div>
         <motion.div className="stage" initial={{ opacity: 0, scale: reduce ? 1 : 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ ...SPRING, duration: 0.9, delay: 0.1 }}>
-          <Suspense fallback={<div className="stage-canvas" aria-hidden="true" />}><PhysicsHero reduce={reduce} onScore={setScore} /></Suspense>
+          {/* Without a graphics processor even one still frame of the physics scene takes many seconds, so it is skipped. */}
+          {SOFTWARE_GL ? <div className="stage-canvas" aria-hidden="true" /> : <Suspense fallback={<div className="stage-canvas" aria-hidden="true" />}><PhysicsHero reduce={reduce} onScore={setScore} /></Suspense>}
           <p className="stage-tag"><span className="dot-red" />Red pieces are hidden tricks</p>
           <p className="stage-hint">{reduce ? 'Motion is reduced: the pile stands still.' : touch ? 'Drag across the pile. Your finger is the guard.' : 'Move your cursor through the pile. You are the guard.'}</p>
           <p className="stage-score" aria-live="polite"><span className="num">{score.stopped}</span> of {score.total} tricks stopped</p>
@@ -160,7 +161,7 @@ function SpaceCta() {
   const reduce = useLite3D();
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
-      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>
+      {!SOFTWARE_GL && <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>}
       <div className="space-copy wrap">
         <p className="caps">Think you can beat it?</p>
         <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
