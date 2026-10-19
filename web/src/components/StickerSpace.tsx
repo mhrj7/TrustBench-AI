@@ -144,7 +144,7 @@ export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boo
           <Physics gravity={[0, -16, 0]} paused={reduce || !visible} timeStep="vary">
             <Bounds />
             {!reduce && <Pointer />}
-            <Suspense fallback={null}><Heap count={small ? 56 : 120} /></Suspense>
+            <Suspense fallback={null}><Heap count={small ? 81 : 174} /></Suspense>
           </Physics>
           {!reduce && <FluidFX />}
         </Canvas>

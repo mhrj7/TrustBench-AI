@@ -11,7 +11,7 @@
 // whole screen from the part of it that fills the viewport. The loop pauses off screen; under reduced motion the page shows
 // a static list instead (Overview.tsx).
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Lightformer, PerspectiveCamera, RenderTexture, useAnimations, useGLTF } from '@react-three/drei';
+import { Environment, Lightformer, PerspectiveCamera, Preload, RenderTexture, useAnimations, useGLTF } from '@react-three/drei';
 import { Bloom } from '@react-three/postprocessing';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { FluidFX } from './FluidFX';
@@ -296,7 +296,8 @@ function Lattice({ p, dense }: { p: React.MutableRefObject<number>; dense: boole
     };
     for (let z = GRID_START; z > GRID_END; z -= C) {
       const t = 0.11;
-      for (const u of LINES) { put(beams, 0, u, z, span, t, t); put(beams, u, 0, z, t, span, t); }
+      // The two directions of a grid differ in depth, so their faces never coincide where they cross (no z-fighting).
+      for (const u of LINES) { put(beams, 0, u, z, span, t, t * 1.3); put(beams, u, 0, z, t * 1.15, span, t); }
       for (const x of LINES) for (const y of LINES) if (rnd() < 0.5) put(beams, x, y, z - C / 2, t * 0.8, t * 0.8, C);
       // Greebles along the grid's beams, many crawling along their beam.
       const count = dense ? 70 : 30;
@@ -305,8 +306,9 @@ function Lattice({ p, dense }: { p: React.MutableRefObject<number>; dense: boole
         const a = 0.1 + rnd() * 0.3, b = 0.1 + rnd() * 0.3, len = 0.25 + rnd() * 1.1, crawl = rnd() < 0.55 ? 0.3 + rnd() * 1.0 : 0, ph = rnd() * 6.28;
         const side = rnd() < 0.5 ? 1 : -1, x = horiz ? along : line + side * (a / 2 + 0.06), y = horiz ? line + side * (b / 2 + 0.06) : along, zz = z + (rnd() - 0.5) * 0.4;
         const mv: [number, number, number, number] = horiz ? [crawl, 0, 0, ph] : [0, crawl, 0, ph];
-        put(greebles, x, y, zz, horiz ? len : a, horiz ? b : len, 0.1 + rnd() * 0.35, mv);
-        if (rnd() < 0.4) led(x + (rnd() - 0.5) * (horiz ? len * 0.6 : 0), y + (rnd() - 0.5) * (horiz ? 0 : len * 0.6), zz + 0.25, 0.06 + rnd() * 0.12, 0.04 + rnd() * 0.06, mv, 0.4);
+        const depth = 0.1 + rnd() * 0.35;
+        put(greebles, x, y, zz, horiz ? len : a, horiz ? b : len, depth, mv);
+        if (rnd() < 0.4) led(x + (rnd() - 0.5) * (horiz ? len * 0.6 : 0), y + (rnd() - 0.5) * (horiz ? 0 : len * 0.6), zz + depth / 2 + 0.03, 0.06 + rnd() * 0.12, 0.04 + rnd() * 0.06, mv, 0.4);
       }
       // Clusters of small parts at the joints, most with an LED.
       for (const x of LINES) for (const y of LINES) {
@@ -315,8 +317,9 @@ function Lattice({ p, dense }: { p: React.MutableRefObject<number>; dense: boole
         for (let k = 0; k < parts; k++) {
           const sz = 0.08 + rnd() * 0.22, dx = (rnd() - 0.5) * 0.6, dy = (rnd() - 0.5) * 0.6, zz = z + 0.08 + rnd() * 0.3;
           const crawl: [number, number, number, number] = rnd() < 0.3 ? (rnd() < 0.5 ? [0.2 + rnd() * 0.4, 0, 0, rnd() * 6.28] : [0, 0.2 + rnd() * 0.4, 0, rnd() * 6.28]) : [0, 0, 0, 0];
-          put(greebles, x + dx, y + dy, zz, sz, sz * (0.6 + rnd()), 0.1 + rnd() * 0.3, crawl);
-          if (rnd() < 0.6) led(x + dx, y + dy, zz + 0.2, 0.05 + rnd() * 0.08, 0.05 + rnd() * 0.08, crawl, 0.55);
+          const depth = 0.1 + rnd() * 0.3;
+          put(greebles, x + dx, y + dy, zz, sz, sz * (0.6 + rnd()), depth, crawl);
+          if (rnd() < 0.6) led(x + dx, y + dy, zz + depth / 2 + 0.03, 0.05 + rnd() * 0.08, 0.05 + rnd() * 0.08, crawl, 0.55);
         }
       }
     }
@@ -504,6 +507,8 @@ function World({ models, p, small, view }: { models: JourneyModels; p: React.Mut
       <Supernova p={p} count={small ? 900 : 2200} />
       <Corridor p={p} />
       <Suspense fallback={null}><WorldAstronaut url={models.astronaut} p={p} /></Suspense>
+      {/* Compile every material and upload every texture up front, hidden ones included, so no beat stalls on first sight. */}
+      <Preload all />
     </>
   );
 }
@@ -636,7 +641,9 @@ function Desk({ models, progress, p, small }: { models: JourneyModels; progress:
   const view = useRef(viewFor(ipad, fillI));
   // One texture size that is sharp enough at full zoom for both screens.
   // The world is drawn at about the canvas's own resolution where it is shown; it never needs more than 2048 px a side.
-  const q = Math.min(viewport.dpr, 1);
+  // Fixed when the canvas starts: a size that followed the live pixel ratio would rebuild the texture (blank frames) each
+  // time the resolution steps down.
+  const [q] = useState(() => Math.min(viewport.dpr, 1));
   const texW = Math.min(2048, Math.round(size.width * q * Math.max(ipad.sw / fillI.rw, imac.sw / fillM.rw)));
   const texH = Math.min(2048, Math.round(size.height * q * Math.max(ipad.sh / fillI.rh, imac.sh / fillM.rh)));
   const tab = useRef<THREE.Group>(null), mon = useRef<THREE.Group>(null), screen = useRef<THREE.Mesh>(null);
@@ -722,6 +729,7 @@ export default function Journey({ progress, reduce, models }: { progress: Motion
         frameloop={reduce ? 'demand' : visible ? 'always' : 'never'}>
         <AdaptiveResolution base={dpr} />
         <Desk models={models} progress={progress} p={p} small={small} />
+        <Preload all />
         {!reduce && <FluidFX><Bloom intensity={1.1} luminanceThreshold={0.75} luminanceSmoothing={0.2} mipmapBlur radius={0.7} /></FluidFX>}
       </Canvas>
     </div>
