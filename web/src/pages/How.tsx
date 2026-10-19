@@ -126,7 +126,7 @@ function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step
                   <p className="caps">Step {step + 1} of {pl.flow.length}</p>
                   <p className="sm-title">{cur.title}</p>
                   <p className="body">{cur.what}</p>
-                  <ul className="sm-facts">{stepFacts(cur.id as StepId, pl, h).map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  <ul className="sm-facts">{stepFacts(cur.id as StepId, pl, h).map((x, i) => <li key={i} className={i > 1 ? 'sm-more' : ''}>{x}</li>)}</ul>
                   <p className="sm-code small">{cur.code.map((c) => <a key={c} href={REPO + c} className="mono">{c}</a>)}</p>
                 </>
               ) : (

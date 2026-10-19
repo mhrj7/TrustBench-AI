@@ -358,11 +358,16 @@ function Rig({ progress, f, onStep }: { progress: MotionValue<number>; f: F; onS
       return { pos: new THREE.Vector3(x - 5 * wide, 8.5 * wide, z + 15 * wide), at: new THREE.Vector3(x, id === 'gateway' ? 3 : 1.8, z) }; });
     return [overview, ...steps, overview];
   }, []);
+  const { size } = useThree();
   useFrame((_, dt) => {
     p.current += (progress.get() - p.current) * Math.min(1, dt * 3.5);
     const s = p.current * (keys.length - 1), i = Math.min(keys.length - 2, Math.floor(s)), u = smooth(s - i);
     from.lerpVectors(keys[i].pos, keys[i + 1].pos, u);
     look.lerpVectors(keys[i].at, keys[i + 1].at, u);
+    // Portrait screens see a narrow slice: pull the camera back along its view line, and aim below the module so it sits
+    // in the top half of the screen, clear of the caption.
+    const aspect = size.width / Math.max(1, size.height);
+    if (aspect < 0.85) { const k = 1 + (0.85 - aspect) * 2.2; from.sub(look).multiplyScalar(k).add(look); look.y -= 2.6 * k; }
     camera.position.copy(from); camera.lookAt(look);
     // Focus per step: 1 at its close-up, falling to 0 a key away.
     STEPS.forEach((_, k) => { f.current[k] = Math.max(0, 1 - Math.abs(s - (k + 1))); });

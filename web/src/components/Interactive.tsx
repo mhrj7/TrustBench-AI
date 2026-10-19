@@ -10,7 +10,7 @@ export function Ribbon() {
   const reduce = useReducedMotion();
   useEffect(() => {
     const c = ref.current;
-    if (!c || reduce || !matchMedia('(pointer: fine)').matches) return;
+    if (!c || reduce) return;
     const host = c.parentElement!;
     const ctx = c.getContext('2d')!;
     const N = 26;
@@ -43,9 +43,12 @@ export function Ribbon() {
     };
     size();
     const ro = new ResizeObserver(size); ro.observe(host);
+    const touch = (e: TouchEvent) => { const p = e.touches[0]; if (p) move({ clientX: p.clientX, clientY: p.clientY } as PointerEvent); };
     host.addEventListener('pointermove', move); host.addEventListener('pointerleave', leave);
+    host.addEventListener('touchstart', touch, { passive: true }); host.addEventListener('touchmove', touch, { passive: true }); host.addEventListener('touchend', leave);
     tick();
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); host.removeEventListener('pointermove', move); host.removeEventListener('pointerleave', leave); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); host.removeEventListener('pointermove', move); host.removeEventListener('pointerleave', leave);
+      host.removeEventListener('touchstart', touch); host.removeEventListener('touchmove', touch); host.removeEventListener('touchend', leave); };
   }, [reduce]);
   return <canvas ref={ref} className="ribbon" aria-hidden="true" />;
 }
@@ -70,7 +73,8 @@ export function GrowCard({ left, right, children, label }: { left: string; right
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] });
   const t = useTransform(scrollYProgress, [0.15, 0.7], [0, 1], { clamp: true });
-  const inset = useTransform(t, [0, 1], ['11%', '0%']);
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 640;
+  const inset = useTransform(t, [0, 1], [narrow ? '7%' : '11%', '0%']);
   const radius = useTransform(t, [0, 1], [28, 20]);
   const lx = useTransform(t, [0, 1], ['0%', '-32%']);
   const rx = useTransform(t, [0, 1], ['0%', '32%']);

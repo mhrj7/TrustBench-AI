@@ -45,8 +45,9 @@ in red), the tool service (ten named tools around the case database), the scorer
 whose result arcs back to the browser. The camera starts on the whole system and flies to each module; the one in focus
 opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.json and configs/live-service.yaml).
 
-Across the site: **water ripples** under the cursor (`components/Water.tsx`): each ripple refracts the real page through an
-SVG displacement filter used as `backdrop-filter` (Chromium); other browsers show the highlight ring only. **Barrel scroll**
+Across the site: **water** under the cursor (`components/Water.tsx`): in Chromium with a mouse, a wake that refracts the real
+page through an SVG displacement filter used as `backdrop-filter`; on phones and in Safari, which cannot refract the page,
+light ripple rings follow the finger or pointer. **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
 **Menu**: the sheet unfolds with a clip-path spring and its numbered links rise in one after another.
 
@@ -69,8 +70,8 @@ secondary ink.
 
 ## Type
 
-**Geist** (variable) for everything, **JetBrains Mono** for tool names, run IDs, hashes and the hidden instruction. Large
-sizes run light (450) and tight (-0.045em). Buttons, tags and labels are 12–13px uppercase with 0.04–0.06em tracking.
+**Google Sans** (variable; Google's open release of its product typeface, OFL) for everything, **Google Sans Code** for tool
+names, run IDs, hashes and the hidden instruction. Large sizes run light (450) and tight (-0.032 to -0.035em). Buttons, tags and labels are 12–13px uppercase with 0.04–0.06em tracking.
 
 | Style | Size | Weight |
 | --- | --- | --- |

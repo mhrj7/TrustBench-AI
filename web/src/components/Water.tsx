@@ -3,9 +3,9 @@
 // stretches and curls behind the pointer like a finger drawn through water. The page itself is refracted by that wake:
 // one fixed, pointer-transparent layer sends its backdrop through an SVG displacement filter whose map is the field
 // (R = x velocity, G = y velocity around 128). The filter is only attached while the water is moving. Chromium supports an
-// SVG filter in backdrop-filter; other browsers simply see no effect. Off for touch screens and under reduced motion.
+// SVG filter in backdrop-filter; phones and Safari get light ripple rings instead (WaterRipples). Off under reduced motion.
 import { useReducedMotion } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const COLS = 72;          // field resolution across the screen (coarse: the map is stretched smoothly anyway)
 const STRENGTH = 34;      // displacement in px at full field strength: a light ripple, not deep water
@@ -13,13 +13,68 @@ const DECAY = 0.9;        // per-frame settling: the wake is gone in well under 
 const RADIUS = 3;         // pointer splat radius, in cells
 const ID = 'tb-water';
 
+/** True where the page itself can be refracted: Chromium, with a mouse or trackpad. */
+const canRefract = () => matchMedia('(pointer: fine)').matches && CSS.supports('backdrop-filter', `url(#${ID})`) && !/^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 export function WaterCursor() {
   const reduce = useReducedMotion();
+  const [refract] = useState(() => typeof window !== 'undefined' && canRefract());
+  if (reduce) return null;
+  return refract ? <WaterRefraction /> : <WaterRipples />;
+}
+
+/** Phones and Safari: they cannot refract the page, so a finger (or the pointer) leaves soft rings that spread out on a
+ *  light overlay, drawn only while any are alive. Touch events are used so ripples follow a finger even while it scrolls. */
+function WaterRipples() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext('2d')!;
+    const dpr = Math.min(1.5, devicePixelRatio || 1);
+    const size = () => { c.width = innerWidth * dpr; c.height = innerHeight * dpr; c.style.width = `${innerWidth}px`; c.style.height = `${innerHeight}px`; };
+    size();
+    type Drop = { x: number; y: number; born: number; big: boolean };
+    const drops: Drop[] = [];
+    let lx = -1e4, ly = -1e4, raf = 0;
+    const LIFE = 1100;
+    const add = (x: number, y: number, big = false) => {
+      drops.push({ x, y, born: performance.now(), big });
+      if (drops.length > 28) drops.shift();
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    const at = (x: number, y: number, force = false) => {
+      if (force || Math.hypot(x - lx, y - ly) > 26) { add(x, y, force); lx = x; ly = y; }
+    };
+    const tick = (now: number) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const d = drops[i], t = (now - d.born) / LIFE;
+        if (t >= 1) { drops.splice(i, 1); continue; }
+        const r = (d.big ? 18 : 10) + t * (d.big ? 150 : 90), a = (1 - t) * (1 - t);
+        // Two rings: a bright crest and a faint blue trough just inside it, so the ripple reads on light and dark parts.
+        ctx.lineWidth = 2.2 * (1 - t) + 0.6;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * a})`; ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(36, 51, 255, ${0.22 * a})`; ctx.beginPath(); ctx.arc(d.x, d.y, Math.max(1, r - 5), 0, Math.PI * 2); ctx.stroke();
+      }
+      raf = drops.length ? requestAnimationFrame(tick) : 0;
+      if (!raf) ctx.clearRect(0, 0, innerWidth, innerHeight);
+    };
+    const touch = (e: TouchEvent) => { const p = e.touches[0]; if (p) at(p.clientX, p.clientY, e.type === 'touchstart'); };
+    const move = (e: PointerEvent) => { if (e.pointerType === 'mouse') at(e.clientX, e.clientY); };
+    addEventListener('touchstart', touch, { passive: true }); addEventListener('touchmove', touch, { passive: true });
+    addEventListener('pointermove', move, { passive: true }); addEventListener('resize', size);
+    return () => { cancelAnimationFrame(raf); removeEventListener('touchstart', touch); removeEventListener('touchmove', touch); removeEventListener('pointermove', move); removeEventListener('resize', size); };
+  }, []);
+  return <canvas ref={ref} className="water-ripples" aria-hidden="true" />;
+}
+
+function WaterRefraction() {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = host.current;
-    if (!el || reduce || !matchMedia('(pointer: fine)').matches) return;
-    if (!CSS.supports('backdrop-filter', `url(#${ID})`) || /^((?!chrome|android).)*safari/i.test(navigator.userAgent)) return;
+    if (!el) return;
     let W = innerWidth, H = innerHeight, rows = Math.max(16, Math.round((COLS * H) / W));
     let vx = new Float32Array(COLS * rows), vy = new Float32Array(COLS * rows), tx = new Float32Array(COLS * rows), ty = new Float32Array(COLS * rows);
     const canvas = document.createElement('canvas');
@@ -123,6 +178,6 @@ export function WaterCursor() {
       window.removeEventListener('pointermove', move); document.removeEventListener('pointerleave', leave); window.removeEventListener('resize', size);
       el.replaceChildren();
     };
-  }, [reduce]);
+  }, []);
   return <div ref={host} className="water" aria-hidden="true" />;
 }
