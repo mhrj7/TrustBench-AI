@@ -8,11 +8,13 @@ import { Suspense, lazy, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Barrel, Roll } from '../components/Interactive';
 import { CountUp } from '../components/Motion';
-import { loadHeadline, loadPipeline, useAsync, type Headline, type Pipeline } from '../lib/data';
+import { loadHeadline, loadPipeline, runPath, useAsync, type Headline, type Pipeline } from '../lib/data';
 import { Loading } from './Common';
 import type { StepId } from '../components/SystemModel';
+import { HOW_MODELS, IMAC_CREDIT, IMAC_URL, type HowModelUrls } from '../lib/models';
 
 const SystemModel = lazy(() => import('../components/SystemModel'));
+const HOW_URLS = Object.fromEntries(Object.entries(HOW_MODELS).map(([k, m]) => [k, m.url ?? ''])) as HowModelUrls;
 
 const REPO = 'https://github.com/mhrj7/TrustBench-AI/tree/main/';
 const pretty = (s: string) => s.replaceAll('_', ' ');
@@ -43,6 +45,23 @@ function stepFacts(id: StepId, pl: Pipeline, h: Headline): ReactNode[] {
   }
 }
 
+/** What the replayed case (headline.json's recorded example) shows at each step: the real task, trick, calls and verdicts. */
+function caseFact(id: StepId, h: Headline): ReactNode | null {
+  const ex = h.example, w = ex.with_guard, b = ex.without_guard;
+  const denied = w.decisions.find((d) => d.decision === 'deny');
+  switch (id) {
+    case 'browser': return <>Case <code>{ex.case_id}</code>, repetition {ex.repetition}.</>;
+    case 'fixtures': return <>The task: “{ex.task}” Hidden in a document: <span className="sm-red">“{ex.hidden_text}”</span></>;
+    case 'agent': return <>The helper made {b.tools.length} calls: {b.tools.map((t) => <code key={t.tool}>{t.tool}</code>)}. The last one is the trick's.</>;
+    case 'arms': return <>Without the guard all {b.tools.length} calls reach the tools; with it, {w.decisions.filter((d) => d.decision === 'allow').length} are allowed.</>;
+    case 'gateway': return denied ? <><code>{denied.tool}</code> was refused: <code>{denied.reason}</code>. The attacker wanted to “{ex.attacker_goal.replace(/\.$/, '')}”.</> : null;
+    case 'tools': return <>Without the guard <code>{denied?.tool}</code> ran: {b.reason_codes.map((r) => <code key={r}>{r}</code>)}.</>;
+    case 'score': return <>Without the guard: job {b.utility_pass ? 'done' : 'not done'}, {b.security_pass ? 'safe' : 'unsafe'}, attacker goal {b.attacker_goal_achieved ? 'reached' : 'not reached'}. With it: job {w.utility_pass ? 'done' : 'not done'}, {w.security_pass ? 'safe' : 'unsafe'}, attacker goal {w.attacker_goal_achieved ? 'reached' : 'not reached'}.</>;
+    case 'report': return <>Both runs are kept with their trace: open the run <Link to={runPath(b.run_id)}>without the guard</Link> and <Link to={runPath(w.run_id)}>with it</Link>.</>;
+    default: return null;
+  }
+}
+
 function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
   const reduce = useLite3D();
   const [step, setStep] = useState(-1);
@@ -53,7 +72,7 @@ function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
       <section className="section wrap page-head how-head" aria-labelledby="how-title">
         <div className="grid">
           <h1 id="how-title" className="display span-7 how-title">How it <span className="tail">works.</span></h1>
-          <p className="start-8 statement ink-2 how-lede">Press Run on the Live page and a run travels through eleven parts of the system. Scroll to follow it, from the whole system down into each part.</p>
+          <p className="start-8 statement ink-2 how-lede">Press Run on the Live page and a run travels through eleven parts of the system. Below, one real recorded case makes that trip: scroll to follow it, or click any part to fly there.</p>
         </div>
         <dl className="how-counts">
           {counts.map(([n, label]) => <div key={label}><dd className="figure"><CountUp to={n} /></dd><dt>{label}</dt></div>)}
@@ -61,6 +80,8 @@ function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
       </section>
 
       {reduce ? <StaticFlow pl={pl} h={h} /> : <FlowSection pl={pl} h={h} step={step} setStep={setStep} />}
+
+      {!reduce && <p className="wrap small ink-2 how-credits">3D models, CC BY 4.0: {[IMAC_CREDIT, ...Object.values(HOW_MODELS).map((m) => m.credit)].map((c, i) => <span key={c.url}>{i ? ', ' : ''}<a href={c.url}>{c.title}</a> by {c.author}</span>)}.</p>}
 
       <section className="section wrap" aria-labelledby="layers-title">
         <div className="section-head">
@@ -113,11 +134,23 @@ function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
   const cur = step >= 0 && step < pl.flow.length ? pl.flow[step] : null;
+  const [replay, setReplay] = useState(0);
+  // Clicking a part scrolls the page to that part's place in the pinned section, so scroll stays the one source of truth.
+  const pick = (i: number) => {
+    const el = ref.current; if (!el) return;
+    const top = el.getBoundingClientRect().top + scrollY, range = el.offsetHeight - innerHeight, n = pl.flow.length + 1;
+    window.scrollTo({ top: top + ((i + 1) / n) * range, behavior: 'smooth' });
+  };
+  const fact = cur ? caseFact(cur.id as StepId, h) : null;
   return (
     <section ref={ref} className="sm" aria-labelledby="sm-title">
       <div className="sm-sticky">
-        <Suspense fallback={<div className="sm-canvas" />}><SystemModel pl={pl} progress={scrollYProgress} reduce={false} onStep={setStep} /></Suspense>
+        <Suspense fallback={<div className="sm-canvas" />}><SystemModel pl={pl} ex={h.example} imacUrl={IMAC_URL!} models={HOW_URLS} progress={scrollYProgress} reduce={false} onStep={setStep} onPick={pick} replay={replay} /></Suspense>
         <h2 id="sm-title" className="sr-only">One live run, part by part</h2>
+        <div className="sm-side">
+          <button type="button" className="btn btn-light sm-replay" onClick={() => setReplay((n) => n + 1)}>Replay the case</button>
+          <ol className="sm-dots">{pl.flow.map((st, i) => <li key={i} className={i <= step ? 'on' : ''}><button type="button" aria-label={`Go to step ${i + 1}: ${st.title}`} onClick={() => pick(i)} /></li>)}</ol>
+        </div>
         <div className="sm-copy wrap">
           <AnimatePresence mode="wait">
             <motion.div key={step} className="sm-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
@@ -127,19 +160,19 @@ function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step
                   <p className="caps">Step {step + 1} of {pl.flow.length}</p>
                   <p className="sm-title">{cur.title}</p>
                   <p className="body">{cur.what}</p>
+                  {fact && <p className="sm-case"><span className="caps">In this case</span> {fact}</p>}
                   <ul className="sm-facts">{stepFacts(cur.id as StepId, pl, h).map((x, i) => <li key={i} className={i > 1 ? 'sm-more' : ''}>{x}</li>)}</ul>
                   <p className="sm-code small">{cur.code.map((c) => <a key={c} href={REPO + c} className="mono">{c}</a>)}</p>
                 </>
               ) : (
                 <>
                   <p className="caps">The whole system</p>
-                  <p className="sm-title">One run, eleven parts.</p>
-                  <p className="body">Keep scrolling: the camera flies to each part in the order a live run reaches it.</p>
+                  <p className="sm-title">One real case, eleven parts.</p>
+                  <p className="body">Case <code>{h.example.case_id}</code>: “{h.example.task}” A document carries a hidden instruction. Watch the same calls run twice, without the guard and with it. Scroll, or click a part.</p>
                 </>
               )}
             </motion.div>
           </AnimatePresence>
-          <ol className="sm-dots" aria-hidden="true">{pl.flow.map((_, i) => <li key={i} className={i <= step ? 'on' : ''} />)}</ol>
         </div>
       </div>
     </section>

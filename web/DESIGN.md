@@ -41,14 +41,18 @@ The overview, top to bottom:
 9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 
-**How it works** (`pages/How.tsx`, `components/SystemModel.tsx`): a 3D model of what really happens when you press Run on
-the Live page, pinned while you scroll. Eleven modules on a dark grid, in the order a run reaches them: the browser (a
-laptop showing the Live page), the live service (server tower, mode drawers, key vault), the job queue (lanes and
-workers), the runner (a process group), the fixtures (pages, one carrying the trick), the agent (core, three provider
-towers, a dashed socket for the planned external agents), the two arms, the guard (one ring per layer, a refused packet
-in red), the tool service (ten named tools around the case database), the scorer (three verdict lamps) and the report,
-whose result arcs back to the browser. The camera starts on the whole system and flies to each module; the one in focus
-opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.json and configs/live-service.yaml).
+**How it works** (`pages/How.tsx`, `components/SystemModel.tsx`): one real recorded case (the home page's example:
+the task, the hidden instruction, the tool calls with and without the guard, from `headline.json`) replayed through
+eleven stations built around downloaded models (Sketchfab, CC BY 4.0, `lib/models.ts`, credited under the model): the
+iMac showing the Live page; a turnstile under an arc of six limit plates that light as the request passes, with your
+key used once and dissolving; one sci-fi assembly line per queue lane with the real worker counts; a server rack where
+the cases fall into a fixed order and the seed die locks; the case's world of documents, one printed with the real
+hidden instruction; a humanoid robot head for the agent, its providers in orbit; the two arms; one walk-through security
+arch per guard layer, the refused call shattering at the arch that refused it with its real code; the tool server ringed
+by the tools' names, whose record panel turns red when the baseline's forbidden call lands; verdict lamps lit with the
+recorded verdicts; and the report returning to the browser. Scroll flies the camera from station to station; clicking a
+station or a step dot flies there; "Replay the case" restarts the replay; each caption adds "In this case", the real data
+for that step. Counts and captions come from `pipeline.json`.
 
 Across the site: **water** under the cursor or finger, from one shared field (`lib/fluid.ts`), as on the reference site: every
 browser draws the wake as a light, smoky WebGL trail over the page (`components/Water.tsx`) and every 3D scene bends what it
