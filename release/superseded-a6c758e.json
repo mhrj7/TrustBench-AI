@@ -1,0 +1,79 @@
+{
+ "task_id": "TB-051",
+ "checks": {
+  "ci_tier1": {
+   "name": "CI on GitHub: Tier 1 release gate (scripted, every case and the policy trail against the committed baselines) and the full npm run verify",
+   "required": true,
+   "candidate": "a6c758e9357ae8192e333a4e371188ab78a451c2",
+   "ok": false,
+   "started_at": "2026-10-19T12:16:40+00:00",
+   "finished_at": "2026-10-19T12:30:27+00:00",
+   "detail": {
+    "run_id": 39250790064,
+    "url": "https://github.com/mhrj7/TrustBench-AI/actions/runs/39250790064",
+    "conclusion": "failure",
+    "jobs": {
+     "tier1": "failure",
+     "tier2": "skipped"
+    }
+   }
+  },
+  "linked_reports": {
+   "name": "Linked reports: every relative link in the documentation resolves, README links answer, and the report, claim, README and reproduction checks pass",
+   "required": true,
+   "candidate": "a6c758e9357ae8192e333a4e371188ab78a451c2",
+   "ok": true,
+   "started_at": "2026-10-19T12:30:27+00:00",
+   "finished_at": "2026-10-19T12:30:49+00:00",
+   "detail": {
+    "markdown_files": 44,
+    "broken_links": [],
+    "readme_external_links": 6,
+    "unreachable": [],
+    "report_checks": {
+     "report and claims ledgers": true,
+     "claim boundaries": true,
+     "README instructions": true,
+     "reproducibility package": true,
+     "published reports reproduce": true
+    }
+   }
+  },
+  "readme_fresh": {
+   "name": "README followed by a fresh non-root user in a clean container (scripts/check-readme.py --fresh)",
+   "required": true,
+   "candidate": "a6c758e9357ae8192e333a4e371188ab78a451c2",
+   "ok": true,
+   "started_at": "2026-10-19T12:30:49+00:00",
+   "finished_at": "2026-10-19T12:31:52+00:00",
+   "detail": {
+    "exit_code": 0,
+    "seconds": 62.9,
+    "problems": [],
+    "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root user \"node\", fresh clone from GitHub, only the README requirements installed (git, Node.js 26.5.0, npm 12.0.0, uv 0.11.28)"
+   }
+  },
+  "offline_reproduction": {
+   "name": "Offline reproduction in a clean container (repro/README.md): every published number rebuilt from the committed raw records",
+   "required": true,
+   "candidate": "a6c758e9357ae8192e333a4e371188ab78a451c2",
+   "ok": false,
+   "started_at": "2026-10-19T12:31:52+00:00",
+   "finished_at": "2026-10-19T12:34:12+00:00",
+   "detail": {
+    "exit_code": 1,
+    "seconds": 140.6,
+    "outcome": "NOT REPRODUCED",
+    "steps_passed": 10,
+    "steps": 12,
+    "unexpected_changes": [],
+    "route": "container (tracked files at the commit, non-root, no network)"
+   }
+  }
+ },
+ "candidate": "a6c758e9357ae8192e333a4e371188ab78a451c2",
+ "superseded": {
+  "reason": "Not released: ci_tier1 and offline_reproduction failed on one file. scripts/build-report.py, rerun for the new reproduction manifest, rewrote research/report-claims.json and portfolio/bullets-claims.json, and only the first was committed; the local npm run verify passed because the working copy had both, while CI and the clean container saw the stale committed copy (tests/research/test_report.py). linked_reports and readme_fresh passed; fresh_clone_verify was stopped once the cause was known, and demo_rebuilt and the live checks were not run. No Tier 2 attempt was started for this candidate. Before the next candidate, every modified tracked file outside the known test-output files was listed and committed.",
+  "recorded_at": "2026-10-19"
+ }
+}
