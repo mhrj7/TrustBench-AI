@@ -24,15 +24,20 @@ The overview, top to bottom:
 5. **Flip the guard**: the recorded pair of runs replayed with the guard off and on.
 6. **Results bento**, **evidence grid** (two-column cards with live mini visuals and rolling titles), the development
    evidence (paired morph, utility cost), and the call to action.
-7. **Sticker sky** (`components/StickerSpace.tsx`, art in `components/stickers.ts`): the call to action floats on a dark
-   sky of die-cut stickers (shield, lock, check, bug, trick, key, stars, bolt, document, helper, eye) that drift in zero
-   gravity and flick away from the pointer; the white footer follows.
-8. **Journey** (`components/Journey.tsx`, `components/Shaders.tsx`): after the reference site's device sequence. An
-   iPad with a liquid-metal frame (Paper Shaders `LiquidMetal`, Apache-2.0) shows the astronaut above a glowing planet;
-   scrolling tips it flat and grows it to the full screen over a ShaderGradient nebula (MIT); "step inside the test"
-   splits apart; the camera flies through a chrome lattice whose rings turn in opposite directions, with captions from the
-   evidence; a white flash opens into a blue corridor cut with the site's shapes; the device shrinks back to its slot.
-   The astronaut is "Astronaut" by Poly (Google), CC BY 2.0 (`lib/models.ts`, credited on the page).
+7. **Sticker sky** (`components/StickerSpace.tsx`, art in `components/stickers.ts`): the call to action over a heap of
+   die-cut stickers (shield, lock, check, bug, trick, key, stars, bolt, document, helper, eye) that rain down under gravity
+   and are pushed around by the pointer; the astronaut that fell out of the journey lands on the heap, large, and waves.
+   It follows the journey directly; the white footer comes after.
+8. **Journey** (`components/Journey.tsx`, beats in `lib/journey.ts`): after the reference site's tunnel sequence, in one
+   sticky canvas. A tablet beside the intro shows the astronaut floating above the Earth, facing you; the view dives until
+   the screen is the whole view (the space world is rendered into the screen's texture); "step inside the test" arrives
+   as the astronaut turns its back and drifts in, then zooms past the camera; the camera follows it in free fall down a
+   lattice tunnel of greebled blocks that crawl along their beams, straight at first, then twisting anticlockwise and
+   back clockwise, with captions from the evidence; through a burst of crystals into a blue corridor cut with the site's
+   shapes, where it turns to face you and walks up to the glass; the camera pulls back out of a desktop screen, the glass
+   cracks and breaks, and the astronaut climbs out towards you and drops below the page into the sticker sky. Models
+   (Sketchfab, CC BY 4.0, `lib/models.ts`, credited on the page): the astronaut by LasquetiSpice, the iPad Pro by
+   CitrixStorm2222, the iMac by DatSketch, the Earth by SebastianSosnowski.
 9. **Endless scroll** (`NextPage`): after every page's footer, keep scrolling and the next page in the tour arrives.
    Only a person's own wheel, touch or key scrolling finishes the hand-off, so scripted scrolling never navigates.
 
@@ -47,8 +52,9 @@ opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.j
 
 Across the site: **water** under the cursor or finger, from one shared field (`lib/fluid.ts`), as on the reference site: every
 browser draws the wake as a light, smoky WebGL trail over the page (`components/Water.tsx`) and every 3D scene bends what it
-draws by the same field with a thin rainbow edge (`components/FluidFX.tsx`, a postprocessing effect); Chromium with a
-mouse also refracts the page itself (SVG displacement as `backdrop-filter`). **Barrel scroll**
+draws by the same field with a thin rainbow edge (`components/FluidFX.tsx`, a postprocessing effect). The page's text is
+not refracted (as on the reference site; a full-window SVG filter halved Chrome's frame rate). Every canvas draws within a
+pixel budget and lowers its resolution while frames are slow (`lib/gpu.ts`). **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
 **Menu**: the sheet unfolds with a clip-path spring and its numbered links rise in one after another.
 

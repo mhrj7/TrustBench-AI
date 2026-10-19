@@ -6,7 +6,8 @@ import { loadHeadline, loadSpans, runPath, useAsync, useDataset, type Dataset, t
 import { Bento, Card, Eyebrow } from '../components/Bento';
 import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
-import { ASTRONAUT_CREDIT, ASTRONAUT_URL, WAVE_CREDIT, WAVE_URL } from '../lib/models';
+import { ASTRONAUT_CREDIT, ASTRONAUT_URL, EARTH_URL, IMAC_URL, IPAD_URL, JOURNEY_CREDITS, JOURNEY_READY } from '../lib/models';
+import { T } from '../lib/journey';
 import { CountUp, Reveal } from '../components/Motion';
 import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
@@ -22,8 +23,7 @@ const heroEarly = typeof window !== 'undefined' && window.location.pathname === 
 const PhysicsHero = lazy(() => heroEarly ?? loadHero());
 const Journey = lazy(() => import('../components/Journey'));
 const StickerSpace = lazy(() => import('../components/StickerSpace'));
-const SpaceGradient = lazy(() => import('../components/Shaders').then((m) => ({ default: m.SpaceGradient })));
-const DeviceMetal = lazy(() => import('../components/Shaders').then((m) => ({ default: m.DeviceMetal })));
+const JOURNEY_MODELS = JOURNEY_READY ? { astronaut: ASTRONAUT_URL!, ipad: IPAD_URL!, imac: IMAC_URL!, earth: EARTH_URL! } : null;
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
 
 /** The defended system each report evaluates, read from its defended runs (baseline runs carry "baseline"). */
@@ -146,7 +146,7 @@ function OverviewBody({ d }: { d: Dataset }) {
 
       <UtilityCost d={d} fp={fp} />
 
-      {h.state === 'ready' && ASTRONAUT_URL && <JourneySection h={h.value} runs={runs.length} modelUrl={ASTRONAUT_URL} />}
+      {h.state === 'ready' && JOURNEY_MODELS && <JourneySection h={h.value} runs={runs.length} />}
 
       <SpaceCta />
     </>
@@ -159,55 +159,51 @@ function SpaceCta() {
   const reduce = !!useReducedMotion();
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
-      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={WAVE_URL ?? ASTRONAUT_URL} /></Suspense>
+      <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>
       <div className="space-copy wrap">
         <p className="caps">Think you can beat it?</p>
         <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
         <p className="body">Run the same comparison in your browser: instantly with no model, live on our free-tier key, or with your own key.</p>
         <div className="row"><Link className="btn btn-light roll-host" to="/live"><span className="btn-dot" /><Roll>Run it live</Roll></Link><Link className="btn btn-ghost roll-host" to="/method"><Roll>How to check a number</Roll></Link></div>
-        {(WAVE_URL || ASTRONAUT_URL) && <p className="space-credit small">Astronaut: {(() => { const c = WAVE_URL ? WAVE_CREDIT : ASTRONAUT_CREDIT; return <><a href={c.url}>{c.title}</a> by {c.author}, {c.license}.</>; })()}</p>}
+        {ASTRONAUT_URL && <p className="space-credit small">Astronaut: <a href={ASTRONAUT_CREDIT.url}>{ASTRONAUT_CREDIT.title}</a> by {ASTRONAUT_CREDIT.author}, {ASTRONAUT_CREDIT.license}.</p>}
       </div>
     </section>
   );
 }
 
-/** The journey, after the reference site's device sequence: an iPad beside the intro shows the astronaut in space; as you
- *  scroll it tips flat and grows to fill the screen, the words "step inside" fly apart, the camera dives through a chrome
- *  tunnel (captions from the evidence arrive on the way), flashes into a blue corridor, and the device shrinks back.
- *  Every number in the captions is from the evidence. */
-function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; modelUrl: string }) {
+/** The journey (components/Journey.tsx), after the reference site's tunnel sequence: a tablet beside the intro shows the
+ *  astronaut above the Earth; the view dives into its screen, a headline zooms past as the astronaut turns and drifts in,
+ *  and the camera follows it in free fall down a twisting lattice, through crystals into a blue corridor, then pulls back
+ *  out of a desktop screen as the astronaut breaks the glass and drops into the ending below. Captions on the way are from
+ *  the evidence. */
+function JourneySection({ h, runs }: { h: Headline; runs: number }) {
   const ref = useRef<HTMLElement>(null);
   const reduce = !!useReducedMotion();
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ['start start', 'end end'] });
   const [active, setActive] = useState(-1);
-  const narrow = typeof window !== 'undefined' && window.innerWidth < 900;
+  const g = T.grid[0], span = T.grid[1] - T.grid[0];
   const stops = [
-    { at: 0.48, kicker: 'Lane 1 · development', title: `${runs.toLocaleString('en')} runs`, tail: 'recorded.', text: 'Every run kept with its tool trace and the scorer\'s verdict.' },
-    { at: 0.57, kicker: 'Lane 2 · the sealed test', title: `${h.primary.pairs} paired tasks,`, tail: 'opened once.', text: 'Locked away before the guard was finished, then run a single time.' },
-    { at: 0.66, kicker: 'Lane 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them: ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
-    { at: 0.84, kicker: 'The way out · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
+    { at: g + 0.02, kicker: 'Lane 1 · development', title: `${runs.toLocaleString('en')} runs`, tail: 'recorded.', text: 'Every run kept with its tool trace and the scorer\'s verdict.' },
+    { at: g + span * 0.36, kicker: 'Lane 2 · the sealed test', title: `${h.primary.pairs} paired tasks,`, tail: 'opened once.', text: 'Locked away before the guard was finished, then run a single time.' },
+    { at: g + span * 0.68, kicker: 'Lane 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them: ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
+    { at: T.corridor[0], kicker: 'The way out · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
   ];
   useMotionValueEvent(p, 'change', (v) => {
     let a = -1;
-    stops.forEach((st, i) => { if (v >= st.at - 0.03 && v < (stops[i + 1]?.at ?? 0.97) - 0.03) a = i; });
+    stops.forEach((st, i) => { if (v >= st.at && v < (stops[i + 1]?.at ?? T.pull[0]) - 0.012) a = i; });
     setActive(a);
   });
-  // The device: grows from its slot to the full screen, and shrinks back at the end.
-  const g = useTransform(p, [0.03, 0.17, 0.93, 1], [0, 1, 1, 0]);
-  const s0 = narrow ? 0.78 : 0.46;
-  const scale = useTransform(g, [0, 1], [s0, 1]);
-  const x = useTransform(g, [0, 1], [narrow ? '0vw' : '23vw', '0vw']);
-  const y = useTransform(g, [0, 1], [narrow ? '16svh' : '6svh', '0svh']);
-  const rotateX = useTransform(g, [0, 1], [12, 0]);
-  const rotateY = useTransform(g, [0, 1], [narrow ? 0 : -14, 0]);
-  const bezel = useTransform(g, (v) => `${((1 - v) * 16) / (s0 + (1 - s0) * v)}px`);
-  const radius = useTransform(g, (v) => `${((1 - v) * 40) / (s0 + (1 - s0) * v)}px`);
-  const intro = useTransform(p, [0, 0.1, 1], [1, 0, 0]);
-  const outro = useTransform(p, [0.94, 1], [0, 1]);
-  const introY = useTransform(p, [0, 0.12], ['0px', '-80px']);
-  const words = useTransform(p, [0.2, 0.26, 0.36, 0.42], [0, 1, 1, 0]);
-  const spread = useTransform(p, [0.26, 0.42], [0, 1]);
-  const flash = useTransform(p, [0.76, 0.785, 0.82], [0, 1, 0]);
+  const intro = useTransform(p, [0, 0.07], [1, 0]);
+  const introVis = useTransform(p, (v) => (v > 0.075 ? 'hidden' : 'visible'));
+  const introY = useTransform(p, [0, 0.1], ['0px', '-80px']);
+  const dark = useTransform(p, [T.zoom[1] - 0.05, T.zoom[1]], [0, 1]);
+  // The model credits show while no caption does: on the opening view and on the desktop screen at the end.
+  const credit = useTransform(p, [T.zoom[1] - 0.05, T.zoom[1], T.turn[0] - 0.02, T.turn[0], T.pull[0], T.pull[1]], [0, 1, 1, 0, 0, 1]);
+  const [w0, w1, w2, w3] = T.words;
+  const words = useTransform(p, [w0, w1, w2 + (w3 - w2) * 0.6, w3], [0, 1, 1, 0]);
+  const wordsY = useTransform(p, [w0, w1], ['40px', '0px']);
+  const zoom = useTransform(p, [w2, w3], [1, 4.2]);
+  const spread = useTransform(p, [w2, w3], [0, 1]);
   if (reduce) {
     return (
       <section className="section wrap journey-static" aria-labelledby="journey-title">
@@ -221,91 +217,43 @@ function JourneySection({ h, runs, modelUrl }: { h: Headline; runs: number; mode
   return (
     <section ref={ref} className="journey" aria-labelledby="journey-title">
       <div className="journey-sticky">
-        <motion.div className="journey-intro wrap" style={{ opacity: intro, y: introY }}>
+        <motion.div className="journey-dark" style={{ opacity: dark }} />
+        <Suspense fallback={<div className="journey-canvas" />}><Journey progress={p} reduce={reduce} models={JOURNEY_MODELS!} /></Suspense>
+        <motion.div className="journey-intro wrap" style={{ opacity: intro, y: introY, visibility: introVis }}>
           <h2 id="journey-title" className="headline">Every claim <span className="tail">meets a test.</span></h2>
           <p className="body ink-2">A benchmark is only worth what you can check. So the helper goes through every stage the project ran: the development runs, the sealed test, the second look by two reviewers, and a rebuild from scratch. Scroll to send it in.</p>
         </motion.div>
-        <motion.div className="journey-intro journey-outro wrap" style={{ opacity: outro }}>
-          <p className="headline" role="presentation">Back where <span className="tail">it started.</span></p>
-          <p className="body ink-2">Every stop on that trip is a file in the repository. The evidence index lists them, with the hash and the command that rebuilds each number.</p>
-          <Link className="btn btn-primary roll-host" to="/method" style={{ pointerEvents: 'auto', alignSelf: 'flex-start' }}><Roll>Open the evidence index</Roll></Link>
-        </motion.div>
-        <motion.div className="device" style={{ scale, x, y, rotateX, rotateY, borderRadius: radius, transformPerspective: 1600 }}>
-          <Suspense fallback={null}><DeviceMetal /></Suspense>
-          <motion.div className="device-screen" style={{ inset: bezel, borderRadius: radius }}>
-            <Suspense fallback={null}><SpaceGradient /></Suspense>
-            <Suspense fallback={<div className="journey-canvas" />}><Journey progress={p} reduce={reduce} modelUrl={modelUrl} /></Suspense>
-            <motion.div className="journey-words" aria-hidden="true" style={{ opacity: words }}>
-              {LINES.map((line, li) => (
-                <div key={li} className="journey-line">
-                  {line.map((w, wi) => <SpreadWord key={wi} word={w} offset={(wi - (line.length - 1) / 2) * 1} spread={spread} />)}
-                </div>
-              ))}
-            </motion.div>
-            <motion.div className="journey-flash" style={{ opacity: flash }} />
-            <Shatter p={p} />
-            <div className="journey-copy">
-              <AnimatePresence mode="wait">
-                {cur && (
-                  <motion.div key={active} className="journey-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, y: -24, filter: 'blur(10px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.6 }}>
-                    <p className="caps">{cur.kicker}</p>
-                    <p className="headline">{cur.title} <span className="tail">{cur.tail}</span></p>
-                    <p className="body">{cur.text}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+        <motion.div className="journey-words" aria-hidden="true" style={{ opacity: words, y: wordsY, scale: zoom }}>
+          {LINES.map((line, li) => (
+            <div key={li} className="journey-line">
+              {line.map((w, wi) => <SpreadWord key={wi} word={w} offset={(wi - (line.length - 1) / 2) * 1} spread={spread} />)}
             </div>
-          </motion.div>
+          ))}
         </motion.div>
-        <p className="journey-credit small">Astronaut: <a href={ASTRONAUT_CREDIT.url}>{ASTRONAUT_CREDIT.title}</a> by {ASTRONAUT_CREDIT.author}, {ASTRONAUT_CREDIT.license}.</p>
+        <div className="journey-copy">
+          <AnimatePresence mode="wait">
+            {cur && (
+              <motion.div key={active} className="journey-cap" initial={{ opacity: 0, y: 24, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -24, filter: 'blur(10px)' }} transition={{ type: 'spring', bounce: 0, duration: 0.6 }}>
+                <p className="caps">{cur.kicker}</p>
+                <p className="headline">{cur.title} <span className="tail">{cur.tail}</span></p>
+                <p className="body">{cur.text}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <motion.p className="journey-credit small" style={{ opacity: credit }}>
+          3D models, CC BY 4.0: {JOURNEY_CREDITS.map((c, i) => <span key={c.url}>{i ? ', ' : ''}<a href={c.url}>{c.title}</a> by {c.author}</span>)}.
+        </motion.p>
       </div>
     </section>
   );
 }
 
-/** The screen breaking as the astronaut comes through it: shards cut from the glass around the point of impact fly outward
- *  and spin, driven by the scroll (so the break plays forward and backward with it). */
-const SHARDS = (() => {
-  const rnd = (() => { let x = 41; return () => ((x = (x * 16807) % 2147483647) - 1) / 2147483646; })();
-  const c: [number, number] = [50, 54], ring: [number, number][] = [];
-  const N = 14;
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + rnd() * 0.3, r = 120;
-    ring.push([Math.max(-5, Math.min(105, c[0] + Math.cos(a) * r)), Math.max(-5, Math.min(105, c[1] + Math.sin(a) * r))]);
-  }
-  const out: { poly: string; dx: number; dy: number; rot: number }[] = [];
-  ring.forEach((pt, i) => {
-    const nx = ring[(i + 1) % N], mid: [number, number] = [c[0] + (pt[0] - c[0]) * (0.35 + rnd() * 0.25), c[1] + (pt[1] - c[1]) * (0.35 + rnd() * 0.25)];
-    const tri = (a: [number, number], b: [number, number], d: [number, number]) => {
-      const cx = (a[0] + b[0] + d[0]) / 3 - c[0], cy = (a[1] + b[1] + d[1]) / 3 - c[1], l = Math.hypot(cx, cy) || 1;
-      out.push({ poly: `polygon(${a[0]}% ${a[1]}%, ${b[0]}% ${b[1]}%, ${d[0]}% ${d[1]}%)`, dx: (cx / l) * (60 + rnd() * 60), dy: (cy / l) * (60 + rnd() * 60), rot: (rnd() - 0.5) * 140 });
-    };
-    tri(c, mid, nx); tri(mid, pt, nx);
-  });
-  return out;
-})();
-
-function Shatter({ p }: { p: MotionValue<number> }) {
-  const s = useTransform(p, [0.875, 0.95], [0, 1], { clamp: true });
-  const crack = useTransform(p, [0.86, 0.875, 0.95], [0, 1, 0]);
-  return (
-    <motion.div className="shatter" aria-hidden="true" style={{ opacity: crack }}>
-      {SHARDS.map((sh, i) => <Shard key={i} sh={sh} s={s} />)}
-    </motion.div>
-  );
-}
-
-function Shard({ sh, s }: { sh: (typeof SHARDS)[number]; s: MotionValue<number> }) {
-  const x = useTransform(s, (v) => `${sh.dx * v}vw`), y = useTransform(s, (v) => `${sh.dy * v}vh`), rotate = useTransform(s, (v) => sh.rot * v);
-  const scale = useTransform(s, [0, 1], [1, 1.3]);
-  return <motion.span className="shard" style={{ clipPath: sh.poly, x, y, rotate, scale }} />;
-}
-
-/** One word of the "step inside" line; words move away from the centre as the line spreads. */
+/** One word of the headline; words move apart from the centre and blur as the line zooms past the camera. */
 function SpreadWord({ word, offset, spread }: { word: string; offset: number; spread: MotionValue<number> }) {
-  const x = useTransform(spread, [0, 1], ['0vw', `${offset * 26}vw`]);
-  const blur = useTransform(spread, [0.5, 1], ['blur(0px)', 'blur(6px)']);
+  const x = useTransform(spread, [0, 1], ['0em', `${offset * 1.6}em`]);
+  const blur = useTransform(spread, [0.55, 1], ['blur(0px)', 'blur(4px)']);
   return <motion.span style={{ x, filter: blur }}>{word}</motion.span>;
 }
 

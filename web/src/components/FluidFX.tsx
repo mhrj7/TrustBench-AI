@@ -30,7 +30,7 @@ class FluidEffectImpl extends Effect {
       blendFunction: BlendFunction.NORMAL,
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map<string, THREE.Uniform>([
-        ['uField', new THREE.Uniform(null)], ['uRect', new THREE.Uniform(new THREE.Vector4(0, 0, 1, 1))], ['uStrength', new THREE.Uniform(0.06)],
+        ['uField', new THREE.Uniform(null)], ['uRect', new THREE.Uniform(new THREE.Vector4(0, 0, 1, 1))], ['uStrength', new THREE.Uniform(0.08)],
       ]),
     });
   }

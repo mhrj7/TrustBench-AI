@@ -1,5 +1,6 @@
 // The ending scene: stickers (our own artwork, components/stickers.ts) rain down onto the floor of a dark sky and settle
-// into a heap, a sea bed of stickers under the title, with the astronaut model floating above. Each sticker is a flat
+// into a heap, a sea bed of stickers under the title. The astronaut that fell out of the journey drops in, lands on the
+// heap, large, and waves. Each sticker is a flat
 // physics body (Rapier) under gravity; nothing moves until the pointer, a kinematic ball, pushes into the heap. The loop
 // stops off screen, and the heap lies still under reduced motion.
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
@@ -9,8 +10,10 @@ import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from '
 import { FluidFX } from './FluidFX';
 import * as THREE from 'three';
 import { STICKERS } from './stickers';
+import { AdaptiveResolution, budgetDpr } from '../lib/gpu';
 
 const NAMES = Object.keys(STICKERS);
+const WAVE_START = 6;
 const URLS = NAMES.map((n) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(STICKERS[n].replace('<svg ', '<svg width="512" height="512" '))}`);
 const seeded = (s: number) => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
 
@@ -53,24 +56,28 @@ function Floater({ url }: { url: string }) {
   const born = useRef<number | null>(null);
   const fit = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    return { s: (viewport.height * 0.3) / Math.max(size.y, 1e-3), c };
+    // Large, as on the reference site: the astronaut stands about two thirds of the view tall, its feet in the heap.
+    return { s: (viewport.height * (viewport.aspect > 1 ? 0.66 : 0.52)) / Math.max(size.y, 1e-3), c };
   }, [model, viewport.height]);
   useEffect(() => {
     const clip = Object.keys(actions).find((n) => /wave|hello|greet/i.test(n)) ?? Object.keys(actions)[0];
-    if (clip) actions[clip]?.reset().fadeIn(0.4).play();
+    const a = clip ? actions[clip] : null;
+    // The waving model's clip waves most from about 8 s in (elbow motion read from its animation data); landing takes
+    // about 2 s, so start 6 s in and the wave arrives as it touches down.
+    if (a) { a.reset().fadeIn(0.4).play(); a.time = WAVE_START; }
   }, [actions]);
   useFrame(({ clock }) => {
     const el = g.current; if (!el) return;
     if (born.current === null) born.current = clock.elapsedTime;
     const t = clock.elapsedTime - born.current, land = Math.min(1, t / 2.2), e = 1 - Math.pow(1 - land, 3);
-    const top = viewport.height * 0.9, rest = -viewport.height * 0.06;
+    const top = viewport.height * 1.1, rest = -viewport.height * (viewport.aspect > 1 ? 0.16 : 0.2);
     el.position.y = top + (rest - top) * e + (land >= 1 ? Math.sin(t * 1.2) * 0.08 : 0);
-    el.rotation.y = Math.sin(t * 0.3) * 0.35;
+    el.rotation.y = Math.sin(t * 0.3) * 0.12;   // face the viewer while it waves, with a slight sway
     // Without its own animation, the model says hello by rocking side to side for a few seconds after it lands.
     if (!animations.length) el.rotation.z = land >= 1 ? Math.sin(t * 5) * 0.16 * Math.max(0, 1 - (t - 2.2) / 5) : 0;
   });
   return (
-    <group ref={g} position={[viewport.width * (viewport.aspect > 1 ? 0.3 : 0.18), viewport.height, -2]}>
+    <group ref={g} position={[viewport.width * (viewport.aspect > 1 ? 0.27 : 0.16), viewport.height, -2.5]}>
       <primitive object={model} scale={fit.s} position={[-fit.c.x * fit.s, -fit.c.y * fit.s, -fit.c.z * fit.s]} />
     </group>
   );
@@ -93,7 +100,7 @@ function Heap({ count }: { count: number }) {
     // Dropped from above the view in a loose column per slot, so they arrive in a shower rather than all at once.
     return Array.from({ length: count }, (_, i) => ({
       start: new THREE.Vector3((rnd() * 2 - 1) * w * 0.92, h + 1 + (i / count) * h * 3 + rnd() * 2, (rnd() - 0.5) * 1.2),
-      size: (0.75 + rnd() * 0.7) * Math.min(1.25, viewport.width / 15), tex: i % textures.length,
+      size: (0.7 + rnd() * 0.65) * Math.min(1.2, viewport.width / 15), tex: i % textures.length,
     }));
   }, [count, viewport.width, viewport.height, textures.length]);
   return <>{items.map((it, i) => <Sticker key={i} tex={textures[it.tex]} start={it.start} size={it.size} />)}</>;
@@ -115,6 +122,7 @@ export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boo
   const [visible, setVisible] = useState(false);
   const [started, setStarted] = useState(false);
   const small = typeof window !== 'undefined' && window.innerWidth < 760;
+  const [dpr] = useState(() => budgetDpr(small ? 1.4e6 : 2.2e6));
   useEffect(() => {
     const el = host.current;
     if (!el) return;
@@ -125,8 +133,9 @@ export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boo
   return (
     <div ref={host} className="space-canvas" aria-hidden="true">
       {started && (
-        <Canvas dpr={[1, 1.75]} camera={{ position: [0, 0, 16], fov: 38 }} gl={{ antialias: true, alpha: false }} onCreated={({ gl }) => gl.setClearColor('#07080c')}
+        <Canvas dpr={dpr} camera={{ position: [0, 0, 16], fov: 38 }} gl={{ antialias: true, alpha: false }} onCreated={({ gl }) => gl.setClearColor('#07080c')}
           eventSource={source.current ?? undefined} eventPrefix="client" frameloop={reduce ? 'demand' : visible ? 'always' : 'never'}>
+          <AdaptiveResolution base={dpr} />
           <Dust count={small ? 400 : 1200} />
           <ambientLight intensity={0.6} />
           <directionalLight position={[4, 8, 6]} intensity={2.4} />
@@ -135,7 +144,7 @@ export default function StickerSpace({ reduce, source, modelUrl }: { reduce: boo
           <Physics gravity={[0, -16, 0]} paused={reduce || !visible} timeStep="vary">
             <Bounds />
             {!reduce && <Pointer />}
-            <Suspense fallback={null}><Heap count={small ? 30 : 64} /></Suspense>
+            <Suspense fallback={null}><Heap count={small ? 56 : 120} /></Suspense>
           </Physics>
           {!reduce && <FluidFX />}
         </Canvas>

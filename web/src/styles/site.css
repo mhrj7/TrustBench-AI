@@ -404,29 +404,21 @@ td.args { max-width: 520px; min-width: 260px; }
 /* Evidence-section headings run long: a step smaller than the hero headlines. */
 #morph-title, #cost-title { font-size: clamp(32px, 3.6vw, 56px); }
 
-/* Water ripples under the cursor (components/Water.tsx) */
-.water { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; contain: strict; }
-.water-layer { position: absolute; inset: 0; pointer-events: none; }
 
-/* The journey (components/Journey.tsx): the device grows from its slot to the full screen */
-.journey { position: relative; height: 900vh; margin-top: var(--section-gap); }
+/* The journey (components/Journey.tsx): one sticky canvas; the page darkens behind it once the tablet fills the view */
+.journey { position: relative; height: 1300vh; margin-top: var(--section-gap); }
 .journey-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; }
-.journey-intro { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-24); z-index: 1; pointer-events: none; }
+.journey-dark { position: absolute; inset: 0; z-index: 0; background: #07080c; pointer-events: none; }
+.journey-intro { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-24); z-index: 2; pointer-events: none; }
 .journey-intro .headline { max-width: 12ch; }
 .journey-intro .body { max-width: 34ch; }
 @media (max-width: 899px) { .journey-intro { justify-content: flex-start; padding-top: calc(var(--nav-h) + 24px); } .journey-intro .headline { max-width: 12ch; } }
-.device { position: absolute; inset: 0; z-index: 2; overflow: hidden; transform-origin: 50% 50%; will-change: transform; background: #0b0c10;
-  box-shadow: 0 60px 120px -40px rgba(13, 14, 19, 0.55); }
-.device-metal { position: absolute; inset: 0; }
-.device-screen { position: absolute; overflow: hidden; background: #05060d; isolation: isolate; }
-.space-gradient { position: absolute; inset: 0; z-index: 0; }
 .journey-canvas { position: absolute; inset: 0; z-index: 1; }
 .journey-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
-.journey-words { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1em; pointer-events: none;
-  color: #fff; font-size: clamp(30px, 5.4vw, 92px); font-weight: 450; letter-spacing: -0.02em; line-height: 1; }
+.journey-words { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1em; pointer-events: none;
+  color: #fff; font-size: clamp(30px, 5.4vw, 92px); font-weight: 450; letter-spacing: -0.02em; line-height: 1; will-change: transform; }
 .journey-line { display: flex; gap: 0.32em; }
 .journey-line span { display: inline-block; }
-.journey-flash { position: absolute; inset: 0; z-index: 3; background: #fff; pointer-events: none; }
 .journey-copy { position: absolute; inset: auto 0 0 0; z-index: 4; padding: 0 var(--margin) 56px; max-width: calc(var(--max) + 2 * var(--margin)); margin: 0 auto; pointer-events: none; }
 .journey-copy::before { content: ''; position: absolute; inset: -140px -50vw 0 -50vw; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.7)); }
 .journey-cap { display: flex; flex-direction: column; gap: 14px; max-width: 760px; color: #fff; }
@@ -434,10 +426,12 @@ td.args { max-width: 520px; min-width: 260px; }
 .journey-cap .tail { color: rgba(255, 255, 255, 0.5); }
 .journey-cap .caps { color: rgba(255, 255, 255, 0.7); }
 .journey-cap .body { color: rgba(255, 255, 255, 0.78); max-width: 48ch; }
-.journey-credit { position: absolute; right: var(--margin); bottom: 14px; z-index: 5; color: rgba(255, 255, 255, 0.55); margin: 0; }
+.journey-credit { position: absolute; right: var(--margin); bottom: 14px; z-index: 5; max-width: min(720px, calc(100% - 2 * var(--margin))); text-align: right; color: rgba(255, 255, 255, 0.5); margin: 0; }
+/* The astronaut drops out of the journey straight into the ending: no gap between them. */
+.journey + .space { margin-top: 0; }
 .journey-credit a { color: inherit; }
 .journey-list { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 32px; }
-@media (max-width: 640px) { .journey-copy { padding-bottom: 32px; } .journey-credit { left: var(--margin); right: auto; } }
+@media (max-width: 640px) { .journey-copy { padding-bottom: 56px; } .journey-credit { left: var(--margin); right: var(--margin); text-align: left; } }
 
 /* The ending: floating stickers on a dark sky (components/StickerSpace.tsx) */
 .space { position: relative; min-height: min(100svh, 1000px); margin-top: var(--section-gap); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #07080c; color: #fff; }
@@ -534,7 +528,3 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 .sm-tag { padding: 2px 8px; border-radius: 6px; background: rgba(13, 14, 19, 0.7); color: rgba(255, 255, 255, 0.85); font-size: 11px; white-space: nowrap; font-family: var(--font-mono); }
 .water-wake { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 69; pointer-events: none; }
 
-/* The screen breaking at the end of the journey */
-.shatter { position: absolute; inset: 0; z-index: 6; pointer-events: none; filter: drop-shadow(0 0 1.2px rgba(8, 10, 30, 0.85)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.35)); }
-.shard { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(210, 220, 255, 0.32) 38%, rgba(255, 255, 255, 0.16) 70%, rgba(255, 255, 255, 0.66));
-  -webkit-backdrop-filter: blur(1.5px) brightness(1.25); backdrop-filter: blur(1.5px) brightness(1.25); will-change: transform; }
