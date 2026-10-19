@@ -8,6 +8,7 @@ import { Story } from '../components/Story';
 import { pct, short } from '../lib/format';
 import { ASTRONAUT_CREDIT, ASTRONAUT_URL, EARTH_URL, IMAC_URL, IPAD_URL, JOURNEY_CREDITS, JOURNEY_READY } from '../lib/models';
 import { T } from '../lib/journey';
+import { useLite3D } from '../lib/lite3d';
 import { CountUp, Reveal } from '../components/Motion';
 import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
@@ -52,7 +53,7 @@ function OverviewBody({ d }: { d: Dataset }) {
   const hero = store.hero_run ? d.byId.get(store.hero_run) : undefined;
   const fp = valid.filter((r) => r.utility_rule === 'call_denied_by_defense').length;
   const h = useAsync(loadHeadline, []);
-  const reduce = !!useReducedMotion();
+  const reduce = useLite3D();
   const [score, setScore] = useState<HeroScore>({ stopped: 0, total: 0 });
   const touch = typeof window !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   return (
@@ -156,7 +157,7 @@ function OverviewBody({ d }: { d: Dataset }) {
 /** The ending: a dark sky of floating stickers around the call to action; the pointer flicks them away. */
 function SpaceCta() {
   const ref = useRef<HTMLElement>(null);
-  const reduce = !!useReducedMotion();
+  const reduce = useLite3D();
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
       <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>
@@ -178,7 +179,7 @@ function SpaceCta() {
  *  the evidence. */
 function JourneySection({ h, runs }: { h: Headline; runs: number }) {
   const ref = useRef<HTMLElement>(null);
-  const reduce = !!useReducedMotion();
+  const reduce = useLite3D();
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ['start start', 'end end'] });
   const [active, setActive] = useState(-1);
   const g = T.grid[0], span = T.grid[1] - T.grid[0];

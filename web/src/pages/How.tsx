@@ -3,6 +3,7 @@
 // through it, with a caption naming what happens there and the files that do it. Every number is read from
 // pipeline.json and headline.json (scripts/export-site-data.py).
 import { AnimatePresence, motion, useReducedMotion, useScroll } from 'motion/react';
+import { useLite3D } from '../lib/lite3d';
 import { Suspense, lazy, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Barrel, Roll } from '../components/Interactive';
@@ -43,7 +44,7 @@ function stepFacts(id: StepId, pl: Pipeline, h: Headline): ReactNode[] {
 }
 
 function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
-  const reduce = !!useReducedMotion();
+  const reduce = useLite3D();
   const [step, setStep] = useState(-1);
   const counts: [number, string][] = [[pl.tasks, 'everyday tasks'], [pl.attacks, 'hidden tricks'], [pl.renderings.length, 'ways to write a trick'], [pl.models.length, 'models'], [pl.tools.length, 'tools'], [pl.runs, 'runs recorded']];
   const total = Object.values(pl.outcomes).reduce((a, b) => a + b, 0);
