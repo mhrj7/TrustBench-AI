@@ -5,14 +5,15 @@
 import { ShaderGradient, ShaderGradientCanvas } from '@shadergradient/react';
 import { LiquidMetal } from '@paper-design/shaders-react';
 
-/** Deep space: a slow, grainy gradient of guard blue, violet and near-black. Lights are generated (no HDR download). */
+/** Deep space: ShaderGradient's own "Universe" preset (violet, rose and black on a moving water plane), its 3D lights only, so
+ *  nothing is downloaded. */
 export function SpaceGradient() {
   return (
     <ShaderGradientCanvas className="space-gradient" pixelDensity={1} fov={45} pointerEvents="none" lazyLoad={false} style={{ position: 'absolute', inset: 0 }}>
-      <ShaderGradient control="props" type="sphere" animate="on" uTime={0} uSpeed={0.08} uStrength={0.35} uDensity={0.9} uFrequency={5.5} uAmplitude={2.4}
-        positionX={-0.2} positionY={0} positionZ={0} rotationX={0} rotationY={130} rotationZ={70}
-        color1="#05061a" color2="#2433ff" color3="#3b0d57" reflection={0.1} cAzimuthAngle={180} cPolarAngle={90} cDistance={3.4} cameraZoom={9}
-        lightType="3d" brightness={0.55} grain="on" grainBlending={0.4} />
+      <ShaderGradient control="props" type="waterPlane" animate="on" uTime={0.2} uSpeed={0.1} uStrength={2.4} uDensity={1.1} uFrequency={5.5} uAmplitude={0}
+        positionX={-0.5} positionY={0.1} positionZ={0} rotationX={0} rotationY={0} rotationZ={235}
+        color1="#5606ff" color2="#fe8989" color3="#000000" reflection={0.1} cAzimuthAngle={180} cPolarAngle={115} cDistance={3.9} cameraZoom={1}
+        lightType="3d" brightness={1.1} grain="off" />
     </ShaderGradientCanvas>
   );
 }

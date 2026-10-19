@@ -6,45 +6,40 @@
 // physics stands still under reduced motion.
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
-import { BallCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
+import { BallCollider, CuboidCollider, Physics, RigidBody, type RapierRigidBody } from '@react-three/rapier';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { FluidFX } from './FluidFX';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 const PALETTE = { blue: '#2433ff', black: '#0d0e13', white: '#e9eaf2', red: '#ef3b24' } as const;
-type Kind = 'box' | 'capsule' | 'ball';
-type Piece = { id: number; kind: Kind; color: keyof typeof PALETTE; scale: number; start: [number, number, number] };
+type Kind = 'cross';
+type Piece = { id: number; kind: Kind; color: keyof typeof PALETTE; scale: number; start: [number, number, number]; spin: [number, number, number] };
 
-const GEO = {
-  box: null as unknown as THREE.BufferGeometry,
-  capsule: new THREE.CapsuleGeometry(0.42, 0.9, 8, 24),
-  ball: new THREE.SphereGeometry(0.62, 40, 40),
-};
-// Soften the cube's edges by rounding it through a subdivided box mapped toward a sphere.
-GEO.box = (() => {
-  const g = new THREE.BoxGeometry(1, 1, 1, 12, 12, 12);
-  const p = g.attributes.position, v = new THREE.Vector3(), r = 0.18, h = 0.5 - r;
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const c = new THREE.Vector3(Math.max(-h, Math.min(h, v.x)), Math.max(-h, Math.min(h, v.y)), Math.max(-h, Math.min(h, v.z)));
-    v.sub(c).normalize().multiplyScalar(r).add(c);
-    p.setXYZ(i, v.x, v.y, v.z);
-  }
-  g.computeVertexNormals();
-  return g;
+/** One hollow tube along y: an outer wall with rounded lips and an inner bore, turned on a lathe (normals come out right). */
+function tube(R = 0.42, r = 0.2, h = 1.2, e = 0.07) {
+  const pts = [[r, -h], [R - e, -h], [R, -h + e], [R, h - e], [R - e, h], [r, h], [r, -h]].map(([x, y]) => new THREE.Vector2(x, y));
+  return new THREE.LatheGeometry(pts, 40);
+}
+/** The piece: three hollow tubes crossing at the middle, one along each axis (a six-armed connector). */
+const CROSS = (() => {
+  const y = tube(), x = tube().rotateZ(Math.PI / 2), z = tube().rotateX(Math.PI / 2);
+  const g = mergeGeometries([x, y, z])!; g.computeVertexNormals(); return g;
 })();
 
 const seeded = (s: number) => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
 
 function makePieces(n: number, tricks: number): Piece[] {
   const rnd = seeded(7);
-  const kinds: Kind[] = ['box', 'capsule', 'ball'];
   const colors: (keyof typeof PALETTE)[] = ['blue', 'black', 'white'];
   return Array.from({ length: n }, (_, i) => ({
     id: i,
-    kind: kinds[i % 3],
+    kind: 'cross' as Kind,
     color: i < tricks ? 'red' : colors[Math.floor(rnd() * 3)],
-    scale: 1.05 + rnd() * 0.75,
-    start: [(rnd() - 0.5) * 16, (rnd() - 0.5) * 12, (rnd() - 0.5) * 8 - 2],
+    scale: 0.95 + rnd() * 0.35,
+    start: (() => { const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, rr = 3.2 * Math.cbrt(rnd()), s2 = Math.sqrt(1 - u * u);
+      return [Math.cos(th) * s2 * rr, Math.sin(th) * s2 * rr, u * rr] as [number, number, number]; })(),
+    spin: [rnd() * 6, rnd() * 6, rnd() * 6] as [number, number, number],
   }));
 }
 
@@ -59,7 +54,7 @@ function Body({ piece, tricked, onStop, still }: { piece: Piece; tricked: boolea
     if (b && !still) {
       // Pull toward the centre: a weak spring with damping, so the pile breathes instead of collapsing.
       const t = b.translation();
-      pull.set(-t.x, -t.y, -t.z).multiplyScalar(0.2 * piece.scale ** 3);
+      pull.set(-t.x, -t.y, -t.z).multiplyScalar(0.55 * piece.scale ** 3);
       b.applyImpulse(pull, true);
     }
     if (mat.current) {
@@ -70,12 +65,16 @@ function Body({ piece, tricked, onStop, still }: { piece: Piece; tricked: boolea
     }
   });
   return (
-    <RigidBody ref={api} position={piece.start} colliders={piece.kind === 'ball' ? 'ball' : piece.kind === 'capsule' ? 'hull' : 'cuboid'}
+    <RigidBody ref={api} position={piece.start} rotation={piece.spin} colliders={false}
       linearDamping={3.2} angularDamping={0.6} friction={0.2} restitution={0.25} name={`piece-${piece.id}`}
       onCollisionEnter={({ other }) => {
         if (tricked && other.rigidBodyObject?.name === 'guard') { flash.current = 1; onStop(piece.id); }
       }}>
-      <mesh geometry={GEO[piece.kind]} scale={piece.scale} castShadow receiveShadow>
+      {/* Three crossing bars: the collider matches the piece, so pieces hook and stack like the real thing. */}
+      <CuboidCollider args={[1.2 * piece.scale, 0.42 * piece.scale, 0.42 * piece.scale]} />
+      <CuboidCollider args={[0.42 * piece.scale, 1.2 * piece.scale, 0.42 * piece.scale]} />
+      <CuboidCollider args={[0.42 * piece.scale, 0.42 * piece.scale, 1.2 * piece.scale]} />
+      <mesh geometry={CROSS} scale={piece.scale} castShadow receiveShadow>
         <meshPhysicalMaterial ref={mat} color={tricked ? PALETTE.red : PALETTE[piece.color === 'red' ? 'blue' : piece.color]}
           roughness={piece.color === 'black' ? 0.12 : 0.28} metalness={0.05} clearcoat={1} clearcoatRoughness={0.12} />
       </mesh>
@@ -107,7 +106,7 @@ export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onSc
   const [visible, setVisible] = useState(true);
   const [pointerIn, setPointerIn] = useState(false);
   const small = typeof window !== 'undefined' && window.innerWidth < 760;
-  const pieces = useMemo(() => makePieces(small ? 34 : 64, small ? 5 : 8), [small]);
+  const pieces = useMemo(() => makePieces(small ? 26 : 46, small ? 4 : 7), [small]);
   const tricks = pieces.filter((p) => p.color === 'red').map((p) => p.id);
   const [stopped, setStopped] = useState<Set<number>>(new Set());
   useEffect(() => { onScore?.({ stopped: stopped.size, total: tricks.length }); }, [stopped, tricks.length, onScore]);
@@ -147,6 +146,7 @@ export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onSc
             <Lightformer form="ring" color="#6b7cff" intensity={6} onUpdate={(self) => self.lookAt(0, 0, 0)} position={[10, 10, 0]} scale={10} />
           </group>
         </Environment>
+        {!reduce && <FluidFX />}
       </Canvas>
     </div>
   );

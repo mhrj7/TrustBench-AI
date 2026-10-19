@@ -45,9 +45,10 @@ in red), the tool service (ten named tools around the case database), the scorer
 whose result arcs back to the browser. The camera starts on the whole system and flies to each module; the one in focus
 opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.json and configs/live-service.yaml).
 
-Across the site: **water** under the cursor (`components/Water.tsx`): in Chromium with a mouse, a wake that refracts the real
-page through an SVG displacement filter used as `backdrop-filter`. Phones and Safari (WebKit) cannot refract the page, so
-they have no water effect. **Barrel scroll**
+Across the site: **water** under the cursor or finger, from one shared field (`lib/fluid.ts`), as on the reference site: every
+browser draws the wake as a light, smoky WebGL trail over the page (`components/Water.tsx`) and every 3D scene bends what it
+draws by the same field with a thin rainbow edge (`components/FluidFX.tsx`, a postprocessing effect); Chromium with a
+mouse also refracts the page itself (SVG displacement as `backdrop-filter`). **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
 **Menu**: the sheet unfolds with a clip-path spring and its numbered links rise in one after another.
 
