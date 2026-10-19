@@ -1,7 +1,7 @@
 // One water field for the whole page, after the reference site: a small velocity field over the viewport that the pointer
 // or a finger drags along its path; each frame it carries itself forward (advection), spreads (diffusion) and settles
 // (decay). It is shared by three readers: the WebGL scenes (components/FluidFX.tsx, which distort what they draw), the
-// light wake drawn over the page (components/Water.tsx) and, in Chromium, the refraction of the page itself. Encoded as
+// light wake drawn over the page (components/Water.tsx) and, in Chromium, the refraction of the page under the water. Encoded as
 // RGBA bytes: R = x velocity and G = y velocity around 128, B = speed. The field sleeps when still; `version` changes
 // whenever the bytes do, and `size` whenever the grid is reallocated.
 export const COLS = 72;
@@ -13,7 +13,7 @@ class Fluid {
   cols = COLS; rows = 40; size = 0; version = 0; active = false;
   data = new Uint8Array(0);
   private vx = new Float32Array(0); private vy = new Float32Array(0); private tx = new Float32Array(0); private ty = new Float32Array(0);
-  private px = -1; private py = -1; private raf = 0; private started = false;
+  private px = -1; private py = -1; private last = 0; private raf = 0; private started = false;
   private listeners = new Set<Listener>();
 
   start() {
@@ -26,7 +26,10 @@ class Fluid {
     addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t) this.move(t.clientX, t.clientY); }, { passive: true });
     addEventListener('touchstart', (e) => { const t = e.touches[0]; if (t) { this.px = -1; this.move(t.clientX, t.clientY); } }, { passive: true });
     addEventListener('touchend', () => { this.px = -1; }, { passive: true });
-    document.addEventListener('pointerleave', () => { this.px = -1; });
+    // Leaving the window (to the tabs, the address bar, past an edge) ends the stroke; otherwise the first move after coming
+    // back would drag the water in a long streak from the point where the pointer left.
+    document.documentElement.addEventListener('mouseleave', () => { this.px = -1; });
+    addEventListener('blur', () => { this.px = -1; });
   }
 
   /** Called whenever the field changes (each frame while it moves, and once more when it settles). */
@@ -53,7 +56,10 @@ class Fluid {
   }
 
   private move(x: number, y: number) {
-    const cx = (x / innerWidth) * COLS, cy = (y / innerHeight) * this.rows;
+    const cx = (x / innerWidth) * COLS, cy = (y / innerHeight) * this.rows, now = performance.now();
+    // A pause of more than a fifth of a second also starts a new stroke.
+    if (now - this.last > 200) this.px = -1;
+    this.last = now;
     if (this.px >= 0) {
       const dx = cx - this.px, dy = cy - this.py, n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 1.5));
       // Drag the water along the whole path since the last event, not just at its end.
@@ -83,6 +89,11 @@ class Fluid {
       vx[k] = (tx[k] * 0.6 + ax * 0.4) * DECAY; vy[k] = (ty[k] * 0.6 + ay * 0.4) * DECAY;
       energy += Math.abs(vx[k]) + Math.abs(vy[k]);
     }
+    // The outer ring of cells is outside the diffusion loop above, so clear it every step: water left on an edge (a stroke
+    // that leaves the window through the top or a side) would otherwise never fade, keep feeding the cells next to it, and
+    // keep the field from ever settling.
+    for (let i = 0; i < COLS; i++) { vx[i] = vy[i] = 0; vx[(rows - 1) * COLS + i] = vy[(rows - 1) * COLS + i] = 0; }
+    for (let j = 0; j < rows; j++) { vx[j * COLS] = vy[j * COLS] = 0; vx[j * COLS + COLS - 1] = vy[j * COLS + COLS - 1] = 0; }
     const settled = energy < 0.02 * COLS * rows / 100;
     if (settled) { vx.fill(0); vy.fill(0); }
     const d = this.data;

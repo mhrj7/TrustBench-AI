@@ -1,18 +1,26 @@
 // Water under the cursor, in every browser (the field itself is lib/fluid.ts):
 //  - the wake: a fixed, pointer-transparent WebGL canvas over the page draws the moving water as a light, smoky trail with a
 //    faint blue and pink edge, after the reference site; it works in Safari and on phones, and clears when the water settles;
-//  - the WebGL scenes distort what they draw by the same field (components/FluidFX.tsx).
-// As on the reference site, the page's own text is not refracted: a full-window SVG displacement filter did that in
-// Chromium and halved the frame rate on high-density screens while the pointer moved. Off under reduced motion.
+//  - the WebGL scenes distort what they draw by the same field (components/FluidFX.tsx);
+//  - in Chromium browsers with a mouse (Chrome, Brave, Edge), the page under the water ripples too: an SVG displacement
+//    filter used as backdrop-filter, applied only to a box around the moving water (cropped to the cells that are moving),
+//    never to the whole window, which halved the frame rate on high-density screens. WebKit cannot filter a backdrop with
+//    SVG, so Safari shows the wake and the scenes' distortion.
+// Off under reduced motion.
 import { useReducedMotion } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fluid } from '../lib/fluid';
+
+const ID = 'tb-water';
+const STRENGTH = 64;   // pixels of bend at full flow: clearly water under a gentle stroke, readable when still
+const canRefract = () => matchMedia('(pointer: fine)').matches && CSS.supports('backdrop-filter', `url(#${ID})`) && !/^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
 export function WaterCursor() {
   const reduce = useReducedMotion();
+  const [refract] = useState(() => typeof window !== 'undefined' && canRefract());
   useEffect(() => { if (!reduce) fluid.start(); }, [reduce]);
   if (reduce) return null;
-  return <WaterWake />;
+  return <><WaterWake />{refract && <WaterRefraction />}</>;
 }
 
 const VERT = `attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
@@ -65,4 +73,59 @@ function WaterWake() {
     return () => { off(); removeEventListener('resize', size); };
   }, []);
   return <canvas ref={ref} className="water-wake" aria-hidden="true" />;
+}
+
+/** Chromium with a mouse: the page under the moving water ripples. Only a box around the moving cells is filtered (the
+ *  filter's cost grows with its area), updated 30 times a second, and nothing is filtered once the water settles. */
+function WaterRefraction() {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true'); svg.style.position = 'absolute';
+    const filter = document.createElementNS(ns, 'filter'), feImg = document.createElementNS(ns, 'feImage'), disp = document.createElementNS(ns, 'feDisplacementMap');
+    filter.setAttribute('id', ID);
+    for (const [k, v] of [['filterUnits', 'userSpaceOnUse'], ['primitiveUnits', 'userSpaceOnUse'], ['color-interpolation-filters', 'sRGB'], ['x', '0'], ['y', '0']]) filter.setAttribute(k, v);
+    for (const [k, v] of [['x', '0'], ['y', '0'], ['preserveAspectRatio', 'none'], ['result', 'map']]) feImg.setAttribute(k, v);
+    for (const [k, v] of [['in', 'SourceGraphic'], ['in2', 'map'], ['scale', String(STRENGTH)], ['xChannelSelector', 'R'], ['yChannelSelector', 'G']]) disp.setAttribute(k, v);
+    filter.append(feImg, disp); svg.appendChild(filter); el.appendChild(svg);
+    const layer = document.createElement('div'); layer.className = 'water-layer'; el.appendChild(layer);
+    let on = false, odd = false;
+    const show = (v: boolean) => {
+      if (v === on) return;
+      on = v;
+      const f = v ? `url(#${ID})` : 'none';
+      layer.style.setProperty('backdrop-filter', f); layer.style.setProperty('-webkit-backdrop-filter', f);
+      layer.style.display = v ? 'block' : 'none';
+    };
+    show(false);
+    const update = () => {
+      if (!fluid.active) { show(false); return; }
+      odd = !odd;
+      if (!odd) return;   // 30 updates a second is smooth enough, and half the work
+      // The moving cells' bounding box, two cells of margin, in grid cells.
+      const { cols, rows, data } = fluid;
+      let i0 = cols, i1 = -1, j0 = rows, j1 = -1;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) if (data[(j * cols + i) * 4 + 2] > 6) { if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
+      if (i1 < 0) { show(false); return; }
+      i0 = Math.max(0, i0 - 2); j0 = Math.max(0, j0 - 2); i1 = Math.min(cols - 1, i1 + 2); j1 = Math.min(rows - 1, j1 + 2);
+      const w = i1 - i0 + 1, h = j1 - j0 + 1, cw = innerWidth / cols, ch = innerHeight / rows;
+      const crop = new Uint8ClampedArray(w * h * 4);
+      for (let j = 0; j < h; j++) crop.set(data.subarray(((j0 + j) * cols + i0) * 4, ((j0 + j) * cols + i0 + w) * 4), j * w * 4);
+      canvas.width = w; canvas.height = h;
+      ctx.putImageData(new ImageData(crop, w, h), 0, 0);
+      const bw = Math.round(w * cw), bh = Math.round(h * ch);
+      for (const n of [filter, feImg]) { n.setAttribute('width', String(bw)); n.setAttribute('height', String(bh)); }
+      feImg.setAttribute('href', canvas.toDataURL('image/png'));
+      Object.assign(layer.style, { left: `${Math.round(i0 * cw)}px`, top: `${Math.round(j0 * ch)}px`, width: `${bw}px`, height: `${bh}px` });
+      show(true);
+    };
+    const off = fluid.on(update);
+    return () => { off(); el.replaceChildren(); };
+  }, []);
+  return <div ref={host} className="water" aria-hidden="true" />;
 }
