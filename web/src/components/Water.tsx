@@ -7,10 +7,10 @@
 import { useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 
-const COLS = 128;         // field resolution across the screen
-const STRENGTH = 70;      // displacement in px at full field strength
-const DECAY = 0.955;      // per-frame settling
-const RADIUS = 5;         // pointer splat radius, in cells
+const COLS = 72;          // field resolution across the screen (coarse: the map is stretched smoothly anyway)
+const STRENGTH = 34;      // displacement in px at full field strength: a light ripple, not deep water
+const DECAY = 0.9;        // per-frame settling: the wake is gone in well under a second
+const RADIUS = 3;         // pointer splat radius, in cells
 const ID = 'tb-water';
 
 export function WaterCursor() {
@@ -93,12 +93,14 @@ export function WaterCursor() {
       const v = on ? `url(#${ID})` : 'none';
       layer.style.setProperty('backdrop-filter', v); layer.style.setProperty('-webkit-backdrop-filter', v);
     };
+    let odd = false;
     const tick = () => {
       const energy = step();
-      if (energy < 0.5) { running = false; attach(false); return; }
-      ctx.putImageData(img, 0, 0);
-      feImg.setAttribute('href', canvas.toDataURL('image/png'));
-      attach(true);
+      // Settled: clear the field completely and detach the filter, so no patch of the page stays bent.
+      if (energy < 0.02 * COLS * rows / 100) { vx.fill(0); vy.fill(0); running = false; attach(false); return; }
+      // The map is re-encoded every other frame (30 a second): smooth enough, and half the work.
+      odd = !odd;
+      if (odd) { ctx.putImageData(img, 0, 0); feImg.setAttribute('href', canvas.toDataURL('image/png')); attach(true); }
       raf = requestAnimationFrame(tick);
     };
     const move = (e: PointerEvent) => {
@@ -107,7 +109,7 @@ export function WaterCursor() {
         const dx = cx - px, dy = cy - py, len = Math.hypot(dx, dy);
         // Drag the water along the whole path since the last event, not just at its end.
         const n = Math.max(1, Math.ceil(len / 1.5));
-        for (let s = 1; s <= n; s++) splat(px + (dx * s) / n, py + (dy * s) / n, Math.max(-3, Math.min(3, dx * 0.5)), Math.max(-3, Math.min(3, dy * 0.5)));
+        for (let s = 1; s <= n; s++) splat(px + (dx * s) / n, py + (dy * s) / n, Math.max(-1.6, Math.min(1.6, dx * 0.35)), Math.max(-1.6, Math.min(1.6, dy * 0.35)));
       }
       px = cx; py = cy;
       if (!running) { running = true; raf = requestAnimationFrame(tick); }

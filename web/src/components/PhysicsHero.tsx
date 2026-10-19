@@ -130,7 +130,7 @@ export default function PhysicsHero({ reduce, onScore }: { reduce: boolean; onSc
   return (
     <div ref={host} className="stage-canvas" aria-hidden="true" onPointerEnter={() => setPointerIn(true)} onPointerLeave={() => setPointerIn(false)}
       onPointerDown={() => setPointerIn(true)}>
-      <Canvas dpr={[1, 1.75]} camera={{ position: [0, 0, 20], fov: 32, near: 1, far: 60 }} gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
+      <Canvas dpr={[1, 1.5]} camera={{ position: [0, 0, 20], fov: 32, near: 1, far: 60 }} gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
         frameloop={reduce ? 'demand' : visible ? 'always' : 'never'} onCreated={({ gl }) => gl.setClearColor('#14161d')}>
         <ambientLight intensity={0.5} />
         <spotLight position={[18, 18, 18]} angle={0.25} penumbra={1} intensity={600} castShadow />

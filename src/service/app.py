@@ -677,6 +677,13 @@ def create_app(service: Optional[Service] = None) -> FastAPI:
                 response.headers.setdefault(name, value)
         if request.url.path.startswith('/api/'):
             response.headers.setdefault('Cache-Control', 'no-store')
+        elif request.url.path.startswith('/assets/'):
+            # Built assets carry a content hash in their names: a new build means new names, so they can be kept for good.
+            response.headers.setdefault('Cache-Control', 'public, max-age=31536000, immutable')
+        else:
+            # Pages and data must be revalidated every time, so a browser never keeps an old page (and its old security
+            # policy) pointing at assets from an earlier build.
+            response.headers.setdefault('Cache-Control', 'no-cache')
         return response
 
     @api.get('/api/health')
