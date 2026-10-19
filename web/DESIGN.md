@@ -20,7 +20,10 @@ The overview, top to bottom:
 2. **Statement** with the cursor ribbon (`Ribbon` in `components/Interactive.tsx`): "Tricks hide. Guards check."
 3. **Story**: four chapters beside a sticky dark stage that swaps scenes, built from the recorded example.
 4. **Growing card** (`GrowCard`): "FLIP ▶ GUARD"; tilted rows of the run's real tool calls drift across it while it grows
-   from an inset to full width.
+   from an inset to full width. Its "Flip it yourself" button opens the launch film full screen (`components/FilmPlayer.tsx`):
+   the picture on black, PAUSE / progress / MUTE along the bottom, and a white circle with an X that follows the pointer and
+   closes on click (it shrinks away over the controls; touch screens get a fixed close button; Esc closes, Space pauses, M
+   mutes). The film (`web/public/media/`) is kept out of git and served by the deployed site.
 5. **Flip the guard**: the recorded pair of runs replayed with the guard off and on.
 6. **Results bento**, **evidence grid** (two-column cards with live mini visuals and rolling titles), the development
    evidence (paired morph, utility cost), and the call to action.

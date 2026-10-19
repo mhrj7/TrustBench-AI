@@ -16,6 +16,7 @@ import { RateBars } from '../components/Charts';
 import { useEvidence } from '../components/Shell';
 import { TimedWaterfall } from '../components/Waterfall';
 import { Loading } from './Common';
+import { FilmPlayer } from '../components/FilmPlayer';
 
 // The hero's 3D code is the heaviest download on the page: start fetching it as soon as the app boots on the home page,
 // instead of waiting for the hero to render.
@@ -313,6 +314,7 @@ function MiniRounds({ d }: { d: Dataset }) {
 /** The cover of the growing card: tilted rows of the recorded run's real tool calls and guard decisions drifting past. */
 function ReelCover({ h }: { h: Headline }) {
   const reduce = useReducedMotion();
+  const [film, setFilm] = useState(false);
   const ex = h.example;
   const items = [
     ...ex.without_guard.tools.map((t) => ({ text: t.tool.replaceAll('_', ' '), tone: '' })),
@@ -331,7 +333,8 @@ function ReelCover({ h }: { h: Headline }) {
           </motion.div>
         ))}
       </div>
-      <a className="reel-play roll-host" href="#sim"><span className="reel-play-icon" aria-hidden="true">▶</span><Roll>Flip it yourself</Roll></a>
+      <button type="button" className="reel-play roll-host" onClick={() => setFilm(true)} aria-haspopup="dialog"><span className="reel-play-icon" aria-hidden="true">▶</span><Roll>Flip it yourself</Roll></button>
+      <FilmPlayer open={film} onClose={() => setFilm(false)} />
     </div>
   );
 }

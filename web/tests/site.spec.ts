@@ -112,6 +112,21 @@ test('drawer closes with Escape and the Close button', async ({ page }) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('film: Flip it yourself opens the launch film; Escape closes it and returns focus', async ({ page }) => {
+  await page.goto('/');
+  const open = page.getByRole('button', { name: /Flip it yourself/ });
+  await open.scrollIntoViewIfNeeded();
+  await open.click();
+  const film = page.getByRole('dialog', { name: 'TrustBench launch film' });
+  await expect(film).toBeVisible();
+  await expect(film.getByRole('button', { name: /^(Pause|Play)$/ })).toBeVisible();
+  await expect(film.getByRole('button', { name: /^(Mute|Unmute)$/ })).toBeVisible();
+  await expect(film.getByRole('slider', { name: 'Seek' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(film).toBeHidden();
+  await expect(open).toBeFocused();
+});
+
 test('controls: filters and verdict live in the URL and change the view', async ({ page }) => {
   await page.goto('/compare');
   await page.getByRole('button', { name: 'Utility pass' }).click();
