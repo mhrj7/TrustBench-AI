@@ -21,13 +21,17 @@ void main(){
   vec4 f = texture2D(field, vec2(uv.x, 1.0 - uv.y));
   vec2 v = (f.rg - 0.5) * 2.0;
   float m = length(v);
-  float a = smoothstep(0.02, 0.35, m);
-  // A soft white body with a thin iridescent edge whose hue follows the direction of the flow.
-  float ang = atan(v.y, v.x);
-  vec3 tint = mix(vec3(0.42, 0.48, 1.0), vec3(1.0, 0.55, 0.85), 0.5 + 0.5 * sin(ang * 2.0));
-  float edge = smoothstep(0.08, 0.2, m) * (1.0 - smoothstep(0.2, 0.5, m));
-  vec3 col = mix(vec3(1.0), tint, edge * 0.8);
-  gl_FragColor = vec4(col * a * 0.42, a * 0.42);
+  float a = smoothstep(0.03, 0.3, m);
+  // Shaded like a liquid surface, so it reads on the light page as well as over the dark scenes: the side facing the
+  // light is a white highlight, the other a blue-violet shade, with a thin iridescent rim whose hue follows the flow.
+  vec2 d = m > 0.0001 ? v / m : vec2(0.0);
+  float lit = dot(d, normalize(vec2(-0.6, -0.8)));
+  vec3 col = mix(vec3(0.28, 0.30, 0.78), vec3(1.0), 0.5 + 0.5 * lit);
+  vec3 tint = mix(vec3(0.35, 0.45, 1.0), vec3(1.0, 0.42, 0.78), 0.5 + 0.5 * sin(atan(v.y, v.x) * 2.0));
+  float edge = smoothstep(0.06, 0.18, m) * (1.0 - smoothstep(0.18, 0.5, m));
+  col = mix(col, tint, edge * 0.9);
+  float alpha = a * 0.36;
+  gl_FragColor = vec4(col * alpha, alpha);
 }`;
 
 /** The visible wake over the page, in every browser. */

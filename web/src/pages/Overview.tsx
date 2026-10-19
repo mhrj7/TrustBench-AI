@@ -299,7 +299,7 @@ function MiniRounds({ d }: { d: Dataset }) {
     <ol className="mini-rounds" aria-label="Audit accuracy by round">
       {Object.entries(a.rounds).map(([r, v], i) => (
         <li key={r}>
-          <motion.span className={Number(r) === a.measured.round ? 'is-measured' : ''} style={{ height: `${(v.summary.all.accuracy ?? 0) * 100}%` }}
+          <motion.span className={Number(r) === a.measured.round ? 'is-measured' : ''} style={{ height: `calc((100% - 36px) * ${v.summary.all.accuracy ?? 0})` }}
             initial={{ scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true }} transition={{ type: 'spring', bounce: 0, duration: 0.9, delay: i * 0.08 }} />
           <span className="small num">{pct(v.summary.all.accuracy)}</span>
         </li>
