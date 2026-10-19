@@ -46,8 +46,8 @@ whose result arcs back to the browser. The camera starts on the whole system and
 opens up. Captions and counts come from `pipeline.json` (configs/site-pipeline.json and configs/live-service.yaml).
 
 Across the site: **water** under the cursor (`components/Water.tsx`): in Chromium with a mouse, a wake that refracts the real
-page through an SVG displacement filter used as `backdrop-filter`; on phones and in Safari, which cannot refract the page,
-light ripple rings follow the finger or pointer. **Barrel scroll**
+page through an SVG displacement filter used as `backdrop-filter`. Phones and Safari (WebKit) cannot refract the page, so
+they have no water effect. **Barrel scroll**
 (`useBarrel` in `components/Interactive.tsx`): cards tilt as they travel up the screen, like panels on the inside of a drum.
 **Menu**: the sheet unfolds with a clip-path spring and its numbered links rise in one after another.
 
