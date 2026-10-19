@@ -87,14 +87,22 @@ function WaterRefraction() {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true'); svg.style.position = 'absolute';
-    const filter = document.createElementNS(ns, 'filter'), feImg = document.createElementNS(ns, 'feImage'), disp = document.createElementNS(ns, 'feDisplacementMap');
+    const filter = document.createElementNS(ns, 'filter'), flood = document.createElementNS(ns, 'feFlood'), feImg = document.createElementNS(ns, 'feImage'),
+      over = document.createElementNS(ns, 'feComposite'), disp = document.createElementNS(ns, 'feDisplacementMap');
     filter.setAttribute('id', ID);
     for (const [k, v] of [['filterUnits', 'userSpaceOnUse'], ['primitiveUnits', 'userSpaceOnUse'], ['color-interpolation-filters', 'sRGB'], ['x', '0'], ['y', '0']]) filter.setAttribute(k, v);
-    for (const [k, v] of [['x', '0'], ['y', '0'], ['preserveAspectRatio', 'none'], ['result', 'map']]) feImg.setAttribute(k, v);
+    // The map sits on neutral grey (no shift). Each update loads a new image asynchronously; until it has decoded, an empty
+    // map would shift the whole box by half the strength (a box-shaped jump following the cursor). On grey it shifts nothing.
+    for (const [k, v] of [['flood-color', 'rgb(128,128,128)'], ['result', 'neutral']]) flood.setAttribute(k, v);
+    for (const [k, v] of [['x', '0'], ['y', '0'], ['preserveAspectRatio', 'none'], ['result', 'img']]) feImg.setAttribute(k, v);
+    for (const [k, v] of [['in', 'img'], ['in2', 'neutral'], ['operator', 'over'], ['result', 'map']]) over.setAttribute(k, v);
     for (const [k, v] of [['in', 'SourceGraphic'], ['in2', 'map'], ['scale', String(STRENGTH)], ['xChannelSelector', 'R'], ['yChannelSelector', 'G']]) disp.setAttribute(k, v);
-    filter.append(feImg, disp); svg.appendChild(filter); el.appendChild(svg);
+    filter.append(flood, feImg, over, disp); svg.appendChild(filter); el.appendChild(svg);
     const layer = document.createElement('div'); layer.className = 'water-layer'; el.appendChild(layer);
-    let on = false, odd = false;
+    let on = false, odd = false, pending = false;
+    // The box for the current stroke: set when the water starts moving and only ever grown, never moved, so the map and
+    // the box cannot fall out of step (a moving box with a map one frame behind showed ghost copies of the text).
+    let bi0 = 0, bj0 = 0, bi1 = -1, bj1 = -1;
     const show = (v: boolean) => {
       if (v === on) return;
       on = v;
@@ -104,25 +112,41 @@ function WaterRefraction() {
     };
     show(false);
     const update = () => {
-      if (!fluid.active) { show(false); return; }
+      if (!fluid.active) { show(false); bi1 = -1; return; }
       odd = !odd;
       if (!odd) return;   // 30 updates a second is smooth enough, and half the work
       // The moving cells' bounding box, two cells of margin, in grid cells.
       const { cols, rows, data } = fluid;
       let i0 = cols, i1 = -1, j0 = rows, j1 = -1;
       for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) if (data[(j * cols + i) * 4 + 2] > 6) { if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
-      if (i1 < 0) { show(false); return; }
-      i0 = Math.max(0, i0 - 2); j0 = Math.max(0, j0 - 2); i1 = Math.min(cols - 1, i1 + 2); j1 = Math.min(rows - 1, j1 + 2);
+      if (i1 < 0) { show(false); bi1 = -1; return; }
+      // A wide margin of still water, so the ripple fades to nothing well inside the box.
+      i0 = Math.max(0, i0 - 4); j0 = Math.max(0, j0 - 4); i1 = Math.min(cols - 1, i1 + 4); j1 = Math.min(rows - 1, j1 + 4);
+      if (bi1 >= 0) { i0 = Math.min(i0, bi0); j0 = Math.min(j0, bj0); i1 = Math.max(i1, bi1); j1 = Math.max(j1, bj1); }
+      bi0 = i0; bj0 = j0; bi1 = i1; bj1 = j1;
       const w = i1 - i0 + 1, h = j1 - j0 + 1, cw = innerWidth / cols, ch = innerHeight / rows;
       const crop = new Uint8ClampedArray(w * h * 4);
       for (let j = 0; j < h; j++) crop.set(data.subarray(((j0 + j) * cols + i0) * 4, ((j0 + j) * cols + i0 + w) * 4), j * w * 4);
+      // The outermost cells are forced to still water (no shift), so nothing near the border is pulled from outside the box.
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (i === 0 || j === 0 || i === w - 1 || j === h - 1) { const k = (j * w + i) * 4; crop[k] = 128; crop[k + 1] = 128; crop[k + 2] = 0; }
       canvas.width = w; canvas.height = h;
       ctx.putImageData(new ImageData(crop, w, h), 0, 0);
-      const bw = Math.round(w * cw), bh = Math.round(h * ch);
-      for (const n of [filter, feImg]) { n.setAttribute('width', String(bw)); n.setAttribute('height', String(bh)); }
-      feImg.setAttribute('href', canvas.toDataURL('image/png'));
-      Object.assign(layer.style, { left: `${Math.round(i0 * cw)}px`, top: `${Math.round(j0 * ch)}px`, width: `${bw}px`, height: `${bh}px` });
-      show(true);
+      const bw = Math.round(w * cw), bh = Math.round(h * ch), url = canvas.toDataURL('image/png');
+      const box = { left: `${Math.round(i0 * cw)}px`, top: `${Math.round(j0 * ch)}px`, width: `${bw}px`, height: `${bh}px` };
+      // Decode the new map first, then switch the map and move the box in the same frame: moving the box while the old map
+      // is still shown would lay that map over the wrong part of the page (ghost copies of the text).
+      if (pending) return;
+      pending = true;
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        pending = false;
+        if (!fluid.active) return;
+        for (const n of [filter, flood, feImg]) { n.setAttribute('width', String(bw)); n.setAttribute('height', String(bh)); }
+        feImg.setAttribute('href', url);
+        Object.assign(layer.style, box);
+        show(true);
+      };
+      img.src = url;
     };
     const off = fluid.on(update);
     return () => { off(); el.replaceChildren(); };
