@@ -12,7 +12,7 @@ synthetic data and mock tools; no real email is sent and no real record changes.
 
 ## Try it live (nothing to install)
 
-**<https://trustbench.taila273c6.ts.net/live>**: pick a mode and press *Run*. You get a guest session automatically.
+**<https://trustbench.taila273c6.ts.net>**: pick a mode and press *Run*. You get a guest session automatically.
 
 | Mode | What it needs | Limit per run |
 | --- | --- | --- |
