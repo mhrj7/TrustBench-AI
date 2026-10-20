@@ -1,7 +1,7 @@
 # External-agent integration contract: goose 1.55.0 (TB-056)
 
-Contract version 1.1.0 (1.0.0 was written in TB-056; the changes made while building the adapter in TB-057 are listed in
-[Changes in 1.1.0](#changes-in-110)). The adapter (`src/external/`) implements exactly this; a change needs a new contract
+Contract version 1.2.0 (1.0.0 was written in TB-056; the changes made in TB-057 are listed in
+[Changes in 1.1.0](#changes-in-110), those made in TB-058 in [Changes in 1.2.0](#changes-in-120)). The adapter (`src/external/`) implements exactly this; a change needs a new contract
 version, recorded before any run that uses it. Every report records the contract version it ran under. The threats each rule answers are in
 `docs/external/threat-model.md` (entry points EX-01 to EX-24).
 
@@ -167,4 +167,26 @@ Found while building the adapter (TB-057); every run in TB-057's evidence used 1
 - `GOOSE_MAX_TURNS` is set; `GOOSE_SUBAGENT_MAX_TURNS` and `GOOSE_AUTO_COMPACT_THRESHOLD` are left at goose's defaults,
   the same in both arms.
 - No seed is sent; goose has no seed setting.
+
+## Changes in 1.2.0
+
+Made in TB-058 (in progress). TB-057's evidence ran under 1.1.0.
+
+- **Sandbox.** goose and every process it starts run inside an OS sandbox (`src/external/sandbox.ts`, configured in
+  `configs/external-agents.yaml` `sandbox`): `sandbox-exec` on macOS, Landlock on Linux
+  (`src/external/bin/landlock-exec.py`, unprivileged, so it also works in the service container).
+  - Network: only the episode's adapter socket and the model proxy port can be reached.
+  - Files: writes are allowed only inside the episode folder. The harness's files cannot be read: the repository, the
+    tool databases, session files, keys, the user's home folder and other episodes.
+  - If the platform cannot confine goose, goose refuses to start. The report records the confinement used per run.
+- **`TMPDIR`** is set to a folder inside the episode sandbox and is added to the allowlisted environment.
+- **One client per socket.** Each episode's adapter or gateway socket accepts only its first client (the agent's relay).
+  Later connections are closed without an answer.
+- **Cancellation.** Once the episode is cancelled or has ended, the adapter refuses every call with `episode_cancelled`,
+  recorded as a `deny` in the trace, and forwards nothing.
+- **Native-mode data.** The native integration's synthetic data lives in a service folder outside the agent's sandbox, so
+  the agent reaches it only through the gateway.
+
+Not yet demonstrated: the bypass tests that would show these controls hold against deliberate attempts (TB-058
+acceptance). Until they pass, no claim says goose cannot reach a tool except through the adapter or gateway.
 

@@ -22,7 +22,7 @@ export interface AdapterOptions {
   signal: AbortSignal;
   /** Gateway denial codes and trace rule IDs from configs/external-agents.yaml. */
   denialCodes: Set<string>;
-  rules: { baseline_policy: { reason_code: string; rule_id: string; policy_version: string }; gateway_rule_id: string; approval_rule_id: string; adapter_rule_id: string; unavailable_code: string };
+  rules: { baseline_policy: { reason_code: string; rule_id: string; policy_version: string }; gateway_rule_id: string; approval_rule_id: string; adapter_rule_id: string; unavailable_code: string; cancelled_code: string };
   policyVersion: string;
   /** Defended arm: the approval log the guarded registry appends to, keyed by call ID. */
   approvalLog?: Array<Record<string, unknown>>;
@@ -36,6 +36,8 @@ export class McpAdapter {
   readonly protocol: Array<{ method: string; at: number }> = [];
   private server: net.Server | null = null;
   private calls = 0;
+  /** Connections refused because the episode's socket already had its client (TB-058). */
+  refusedConnections = 0;
   private readonly byName: Map<string, AdapterTool>;
 
   private readonly o: AdapterOptions;
@@ -45,7 +47,12 @@ export class McpAdapter {
   }
 
   async listen(): Promise<void> {
+    let client: net.Socket | null = null;
     this.server = net.createServer((socket) => {
+      // One client per episode socket: the agent's relay. A second connection (another process, another episode's agent)
+      // is closed at once and never sees the tools.
+      if (client) { this.refusedConnections++; socket.destroy(); return; }
+      client = socket;
       let buffer = "";
       socket.setEncoding("utf8");
       socket.on("data", (chunk: string) => {
@@ -104,6 +111,12 @@ export class McpAdapter {
       return refuse(rules.unavailable_code);
     }
     try {
+      if (this.o.signal.aborted) {
+        // The episode was cancelled or has ended: nothing is forwarded after that (TB-058).
+        trace.decision(callId, args, "deny", rules.cancelled_code, rules.adapter_rule_id, this.o.policyVersion);
+        this.records.push({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: rules.cancelled_code });
+        return refuse(rules.cancelled_code);
+      }
       if (!tool || !this.o.registry[name]) {
         trace.decision(callId, args, "deny", "tool_not_allowed", rules.adapter_rule_id, this.o.policyVersion);
         this.records.push({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: "tool_not_allowed" });
