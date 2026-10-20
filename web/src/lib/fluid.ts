@@ -4,8 +4,8 @@
 // light wake drawn over the page (components/Water.tsx) and, in Chromium, the refraction of the page under the water. Encoded as
 // RGBA bytes: R = x velocity and G = y velocity around 128, B = speed. The field sleeps when still; `version` changes
 // whenever the bytes do, and `size` whenever the grid is reallocated.
-export const COLS = 72;
-const DECAY = 0.93, RADIUS = 3.2;   // a thin trail that lingers a moment, after the reference site
+export const COLS = 120;   // fine enough for a thin trail (about 12 px per cell on a 1440 px screen)
+const DECAY = 0.91, RADIUS = 2.2;   // a thin trail that fades quickly, after the reference site
 
 type Listener = () => void;
 
