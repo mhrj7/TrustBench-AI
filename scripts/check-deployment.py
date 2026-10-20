@@ -110,6 +110,14 @@ def main():
         c.check(f'site page {page}', code == 200 and b'<div id="root"' in body and all(h in lower for h in want),
                 {'status': code, 'missing_headers': [h for h in want if h not in lower]})
 
+    # the launch film the Overview page plays: served as video, with byte ranges (seeking), and its poster
+    code, body, headers = site.call('GET', '/media/trustbench-launch.mp4', raw=True, headers={'range': 'bytes=0-1023'})
+    lower = {k.lower(): v for k, v in headers.items()}
+    c.check('launch film is served as video with byte ranges', code == 206 and lower.get('content-type', '').startswith('video/mp4') and len(body) == 1024 and body[4:8] == b'ftyp',
+            {'status': code, 'content_type': lower.get('content-type'), 'bytes': len(body)})
+    code, body, headers = site.call('GET', '/media/trustbench-launch-poster.jpg', raw=True)
+    c.check('launch film poster is served', code == 200 and {k.lower(): v for k, v in headers.items()}.get('content-type', '').startswith('image/jpeg'), {'status': code})
+
     # catalog
     code, cat, _ = site.call('GET', '/api/catalog')
     exposed = [x['id'] for x in cat.get('cases', []) if x['id'].upper().replace('-', '') in {s.upper().replace('-', '') for s in SEALED}]
