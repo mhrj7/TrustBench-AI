@@ -299,11 +299,12 @@ def remote_run(url: Annotated[str, typer.Option(help='service origin')],
                rendering: Annotated[Optional[str], typer.Option(help='attack rendering')] = None,
                cases: Annotated[Optional[str], typer.Option(help="comma-separated case ids (default: as many as the mode's per-run limit allows, benign and attack alternating)")] = None,
                repetitions: Annotated[int, typer.Option(min=1)] = 1,
+               agent: Annotated[str, typer.Option(help="agent under test: trustbench_baseline, or external_mcp (goose, an independent agent run unmodified; see catalog)")] = 'trustbench_baseline',
                key_env: Annotated[Optional[str], typer.Option(help='own_key mode: name of the environment variable holding your key')] = None,
                token_env: Annotated[Optional[str], typer.Option(help='environment variable holding the deployment access token, if it needs one')] = None,
                wait: Annotated[bool, typer.Option(help='wait for the run and print its summary')] = False):
     """Start a paired run. Keys are read from an environment variable, never from the command line."""
-    body = {'mode': mode, 'system': system, 'repetitions': repetitions, **({'model': model} if model else {}), **({'rendering': rendering} if rendering else {}),
+    body = {'mode': mode, 'system': system, 'repetitions': repetitions, 'agent': agent, **({'model': model} if model else {}), **({'rendering': rendering} if rendering else {}),
             **({'cases': cases.split(',')} if cases else {})}
     if mode == 'own_key':
         if not key_env or not os.environ.get(key_env):

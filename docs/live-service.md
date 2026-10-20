@@ -87,13 +87,23 @@ Sealed holdouts are never listed, accepted or run.
 Not built here: sign-in with Google or GitHub (needs OAuth apps registered for the deployment) and multi-factor
 authentication.
 
-## Connecting your own agent (planned, phase 10)
+## External agents (phase 10)
 
-The API already takes an `agent` field. Today only `trustbench_baseline` is available; `external_mcp` and `langgraph_http`
-are reserved and answer "planned". Phase 10 (TB-055..TB-066) adds the adapters: an external agent (LangGraph or a
-customer's own tool-calling agent) is connected through the website or the CLI, its tool calls are routed through the
-TrustBench gateway, and it receives the same paired report. Two modes are planned: the agent uses the TrustBench tool
-services, or it keeps its own tool integration against a sandbox with the gateway interposed (TB-057).
+The run API's `agent` field picks the agent under test.
+
+- **`trustbench_baseline`** (default): the built-in agent.
+- **`external_mcp`** (TB-057): goose 1.55.0, an independent open-source agent, run unmodified through the TrustBench MCP
+  adapter ([docs/external/native-integration.md](external/native-integration.md)).
+  - Both arms run goose; the arms differ only in the tool path. For that reason the agent offers only the defenses that
+    live entirely on the tool path (`compatible_systems` in the catalog).
+  - The service image installs the pinned goose release (`scripts/fetch-goose.mjs`, checksums from
+    `configs/external-agents.yaml`).
+  - Where the binary is missing, the catalog reports the agent `unavailable` and runs are refused with 503.
+  - On the website, choose it under "Agent under test". From the CLI, use
+    `trustbench remote run --agent external_mcp ...`.
+  - The report is the same paired report, with an `agent` block.
+- **`langgraph_http`**: an external LangGraph or customer agent over HTTP. Still reserved; it answers "planned"
+  (TB-055..TB-066).
 
 ## Deploy
 

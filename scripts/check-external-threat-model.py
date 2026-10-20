@@ -55,8 +55,8 @@ def main() -> int:
         if not found:
             problems.append(f"{eid}: no TB-002 surface mapped")
         mapped.update(found)
-        if not re.search(r"observed|documented|planned|design", evidence):
-            problems.append(f"{eid}: evidence must say observed, documented, planned or design")
+        if not re.search(r"observed|documented|planned|design|tested", evidence):
+            problems.append(f"{eid}: evidence must say observed, tested, documented, planned or design")
         if evidence.startswith("planned") and not (eid in uncovered_text or re.search(r"TB-0\d\d", evidence)):
             problems.append(f"{eid}: planned only, but neither listed as uncovered nor assigned to a task")
     inv_text = " ".join(" ".join(r) for r in inventory).lower()

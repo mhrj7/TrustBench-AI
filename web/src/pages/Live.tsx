@@ -59,7 +59,11 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
   const firstMode: Mode = catalog.modes.hosted.available ? 'hosted' : catalog.modes.scripted.available ? 'scripted' : (MODE_ORDER.find((m) => catalog.modes[m].available) ?? 'scripted');
   const [mode, setMode] = useState<Mode>(firstMode);
   const info = catalog.modes[mode];
-  const systems = catalog.systems.filter((s) => s.modes.includes(mode));
+  // TB-057: the agent under test. An external agent runs unmodified and can only be defended on its tool path.
+  const agents = Object.entries(catalog.agents).filter(([, a]) => a.status !== 'planned');
+  const [agent, setAgent] = useState('trustbench_baseline');
+  const agentInfo = catalog.agents[agent];
+  const systems = catalog.systems.filter((s) => s.modes.includes(mode) && (!agentInfo?.compatible_systems || agentInfo.compatible_systems.includes(s.id)));
   const [system, setSystem] = useState('');
   const [model, setModel] = useState('');
   const [rendering, setRendering] = useState(catalog.default_rendering);
@@ -87,6 +91,7 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
     setCases(pick);
     setError(null);
   }, [mode]);
+  useEffect(() => { if (!systems.some((s) => s.id === system)) setSystem((systems.find((s) => s.frozen) ?? systems[0])?.id ?? ''); }, [agent]);
   const pairs = cases.length * reps;
   const over = pairs > maxPairs;
   const selectedModel = info.models.find((m) => m.id === model);
@@ -94,7 +99,7 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
   const submit = async () => {
     setBusy(true); setError(null);
     try {
-      const job = await submitRun({ mode, system, rendering, cases, repetitions: reps, ...(info.live ? { model } : {}), ...(mode === 'own_key' ? { api_key: key } : {}) }, token || undefined);
+      const job = await submitRun({ mode, system, agent, rendering, cases, repetitions: reps, ...(info.live ? { model } : {}), ...(mode === 'own_key' ? { api_key: key } : {}) }, token || undefined);
       setKey('');
       onStarted(job.id);
     } catch (e) { setError(String((e as Error).message)); } finally { setBusy(false); }
@@ -109,6 +114,15 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
         </div>
         <p className="small ink-2">{info.label}.{mode === 'hosted' && info.remaining_pairs_today !== undefined ? ` ${info.remaining_pairs_today} shared pairs left today.` : ''}
           {MODE_ORDER.filter((m) => !catalog.modes[m].available).map((m) => ` ${MODE_TITLE[m]}: ${catalog.modes[m].reason}.`).join('')}</p>
+      </div>
+      <div className="field"><span>Agent under test</span>
+        <div className="segmented" role="group" aria-label="Agent under test">
+          {agents.map(([id, a]) => (
+            <button key={id} aria-pressed={agent === id} disabled={a.status !== 'available'} onClick={() => setAgent(id)}>{id === 'trustbench_baseline' ? 'TrustBench agent' : a.runner_agent ?? id}</button>
+          ))}
+        </div>
+        <p className="small ink-2">{agentInfo?.label}.{agentInfo?.runner_agent ? ' Both arms run it unchanged; only the tool path differs, so only tool-path defenses are offered.' : ''}
+          {agents.filter(([, a]) => a.status !== 'available').map(([id, a]) => ` ${a.runner_agent ?? id}: ${a.reason}.`).join('')}</p>
       </div>
       <div className="controls">
         <label className="field"><span>Defense</span>
@@ -144,10 +158,17 @@ function RunForm({ catalog, onStarted }: { catalog: Catalog; onStarted: (id: str
           {busy ? 'Starting…' : `Run ${pairs} paired run${pairs === 1 ? '' : 's'}`}</button>
         <span className="small ink-2">{over ? `Too many for this mode: at most ${maxPairs}.` : info.live ? 'Live runs take one to four minutes per pair.' : 'Scripted runs finish in seconds.'}</span>
       </div>
-      <p className="small ink-2">Agent under test: {catalog.agents.trustbench_baseline.label}. Connecting your own agent (LangGraph or any tool-calling agent) is planned:{' '}
-        {Object.entries(catalog.agents).filter(([, a]) => a.status !== 'available').map(([k, a]) => `${a.label} (${a.tasks})`).join('; ')}.</p>
+      {Object.values(catalog.agents).some((a) => a.status === 'planned') && <p className="small ink-2">Planned:{' '}
+        {Object.values(catalog.agents).filter((a) => a.status === 'planned').map((a) => `${a.label} (${a.tasks})`).join('; ')}.</p>}
     </Reveal>
   );
+}
+
+/** The agent under test as the report names it (an external agent's name and version), else the job's agent field. */
+function agentName(job: Job, report: unknown): string {
+  const a = (report as { agent?: { name: string; version: string } | null } | null)?.agent;
+  if (a) return `${a.name} ${a.version}`;
+  return !job.agent || job.agent === 'trustbench_baseline' ? 'TrustBench agent' : job.agent;
 }
 
 function SessionNote({ who, catalog }: { who: Me; catalog: Catalog }) {
@@ -210,7 +231,7 @@ function Result({ id, onNew }: { id: string; onNew: () => void }) {
     <div className="stack-24" aria-live="polite">
       <div className="panel stack-8">
         <p className="body"><strong>{job.status === 'queued' ? `Queued (position ${job.queue_position ?? '…'})` : job.status === 'running' ? 'Running' : job.status === 'failed' ? 'Failed' : 'Done'}</strong>
-          {' · '}{job.system} · {job.model ? short(job.model.id) : 'scripted'} · {job.rendering.replaceAll('_', ' ')} · {job.pairs} paired runs · key: {job.key_source ?? 'none'}</p>
+          {' · '}{job.system} · {job.model ? short(job.model.id) : 'scripted'} · {job.rendering.replaceAll('_', ' ')} · {job.pairs} paired runs · key: {job.key_source ?? 'none'} · agent: {agentName(job, report)}</p>
         {(job.status === 'running' || job.status === 'queued') && (
           <div className="ratebar-track" role="progressbar" aria-valuemin={0} aria-valuemax={job.progress.total} aria-valuenow={job.progress.done}>
             <div className="ratebar-fill" style={{ width: `${(job.progress.done / Math.max(1, job.progress.total)) * 100}%`, background: 'var(--gradient)' }} />
@@ -281,6 +302,7 @@ function CliGuide({ origin, catalog }: { origin: string; catalog: Catalog | null
     ['Install the client once (git and uv; see the README)', 'git clone https://github.com/mhrj7/TrustBench-AI.git && cd TrustBench-AI && sh scripts/setup-python.sh'],
     ['See what this service offers', `sh bin/trustbench remote catalog --url ${origin}`],
     ['Instant run, no model and no key', `sh bin/trustbench remote run --url ${origin} --mode scripted --system gateway_capability --cases doc-benign,doc-attack --wait`],
+    ['The same run with an external agent (goose, unmodified)', `sh bin/trustbench remote run --url ${origin} --mode scripted --system gateway_capability --agent external_mcp --cases doc-benign,doc-attack --wait`],
     ['Live run with the project key', `sh bin/trustbench remote run --url ${origin} --mode hosted --system ${system} --model ${model} --cases doc-benign,doc-attack --wait`],
     ['Live run with your own key (read from an environment variable, never a flag)', `${keyEnv}=... sh bin/trustbench remote run --url ${origin} --mode own_key --key-env ${keyEnv} --system ${system} --model ${model} --cases doc-benign,doc-attack --wait`],
     ['Fetch a finished run', 'sh bin/trustbench remote report <run-id> --url ' + origin + ' --out report.json'],
