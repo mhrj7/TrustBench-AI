@@ -5,7 +5,7 @@
     "goose": {
       "label": "goose 1.55.0 (aaif-goose/goose), headless CLI",
       "selection": "docs/external/agent-selection.md",
-      "contract_version": "1.1.0",
+      "contract_version": "1.2.0",
       "version": "1.55.0",
       "tag": "v1.55.0",
       "commit": "2bcb8583a18a0623eb78c9ed845d597ed99fae48",
@@ -64,6 +64,11 @@
       ],
       "max_tool_repetitions": 3,
       "sandbox_root": "/tmp/tb-goose",
+    "sandbox": {
+      "required": true,
+      "note": "TB-058: goose and every process it starts run confined (src/external/sandbox.ts): sandbox-exec on macOS, Landlock on Linux. Only the episode's adapter socket and the model proxy port are reachable; writes only inside the episode folder.",
+      "linux_system_paths": ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc", "/proc", "/dev/urandom", "/dev/random"]
+    },
       "turn_context_time_pattern": "<current-time>[^<]*</current-time>",
       "seed_supported": false
     }
@@ -96,7 +101,8 @@
     "gateway_rule_id": "gateway",
     "approval_rule_id": "gateway.approval",
     "adapter_rule_id": "adapter.tool_list",
-    "unavailable_code": "tool_unavailable"
+    "unavailable_code": "tool_unavailable",
+    "cancelled_code": "episode_cancelled"
   },
   "evaluator_version": "tb016.1.3.0",
   "evaluator_version_note": "Recorded in each external-agent trace (run_started); must equal EVALUATOR_VERSION in src/evaluators/outcomes_v2.py (tests/external/adapter).",

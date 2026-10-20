@@ -69,6 +69,9 @@ export class McpGateway {
   private server: net.Server | null = null;
   private child: ChildProcess | null = null;
   private calls = 0;
+  private closed = false;
+  /** Connections refused because the socket already had its client (TB-058). */
+  refusedConnections = 0;
   private pending = new Map<unknown, { callId: string; tool: string; args: Record<string, unknown>; t0: number; method: string }>();
 
   constructor(o: GatewayOptions) { this.o = o; }
@@ -109,6 +112,7 @@ export class McpGateway {
       }
     });
     this.server = net.createServer((socket) => {
+      if (agent || this.closed) { this.refusedConnections++; socket.destroy(); return; }  // one client per episode socket
       agent = socket;
       let buf = "";
       socket.setEncoding("utf8");
@@ -120,6 +124,7 @@ export class McpGateway {
           if (!line) continue;
           let msg: any; try { msg = JSON.parse(line); } catch { continue; }
           this.protocol.push({ method: String(msg.method ?? ""), at: Date.now(), from: "agent" });
+          if (this.closed) { toAgent({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "episode ended" } }); continue; }
           if (msg.method !== "tools/call") {
             if (msg.id !== undefined) this.pending.set(msg.id, { callId: "", tool: "", args: {}, t0: Date.now(), method: String(msg.method ?? "") });
             toServer(msg); continue;
@@ -152,6 +157,7 @@ export class McpGateway {
   }
 
   async close(): Promise<void> {
+    this.closed = true;
     this.child?.kill("SIGTERM");
     if (this.server) await new Promise<void>((r) => this.server!.close(() => r()));
     this.server = null;

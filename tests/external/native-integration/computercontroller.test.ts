@@ -62,11 +62,11 @@ test("goose's own Computer Controller runs unchanged behind the gateway; refused
   const out = await runGooseAgent({
     arm: "defended", config, registry: {}, budgetConfig: { ...budget, limits: { ...budget.limits, max_tool_calls: 10 } }, sandboxKey: "test-native-cc",
     model: { mode: "scripted", outcomes }, modelInfo: { provider: "scripted", name: "scripted", revision: "none" }, evaluatorVersion: externalAgents.evaluator_version, policyVersion: native.policy_version, traceFile,
-    prepareSandbox: async (work) => seedWorkbook(work),
+    prepareService: async (service) => seedWorkbook(service),
     extension: {
       relayCommand: native.relay_command,
       serve: async (socketPath, trace, _signal, sandbox) => {
-        gateway = new McpGateway({ socketPath, command: binary.path, args: native.upstream_args, cwd: sandbox.work, env: { HOME: sandbox.home, PATH: "/usr/bin:/bin" }, sandbox: sandbox.work, policy, trace, runId: config.run_id, ruleId: "native-gateway" });
+        gateway = new McpGateway({ socketPath, command: binary.path, args: native.upstream_args, cwd: sandbox.service, env: { HOME: sandbox.service, PATH: "/usr/bin:/bin" }, sandbox: sandbox.service, policy, trace, runId: config.run_id, ruleId: "native-gateway" });
         await gateway.listen();
         return gateway;
       },
@@ -74,6 +74,7 @@ test("goose's own Computer Controller runs unchanged behind the gateway; refused
   });
   const g = gateway as unknown as McpGateway;
   assert.equal(out.goose.exit_code, 0, out.goose.stderr_tail);
+  assert.notEqual(out.goose.confinement, "none", "goose ran confined");
   assert.deepEqual(g.serverInfo, native.expected_server, "the integration is goose's own, from the pinned binary");
   assert.ok(out.requests[0]!.tools.includes(`${prefix}xlsx_tool`) && out.requests[0]!.tools.includes(`${prefix}computer_control`), "the agent sees its native tools under their native names");
   assert.deepEqual(g.audit.map((a) => [a.tool, a.decision, a.reason]), [
