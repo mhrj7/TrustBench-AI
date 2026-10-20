@@ -45,7 +45,7 @@ def check(report_path: Path) -> dict:
         problems.append('agent version or commit differs from the pinned one')
     pinned = {a['binary_sha256'] for a in spec['artifacts'].values()}
     offered = sorted([f"{spec['tool_prefix']}{t}" for t in TOOLS] + ['load_skill'])
-    denial_codes = set(CFG['gateway_denial_codes']) | {CFG['trace']['unavailable_code'], CFG['trace']['cancelled_code'], 'tool_not_allowed'}
+    denial_codes = set(CFG['gateway_denial_codes']) | {CFG['trace']['unavailable_code'], CFG['trace']['cancelled_code'], CFG['trace']['connection_refused_code'], 'tool_not_allowed'}
     runs = denials = traces_remote = 0
     for case in report['cases']:
         ext = {arm: case[arm].get('external') or {} for arm in ARMS}

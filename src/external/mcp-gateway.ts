@@ -4,7 +4,7 @@
 // are forwarded and their results returned unchanged; refused calls never reach it. Server-initiated requests
 // (sampling, elicitation, roots) are refused. Each decision is recorded in the TB-004 trace and in an audit list.
 import { spawn, type ChildProcess } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import type { AgentToolRecord } from "../agent/contracts.ts";
@@ -17,6 +17,11 @@ export interface NativePolicy {
   reason_codes: { tool: string; operation: string; path: string; arguments: string };
   refused_server_requests: string[];
 }
+
+/** Codes for refusals that are not tool decisions (configs/external-agents.yaml trace). */
+export interface RefusalCodes { cancelled: string; connectionRefused: string; connectionTool: string }
+const traceRules = JSON.parse(readFileSync(path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../configs/external-agents.yaml"), "utf8")).trace;
+const defaultRefusals: RefusalCodes = { cancelled: traceRules.cancelled_code, connectionRefused: traceRules.connection_refused_code, connectionTool: traceRules.connection_tool };
 
 export interface Decision { decision: "allow" | "deny"; reason: string }
 
@@ -56,6 +61,8 @@ export interface GatewayOptions {
   trace: TraceRecorder;
   runId: string;
   ruleId: string;
+  /** Default: configs/external-agents.yaml trace. */
+  refusals?: RefusalCodes;
 }
 
 export class McpGateway {
@@ -75,6 +82,16 @@ export class McpGateway {
   private pending = new Map<unknown, { callId: string; tool: string; args: Record<string, unknown>; t0: number; method: string }>();
 
   constructor(o: GatewayOptions) { this.o = o; }
+
+  /** A refusal that never reaches the integration still leaves a TB-004 proposal and deny decision, and an audit entry. */
+  private refuse(tool: string, args: Record<string, unknown>, reason: string) {
+    const callId = `${this.o.runId}-native-${++this.calls}`.replace(/[^a-zA-Z0-9._:-]/g, "_").slice(0, 128);
+    try {
+      this.o.trace.proposed(callId, tool.replace(/[^a-zA-Z0-9._:-]/g, "_") || "unknown", args);
+      this.o.trace.decision(callId, args, "deny", reason, this.o.ruleId, this.o.policy.policy_version);
+    } catch { /* trace broken: the recorder refuses everything after this and the runner reports it */ }
+    this.audit.push({ call_id: callId, tool, operation: args.operation, decision: "deny", reason, forwarded: false });
+  }
 
   async listen(): Promise<void> {
     this.child = spawn(this.o.command, this.o.args, { cwd: this.o.cwd, env: this.o.env, stdio: ["pipe", "pipe", "ignore"] });
@@ -112,7 +129,11 @@ export class McpGateway {
       }
     });
     this.server = net.createServer((socket) => {
-      if (agent || this.closed) { this.refusedConnections++; socket.destroy(); return; }  // one client per episode socket
+      if (agent || this.closed) {  // one client per episode socket; a refused connection is audited, then closed
+        this.refusedConnections++;
+        this.refuse((this.o.refusals ?? defaultRefusals).connectionTool, {}, this.closed ? (this.o.refusals ?? defaultRefusals).cancelled : (this.o.refusals ?? defaultRefusals).connectionRefused);
+        socket.destroy(); return;
+      }
       agent = socket;
       let buf = "";
       socket.setEncoding("utf8");
@@ -124,7 +145,10 @@ export class McpGateway {
           if (!line) continue;
           let msg: any; try { msg = JSON.parse(line); } catch { continue; }
           this.protocol.push({ method: String(msg.method ?? ""), at: Date.now(), from: "agent" });
-          if (this.closed) { toAgent({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "episode ended" } }); continue; }
+          if (this.closed) {  // the episode ended or was cancelled: nothing more is forwarded, and a call is audited as refused
+            if (msg.method === "tools/call") this.refuse(String(msg.params?.name ?? ""), (msg.params?.arguments ?? {}) as Record<string, unknown>, (this.o.refusals ?? defaultRefusals).cancelled);
+            toAgent({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "episode ended" } }); continue;
+          }
           if (msg.method !== "tools/call") {
             if (msg.id !== undefined) this.pending.set(msg.id, { callId: "", tool: "", args: {}, t0: Date.now(), method: String(msg.method ?? "") });
             toServer(msg); continue;

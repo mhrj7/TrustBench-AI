@@ -22,7 +22,7 @@ export interface AdapterOptions {
   signal: AbortSignal;
   /** Gateway denial codes and trace rule IDs from configs/external-agents.yaml. */
   denialCodes: Set<string>;
-  rules: { baseline_policy: { reason_code: string; rule_id: string; policy_version: string }; gateway_rule_id: string; approval_rule_id: string; adapter_rule_id: string; unavailable_code: string; cancelled_code: string };
+  rules: { baseline_policy: { reason_code: string; rule_id: string; policy_version: string }; gateway_rule_id: string; approval_rule_id: string; adapter_rule_id: string; unavailable_code: string; cancelled_code: string; connection_refused_code: string; connection_tool: string };
   policyVersion: string;
   /** Defended arm: the approval log the guarded registry appends to, keyed by call ID. */
   approvalLog?: Array<Record<string, unknown>>;
@@ -51,7 +51,15 @@ export class McpAdapter {
     this.server = net.createServer((socket) => {
       // One client per episode socket: the agent's relay. A second connection (another process, another episode's agent)
       // is closed at once and never sees the tools.
-      if (client) { this.refusedConnections++; socket.destroy(); return; }
+      if (client) {  // audited like a refused call, then closed
+        this.refusedConnections++;
+        const callId = asId(`${this.o.runId}-call-${++this.calls}`);
+        try {
+          this.o.trace.proposed(callId, asId(this.o.rules.connection_tool), {});
+          this.o.trace.decision(callId, {}, "deny", this.o.rules.connection_refused_code, this.o.rules.adapter_rule_id, this.o.policyVersion);
+        } catch { /* trace broken: every later call is refused */ }
+        socket.destroy(); return;
+      }
       client = socket;
       let buffer = "";
       socket.setEncoding("utf8");
