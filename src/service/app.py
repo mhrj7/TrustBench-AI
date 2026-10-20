@@ -35,6 +35,9 @@ PROVIDERS = json.loads((ROOT / 'configs/providers.yaml').read_text())['providers
 HC = json.loads((ROOT / 'configs/frozen/holdout-config.json').read_text())
 WORKFLOW = {f['fixture_id']: f['workflow'] for f in map(json.loads, filter(str.strip, (ROOT / 'data/benign.jsonl').read_text().splitlines()))}
 SUITE = json.loads((ROOT / CFG['suite']).read_text())
+# Defended systems an external agent can run: those whose defense lives entirely on the tool path (TB-057).
+_SYSTEMS = {**json.loads((ROOT / 'configs/ablations.yaml').read_text())['systems'], **json.loads((ROOT / 'configs/defenses.yaml').read_text())['systems']}
+TOOL_PATH_ONLY = {k for k, v in _SYSTEMS.items() if not v.get('agent_defenses') and not v.get('architecture')}
 
 
 def _load(name):
@@ -176,6 +179,20 @@ class Service:
             threading.Thread(target=self._retention, daemon=True).start()
 
     # ---- catalog ---------------------------------------------------------------------------------------------------------
+    @staticmethod
+    def agents() -> dict[str, dict[str, Any]]:
+        """Agents as configured; an external agent whose pinned binary is not installed here reports itself unavailable."""
+        out = {}
+        for name, a in CFG['agents'].items():
+            a = dict(a)
+            need = a.get('requires_env')
+            if a['status'] == 'available' and need and not (os.environ.get(need) and Path(os.environ[need]).is_file()):
+                a.update(status='unavailable', reason=a.get('unavailable_reason'))
+            if a.get('runner_agent'):
+                a['compatible_systems'] = [k for k in CFG['systems'] if k in TOOL_PATH_ONLY]
+            out[name] = a
+        return out
+
     def models(self, mode: str) -> list[dict[str, Any]]:
         spec = CFG['modes'][mode]
         out = []
@@ -211,7 +228,7 @@ class Service:
                            **({'remaining_pairs_today': hosted['remaining_pairs_today']} if name == 'hosted' else {})}
         cases = [{'id': c['case_id'], 'kind': c['kind'], 'workflow': WORKFLOW[c['fixture_id'].split('--')[0]], 'scripted_only': bool(c.get('scripted_only'))} for c in SUITE['cases']]
         return {'modes': modes, 'systems': [{'id': k, **v} for k, v in CFG['systems'].items()], 'renderings': renderings, 'default_rendering': CFG['default_rendering'],
-                'cases': cases, 'agents': CFG['agents'], 'frozen': {'system': HC['defended_system']['system'], 'model': HC['model'], 'prompt_profile': HC['prompt_profile']},
+                'cases': cases, 'agents': self.agents(), 'frozen': {'system': HC['defended_system']['system'], 'model': HC['model'], 'prompt_profile': HC['prompt_profile']},
                 'holdouts': 'sealed; never offered or run by this service', 'storage': 'unavailable' if self.storage_error else 'ok', 'deploy_profile': CFG.get('deploy_profile'), 'access_token_required': bool(sec.get(CFG['access_token_env'])),
                 'auth': {'session': 'POST /api/session (anonymous, no account)', 'retention_hours': CFG['retention_hours'], 'session_ttl_hours': AUTH['session_ttl_hours'],
                          'accounts': {'signup': 'POST /api/auth/signup', 'retention_days': ACC['account_retention_days'], 'verified_quota_multiplier': ACC['verified_quota_multiplier'],
@@ -224,14 +241,18 @@ class Service:
         spec = CFG['modes'][req.mode]
         if spec.get('disabled'):
             raise HTTPException(503, CFG['disabled_mode_reason'])
-        agent = CFG['agents'].get(req.agent)
+        agent = self.agents().get(req.agent)
         if not agent:
             raise HTTPException(400, f"agent must be one of {', '.join(CFG['agents'])}")
+        if agent['status'] == 'unavailable':
+            raise HTTPException(503, f"agent '{req.agent}' is not available on this server: {agent.get('reason')}")
         if agent['status'] != 'available':
             raise HTTPException(400, f"agent '{req.agent}' is planned, not available yet ({agent.get('tasks')})")
         system = CFG['systems'].get(req.system)
         if not system or req.mode not in system['modes']:
             raise HTTPException(400, f"system '{req.system}' is not offered in mode {req.mode}")
+        if agent.get('runner_agent') and req.system not in agent['compatible_systems']:
+            raise HTTPException(400, f"agent '{req.agent}' runs {agent['systems']}: one of {', '.join(agent['compatible_systems'])}")
         rendering = req.rendering or CFG['default_rendering']
         if rendering not in [r['id'] for r in MATRIX['renderings']]:
             raise HTTPException(400, 'unknown rendering')
@@ -509,6 +530,9 @@ class Service:
         d = self._dir(job['id'])
         args = [*self.runner, '--defended-system', job['system'], '--attack-rendering', job['rendering'], '--cases', ','.join(job['cases']),
                 '--out-dir', str(d / 'out'), '--work-dir', str(d / 'work'), '--report-prefix', 'live']
+        runner_agent = CFG['agents'].get(job.get('agent') or '', {}).get('runner_agent')
+        if runner_agent:
+            args += ['--agent', runner_agent]
         env = {k: v for k, v in os.environ.items() if k not in {p.get('api_key_env') for p in PROVIDERS.values() if p.get('api_key_env')}}
         if job['model']:
             m = job['model']

@@ -6,7 +6,7 @@
 FROM ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa AS uv
 FROM node:26.5.0-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
 
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates bzip2 && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /uv /uvx /usr/local/bin/
 ENV TRUSTBENCH_STORAGE_ROOT=/workspace \
     npm_config_cache=/workspace/.cache/npm \
@@ -18,6 +18,11 @@ ENV TRUSTBENCH_STORAGE_ROOT=/workspace \
     PORT=8080
 RUN npm install -g npm@12.0.0
 WORKDIR /workspace/TrustBench-AI
+# TB-057: the external agent (goose), installed unchanged from its release; archive and binary checksums are pinned.
+COPY configs/external-agents.yaml configs/
+COPY scripts/fetch-goose.mjs scripts/
+RUN node scripts/fetch-goose.mjs --dest /opt/goose
+ENV TRUSTBENCH_GOOSE_BIN=/opt/goose/goose
 COPY . .
 RUN cp .env.example .env && npm ci && npm run setup && npm run web:build \
     && mkdir -p /workspace/service-data && chown -R node /workspace

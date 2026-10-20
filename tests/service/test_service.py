@@ -58,6 +58,35 @@ def test_scripted_run_end_to_end_with_report_evaluation_and_spans(client):
     assert client.get(f"/api/runs/{s['id']}/spans").json()
 
 
+GOOSE_BIN = os.environ.get('TRUSTBENCH_GOOSE_BIN')
+
+
+@pytest.mark.skipif(not GOOSE_BIN, reason='set TRUSTBENCH_GOOSE_BIN to the pinned goose binary')
+def test_external_agent_goose_gets_the_same_paired_report(client):
+    """TB-057: the external agent (goose, unmodified) runs both arms through the service and gets the same paired report."""
+    agent = client.get('/api/catalog').json()['agents']['external_mcp']
+    assert agent['status'] == 'available' and 'gateway_capability' in agent['compatible_systems']
+    assert 'gateway_directive_flow_v4' not in agent['compatible_systems'] and 'spotlighting' not in agent['compatible_systems']
+    r = client.post('/api/runs', json={'mode': 'scripted', 'system': 'gateway_capability', 'agent': 'external_mcp', 'cases': ['doc-benign', 'doc-attack']})
+    assert r.status_code == 202, r.text
+    s = wait(client, r.json()['id'], timeout=240)
+    assert s['status'] == 'done' and s['summary']['valid_pairs'] == 2, s
+    report = client.get(f"/api/runs/{s['id']}/report").json()
+    assert report['schema_version'] == '1.1.0' and len(report['cases']) == 2
+    assert report['agent']['name'] == 'goose' and report['agent']['version'] == '1.55.0'
+    ev = client.get(f"/api/runs/{s['id']}/evaluation").json()
+    assert ev['metrics']['defended']['rates']['unsafe_committed_effect']['denominator'] == 1
+
+
+def test_external_agent_refusals(client, monkeypatch):
+    r = client.post('/api/runs', json={'mode': 'scripted', 'system': 'gateway_counterfactual_writes' if 'gateway_counterfactual_writes' in CFG['systems'] else 'spotlighting', 'agent': 'external_mcp'})
+    assert r.status_code in (400, 503) and r.status_code != 202
+    monkeypatch.delenv('TRUSTBENCH_GOOSE_BIN', raising=False)
+    assert client.get('/api/catalog').json()['agents']['external_mcp']['status'] == 'unavailable'
+    r = client.post('/api/runs', json={'mode': 'scripted', 'system': 'gateway_capability', 'agent': 'external_mcp'})
+    assert r.status_code == 503 and 'goose' in r.json()['detail']
+
+
 def test_requests_outside_the_offer_are_rejected(client):
     bad = [
         {'mode': 'scripted', 'system': 'gateway_directive_flow_v4'},  # model-based defense needs a live mode

@@ -18,6 +18,7 @@ import { createTracing, observabilityConfig } from "../src/observability/tracing
 import { RunSpans } from "../src/observability/run-spans.ts";
 import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
 import { buildArm, configDifferences, loadArm, snapshotEpisode } from "../src/arms/arms.ts";
+import { externalAgents, runGooseAgent } from "../src/external/goose.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const python = path.join(root, ".venv-tools/bin/python");
@@ -93,6 +94,11 @@ if (reliability?.retry) {
   await writeFile(recoveryOverridePath, JSON.stringify(base, null, 2));
 }
 const reportPrefix = flag("--report-prefix", "tb024");
+// TB-057: --agent <name> runs a registered external agent (configs/external-agents.yaml) in BOTH arms through the
+// integration contract; the arms still differ only in their tool path. Default: the built-in TrustBench agent.
+const agentName = flag("--agent", "trustbench");
+if (agentName !== "trustbench" && !(agentName in externalAgents.agents)) throw new Error(`--agent must be trustbench or one of ${Object.keys(externalAgents.agents).join(", ")}`);
+const externalAgent = agentName === "trustbench" ? null : externalAgents.agents[agentName];
 // A longer run timeout only takes effect if the budget's elapsed-time limit grows with it, so the override raises both.
 let budgetOverridePath = null;
 if (reliability?.timeout_ms) {
@@ -237,6 +243,7 @@ const serviceEnv = (db) => ({ TRUSTBENCH_FIXTURE_PATH: fixturesPath, TRUSTBENCH_
 launch(["-m", "uvicorn", "src.tools.app:app", "--host", "127.0.0.1", "--port", String(baselinePort), "--log-level", "warning"], serviceEnv(baselineDb));
 await waitFor(baselinePort);
 
+if (externalAgent && (defendedSystem.agent_defenses.length || defendedSystem.architecture)) throw new Error(`${defendedSystemName} adds agent-side defenses or its own architecture, which an external agent (${agentName}) cannot host; use a gateway system`);
 if (!live && (defendedSystem.agent_defenses.length || defendedSystem.architecture)) throw new Error(`${defendedSystemName} uses agent-side defenses or its own agent architecture, which only a live --model can exercise (a scripted trajectory ignores prompts)`);
 let defendedDirectPort = null;
 if (defendedSystem.transport === "direct") {
@@ -337,7 +344,21 @@ async function runArm(arm, testCase, fixture, rep) {
   const architecture = arm === "defended" && defendedSystem.architecture ? defensesRegistry.architectures[defendedSystem.architecture] : null;
   if (arm === "defended" && defendedSystem.architecture && defendedSystem.architecture !== "camel") throw new Error(`unknown architecture ${defendedSystem.architecture}`);
   const tracedTools = spans.tools(built.tools, built.recovery.tool_classes);
-  const result = architecture
+  let external = null;
+  if (externalAgent) {
+    const traceDir = path.join(runOutDir ?? work, "traces");
+    await mkdir(traceDir, { recursive: true });
+    const pace = live ? async (req) => { const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now(); } : undefined;
+    external = await runGooseAgent({
+      arm, config: built.config, registry: tracedTools, budgetConfig: built.budget, sandboxKey: `${testCase.case_id}-r${rep}`,
+      model: live ? { mode: "forward", baseUrl: modelSpec.base_url, apiKey: provider.api_key_env ? process.env[provider.api_key_env] ?? null : null, modelId, extraBody: provider.generation_overrides ?? {} } : { mode: "scripted", outcomes: scriptedOutcomes(testCase) },
+      modelInfo: { provider: live ? providerName : "scripted", name: live ? modelId : "mock-arm-smoke", revision: "unpinned" },
+      evaluatorVersion: externalAgents.evaluator_version, policyVersion: arm === "defended" ? `gateway_${defendedVariant}` : "none",
+      traceFile: path.join(traceDir, `${testCase.case_id}-r${rep}-${arm}.trace.jsonl`), approvalLog, ...(pace ? { pace } : {}),
+    });
+    for (const m of external.responseModels) observedResponseModels.add(m);
+  }
+  const result = external ? external.result : architecture
     ? await runCamelAgent({ config: built.config, adapter, tools: tracedTools, budgetConfig: built.budget, architecture, recovery: { policy: built.recovery, seed: baseSeed } })
     : await runBaselineAgent({ config: built.config, adapter, tools: tracedTools, budgetConfig: built.budget, recovery: { policy: built.recovery, seed: baseSeed }, ...(defenses ? { defenses } : {}) });
   const elapsedMs = Date.now() - started;
@@ -348,10 +369,12 @@ async function runArm(arm, testCase, fixture, rep) {
   spans.policy(decisions);
   spans.end({ "run.outcome": result.outcome, "run.tool_calls": result.tool_records.length, "run.elapsed_ms": elapsedMs, "eval.utility_pass": evaluation.utility_pass, "eval.security_pass": evaluation.security_pass, "eval.attacker_goal_achieved": evaluation.attacker_goal_achieved }, result.recovery?.backoff_ms_total ?? 0);
   const marker = testCase.attack_id ? attackInfo[testCase.attack_id].exposure_marker : null;
-  const exposed = marker === null ? null : adapter.requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
+  const requests = external ? external.requests : adapter.requests;
+  const exposed = marker === null ? null : requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));
   const faultsInjected = transport ? transport.injected.length : 0;
-  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests: adapter.requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries, elapsedMs };
+  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries, elapsedMs,
+    external: external ? { ...external.goose, stderr_tail: undefined, trace: { ...external.trace, file: external.trace.file ? path.relative(root, external.trace.file) : null } } : null };
 }
 
 const runs = [];
@@ -395,6 +418,7 @@ const report = {
   status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  agent: externalAgent ? { name: agentName, version: externalAgent.version, commit: externalAgent.commit, contract_version: externalAgent.contract_version, seed_sent_to_model: externalAgent.seed_supported, note: "external agent run unmodified through docs/external/integration-contract.md; both arms run it, only the tool path differs" } : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
   ...(endedEarly && !confirmatory ? { ended_early: endedEarly } : {}),
   ...(drillModelUrl ? { fault_drill: { model_base_url: drillModelUrl } } : {}),
@@ -419,13 +443,13 @@ for (const { testCase, rep, order, arms, entry: scheduled } of runs) {
   }
   entry.record_differences = diffs;
   entry.differences_attributable_to_gateway = diffs.every((x) => defended.decisions.some((dec) => dec.tool === x.tool && dec.decision === "deny"));
-  const nonTool = (requests) => requests.map((r) => r.messages.filter((m) => !m.content.includes('"type":"tool_result"')));
+  const nonTool = (requests) => requests.map((r) => r.messages.filter((m) => m.role !== "tool" && !m.content.includes('"type":"tool_result"')));
   const common = Math.min(baseline.requests.length, defended.requests.length);
   entry.non_tool_messages_identical = canon(nonTool(baseline.requests).slice(0, common)) === canon(nonTool(defended.requests).slice(0, common));
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
   entry.final_state_identical = canon(baseline.snapshot.state) === canon(defended.snapshot.state);
   entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
-  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null, camel: a.result.defense.camel ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
+  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null, camel: a.result.defense.camel ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), external: a.external ?? null, invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
   entry.baseline = side(baseline);
   entry.defended = { ...side(defended), policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   for (const decision of defended.decisions) traces.push({ case_id: testCase.case_id, repetition: rep, arm: "defended", ...decision });
@@ -468,7 +492,7 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}${reliability ? `-rel-${reliability.name}` : ""}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}${reliability ? `-rel-${reliability.name}` : ""}${externalAgent ? `-agent-${agentName}` : ""}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });

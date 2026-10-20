@@ -1,7 +1,8 @@
 # External-agent integration contract: goose 1.55.0 (TB-056)
 
-Contract version 1.0.0. The adapter built in TB-057 (`src/external/`) must implement exactly this; a change needs a new
-contract version, recorded before any run that uses it. The threats each rule answers are in
+Contract version 1.1.0 (1.0.0 was written in TB-056; the changes made while building the adapter in TB-057 are listed in
+[Changes in 1.1.0](#changes-in-110)). The adapter (`src/external/`) implements exactly this; a change needs a new contract
+version, recorded before any run that uses it. Every report records the contract version it ran under. The threats each rule answers are in
 `docs/external/threat-model.md` (entry points EX-01 to EX-24).
 
 ## Process model
@@ -33,12 +34,15 @@ Working folder: a new empty folder with a neutral path (no machine path, outside
 folder. Both are deleted after the episode.
 
 ```sh
-goose run --no-session --no-profile \
+goose run --no-session --no-profile -q --output-format json \
   --provider openai --model <registered model id> \
-  --with-extension "<relay path>/trustbench --socket <episode socket>" \
+  --with-extension "<relay path>/trustbench --node <node path> --socket <episode socket>" \
   --max-turns <run limit> --max-tool-repetitions <run limit> \
-  -q --output-format json -t "<task user text>"
+  --system "<the arm's TrustBench system prompt>" -t "<task user text>"
 ```
+
+`--system` adds the same TrustBench system prompt the built-in agents get, identical in both arms; goose appends it to its
+own built-in prompt (EX-02). goose has no seed setting, so no seed is sent to the model and the trace records `seed: null`.
 
 Environment: an allowlist, nothing inherited from the harness shell (goose is started as `env -i <allowlisted variables>
 goose ...`; observed to run normally that way).
@@ -53,7 +57,8 @@ goose ...`; observed to run normally that way).
 | `GOOSE_DISABLE_KEYRING` | `1` | No keychain access (EX-19) |
 | `GOOSE_TELEMETRY_ENABLED` | `false` | No usage data (EX-22) |
 | `GOOSE_TEMPERATURE` | the run's registered temperature | Same generation settings as the built-in agents; goose sends none otherwise, and sends this value when set (both observed) |
-| `GOOSE_MAX_TOKENS`, `GOOSE_SUBAGENT_MAX_TURNS`, `GOOSE_AUTO_COMPACT_THRESHOLD` | the run's registered limits | Bounded execution, identical across arms (EX-16, EX-18) |
+| `GOOSE_MAX_TOKENS`, `GOOSE_MAX_TURNS` | the run's registered limits | Bounded execution, identical across arms |
+| `GOOSE_SUBAGENT_MAX_TURNS`, `GOOSE_AUTO_COMPACT_THRESHOLD` | not set: goose's defaults, identical across arms | Summon is not offered (EX-16); compaction requests go through the proxy and are recorded like any request (EX-18) |
 | `OPENAI_HOST`, `OPENAI_BASE_PATH`, `OPENAI_API_KEY` | the model proxy's address and a placeholder | The real provider key stays in the proxy (EX-23) |
 
 Never set: `GOOSE_MOIM_MESSAGE_TEXT`, `GOOSE_MOIM_MESSAGE_FILE`, `GOOSE_RECIPE_PATH`, `GOOSE_RECIPE_GITHUB_REPO`,
@@ -75,6 +80,7 @@ EX-21). The harness starts goose with a constructed environment, so these cannot
 
 | goose sends | The adapter does | goose receives |
 | --- | --- | --- |
+| `server/discover` (goose's first message) | Answers method not supported; goose falls back to `initialize` (observed) | an error |
 | `tools/call` for a listed tool | Strips the prefix, sends `POST /v1/episodes/<episode>/tools/<tool>` with the arguments unchanged; in the defended arm adds `Authorization: Bearer <session token>` | — |
 | — | Backend or gateway returns 2xx | `isError: false`; the response body as JSON text, unchanged (the defended arm's provenance envelope included) |
 | — | Gateway denies (403) | `isError: true`; `{"detail": "<code>"}` with the gateway's code unchanged: `tool_not_allowed`, `argument_scope_denied`, `resource_denied`, `operation_denied`, `citation_denied`, `required_content_missing`, `directive_attributed_flow`, `tool_filtered`, `counterfactual_write_match`, `masked_rerun_match`, `camel_policy_denied`, `missing_or_invalid_session`, `episode_mismatch`, `stale_capability` |
@@ -92,16 +98,20 @@ The adapter and the model proxy together write one trace per episode that valida
 
 | Event | Written by | Content |
 | --- | --- | --- |
-| `run_started` | adapter | Provider and model as recorded by the proxy; `prompt_sha256` of goose's system prompt (from the proxy); evaluator version; configuration hash covering the pinned goose artifact checksum, the invocation and the environment above; all limits |
+| `run_started` | adapter | Provider and model; `prompt_sha256` of the canonical TrustBench `{system, user}` prompt (the same definition as the built-in agents, so arms and agents compare); `seed: null`; evaluator version; configuration hash covering the pinned binary checksum, the contract version, the invocation and the environment above, the tool list and the model; all limits. goose's full system prompt, as the proxy saw it, is hashed per run in the report (`external.system_prompt_sha256`) |
 | `model_usage` | model proxy | One per model request: tokens and timing |
 | `tool_call_proposed` | adapter | Every `tools/call` received, with the canonical argument hash |
-| `policy_decision` | adapter, from the gateway response and audit | `allow`, `deny` with the code, or approval required |
+| `policy_decision` | adapter, from the arm's tool path | Baseline: `allow` with `no_policy` (`baseline.permissive`). Defended: `deny` with the gateway's code, or `allow` (`approval_granted` after the approval step). Unknown tool: `deny` `tool_not_allowed`, decided by the adapter |
 | `tool_call_started`, `tool_call_finished` | adapter | Only after an allow; the outcome and status |
-| `run_finished` | adapter | goose's exit status, turns, the final text from `--output-format json`, and the terminal reason (`completed`, `max_turns`, `timeout`, `error`) |
+| `run_finished` | adapter | The TB-004 outcome, elapsed time, model and tool call counts and tokens. goose's exit status, its JSON `status`, the tools it advertised, the protocol methods and its final text are kept in the report's `external` block and `final_text` |
 
-**Fail closed (TB-002, trace boundary):** the adapter writes `tool_call_proposed` and `policy_decision` before it forwards
-a call. If a trace write fails, it refuses that call and every later one with `{"detail": "tool_unavailable"}` and the
-run ends with reason `error`, so no effect can happen without its evidence.
+**Fail closed (TB-002, trace boundary):** the adapter writes `tool_call_proposed` before it forwards a call; if that
+write fails, the call is refused with `{"detail": "tool_unavailable"}` and never forwarded. In the TrustBench-tools mode the
+gateway itself decides during the forwarded request (it is the enforcement point and keeps its own audit log), so the
+adapter writes `policy_decision` from the gateway's answer, followed by `tool_call_started` and `tool_call_finished` for an
+allowed call. After any failed write the recorder refuses every later call, so the run cannot continue without evidence.
+In the native-integration mode the gateway is TrustBench's MCP proxy and writes `tool_call_proposed` and
+`policy_decision` before it forwards anything ([native-integration.md](native-integration.md)).
 
 goose's `--output-format json` result (observed: the messages, the tools advertised to the model, token counts and a
 final `status`) is read for `run_finished`; goose's own logs are not trace evidence and may only be kept beside the trace
@@ -117,7 +127,7 @@ for debugging. No token, key or credential-shaped value is ever written (TB-004 
 | Model calls, tokens, cost per run | the run's budget file | the model proxy refuses requests past the budget; the run ends `budget_exhausted` |
 | Wall clock | the run's time limit | the harness kills goose and records `timeout` |
 
-## Acceptance tests TB-057 and TB-058 must add
+## Acceptance tests
 
 1. Every listed tool is callable from goose in both arms, and the trace validates against TB-004.
 2. Gateway denials reach goose with the exact codes above; a tool outside the list never reaches the backend.
@@ -130,3 +140,31 @@ for debugging. No token, key or credential-shaped value is ever written (TB-004 
 6. goose cannot reach the tool backend, the gateway or the network except through the adapter and the model proxy
    (a deliberately planted direct request fails).
 7. Paired runs differ only in the tool backend the adapter forwards to (configuration hashes compared).
+
+Where each test lives:
+
+| Test | Where | Status |
+| --- | --- | --- |
+| 1 | `tests/external/adapter/goose-adapter.test.ts` (real goose calls all ten tools); `scripts/check-external-paired-report.py` over every paired report | TB-057, passing |
+| 2 | Adapter unit test (codes mapped unchanged, unknown tool never reaches the registry); the paired-report check (every denial in every trace carries a contract code) | TB-057, passing |
+| 3 | The paired-report check scans every output file for credential-shaped values and the provider keys in its environment; the goose test checks the environment goose gets is exactly the allowlist | TB-057, passing |
+| 4 | The goose test plants `AGENTS.md` and `.goosehints` in the working folder and checks they never reach the model, checks the offered tools, and checks that no never-set variable is present | TB-057, passing |
+| 5 | Adapter unit test: a failing trace write refuses that call and every later one | TB-057, passing |
+| 6 | Network confinement and bypass tests | TB-058 |
+| 7 | The paired-report check compares the configuration and system-prompt hashes of both arms of every pair | TB-057, passing |
+
+## Changes in 1.1.0
+
+Found while building the adapter (TB-057); every run in TB-057's evidence used 1.1.0.
+
+- The invocation adds `--system` (the TrustBench system prompt, the same in both arms) and the relay's `--node` argument.
+- `prompt_sha256` hashes the TrustBench `{system, user}` prompt, as for the built-in agents. goose's full system prompt is
+  hashed per run in the report instead.
+- In the TrustBench-tools mode, `policy_decision` is written from the gateway's answer, after the proposal, because the
+  gateway decides during the forwarded request. The fail-closed rule is restated above.
+- `run_finished` carries the TB-004 fields; goose's own status and final text moved to the report.
+- goose opens with `server/discover`, which the adapter answers as unsupported.
+- `GOOSE_MAX_TURNS` is set; `GOOSE_SUBAGENT_MAX_TURNS` and `GOOSE_AUTO_COMPACT_THRESHOLD` are left at goose's defaults,
+  the same in both arms.
+- No seed is sent; goose has no seed setting.
+

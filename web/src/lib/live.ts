@@ -15,14 +15,14 @@ export type Catalog = {
   systems: { id: string; label: string; modes: string[]; frozen?: boolean }[];
   renderings: string[]; default_rendering: string;
   cases: { id: string; kind: 'benign' | 'attack'; workflow: string; scripted_only: boolean }[];
-  agents: Record<string, { status: string; label: string; tasks?: string }>;
+  agents: Record<string, { status: string; label: string; tasks?: string; reason?: string; runner_agent?: string; compatible_systems?: string[]; contract?: string }>;
   frozen: { system: string; model: string; prompt_profile: string };
   holdouts: string; access_token_required: boolean; storage?: 'ok' | 'unavailable';
   auth?: { retention_hours: number; accounts: { retention_days: number; verified_quota_multiplier: number; email_delivery: string; password_min_length: number } };
 };
 export type Job = {
   id: string; status: 'queued' | 'running' | 'done' | 'done_with_parity_warnings' | 'failed'; mode: string; system: string; rendering: string;
-  model: { id: string } | null; cases: string[]; repetitions: number; pairs: number; key_source: string | null;
+  model: { id: string } | null; cases: string[]; repetitions: number; pairs: number; key_source: string | null; agent?: string;
   created_at: string; started_at: string | null; finished_at: string | null; progress: { done: number; total: number }; queue_position?: number; error: string | null;
   summary?: { valid_pairs: number; invalid_pairs: number; invalid_reasons?: { code: string; runs: number; message: string }[]; unsafe_committed_effect: Pair; benign_utility_pass: Pair; attacker_goal_achieved: Pair; observed_response_models: string[] | null };
 };

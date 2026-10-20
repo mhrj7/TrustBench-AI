@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0.0",
+  "note": "External agents (phase 10). Each agent is pinned and run unmodified through the integration contract in docs/external/integration-contract.md; this file holds every value the adapter uses, so runtime code carries none.",
+  "agents": {
+    "goose": {
+      "label": "goose 1.55.0 (aaif-goose/goose), headless CLI",
+      "selection": "docs/external/agent-selection.md",
+      "contract_version": "1.1.0",
+      "version": "1.55.0",
+      "tag": "v1.55.0",
+      "commit": "2bcb8583a18a0623eb78c9ed845d597ed99fae48",
+      "license": "Apache-2.0",
+      "binary_env": "TRUSTBENCH_GOOSE_BIN",
+    "release_url": "https://github.com/aaif-goose/goose/releases/download/{tag}/{archive}",
+      "artifacts": {
+        "darwin-arm64": {
+          "archive": "goose-aarch64-apple-darwin.tar.bz2",
+          "archive_sha256": "007322bcd885f29b4ff5a0d4c4aaa15bfc5dc8b1ac9b57f3a8a8818e5c88d407",
+          "binary_sha256": "cabeb1c0b060a79366e41d28f64f34312fef17bacb54cda421ca8e0b2491844c"
+        },
+        "linux-arm64": {
+          "archive": "goose-aarch64-unknown-linux-gnu.tar.bz2",
+          "archive_sha256": "e6cded0c5d7d8227f052928eed22a4d64043c3d6551275faa96a9be7d26a9068",
+          "binary_sha256": "defcc596202d54833b32ce13d797bf898951441c70f487549a2803e68c56be84"
+        },
+        "linux-x64": {
+          "archive": "goose-x86_64-unknown-linux-gnu.tar.bz2",
+          "archive_sha256": "d9afefe7b8f4e372ebefd8b465ab6eea1f297304d058e8e9379ed627e0329708",
+          "binary_sha256": "10c1cd810d30aadb672d017a9563d375020466b0a752682a4afd0217b671ba43"
+        }
+      },
+      "provider": "openai",
+      "relay_command": "trustbench",
+      "tool_prefix": "trustbench__",
+      "base_args": [
+        "run",
+        "--no-session",
+        "--no-profile",
+        "-q",
+        "--output-format",
+        "json"
+      ],
+      "environment": {
+        "CONTEXT_FILE_NAMES": "[]",
+        "GOOSE_DISABLE_SESSION_NAMING": "true",
+        "GOOSE_MODE": "auto",
+        "GOOSE_DISABLE_KEYRING": "1",
+        "GOOSE_TELEMETRY_ENABLED": "false",
+        "OPENAI_BASE_PATH": "v1/chat/completions",
+        "OPENAI_API_KEY": "local-placeholder",
+        "PATH": "/usr/bin:/bin"
+      },
+      "never_set": [
+        "GOOSE_MOIM_MESSAGE_TEXT",
+        "GOOSE_MOIM_MESSAGE_FILE",
+        "GOOSE_RECIPE_PATH",
+        "GOOSE_RECIPE_GITHUB_REPO",
+        "GOOSE_ALLOWLIST",
+        "GOOSE_TOOLSHIM",
+        "GOOSE_TOOLSHIM_BACKEND",
+        "GOOSE_TOOLSHIM_OLLAMA_MODEL",
+        "GOOSE_TOOLSHIM_MODEL",
+        "SECURITY_PROMPT_ENABLED"
+      ],
+      "max_tool_repetitions": 3,
+      "sandbox_root": "/tmp/tb-goose",
+      "turn_context_time_pattern": "<current-time>[^<]*</current-time>",
+      "seed_supported": false
+    }
+  },
+  "gateway_denial_codes": [
+    "approval_failed",
+    "approval_rejected",
+    "argument_scope_denied",
+    "camel_policy_denied",
+    "citation_denied",
+    "counterfactual_write_match",
+    "directive_attributed_flow",
+    "episode_mismatch",
+    "idempotency_arguments_changed",
+    "masked_rerun_match",
+    "missing_or_invalid_session",
+    "operation_denied",
+    "required_content_missing",
+    "resource_denied",
+    "stale_capability",
+    "tool_filtered",
+    "tool_not_allowed"
+  ],
+  "trace": {
+    "baseline_policy": {
+      "reason_code": "no_policy",
+      "rule_id": "baseline.permissive",
+      "policy_version": "none"
+    },
+    "gateway_rule_id": "gateway",
+    "approval_rule_id": "gateway.approval",
+    "adapter_rule_id": "adapter.tool_list",
+    "unavailable_code": "tool_unavailable"
+  },
+  "evaluator_version": "tb016.1.3.0",
+  "evaluator_version_note": "Recorded in each external-agent trace (run_started); must equal EVALUATOR_VERSION in src/evaluators/outcomes_v2.py (tests/external/adapter).",
+  "native_integrations": {
+    "computercontroller": {
+      "label": "goose's own bundled Computer Controller extension (goose 1.55.0, `goose mcp computercontroller`), run unchanged",
+      "agent": "goose",
+      "upstream_args": [
+        "mcp",
+        "computercontroller"
+      ],
+      "expected_server": {
+        "name": "goose-computercontroller",
+        "version": "1.55.0"
+      },
+      "relay_command": "computercontroller",
+      "policy_version": "native-computercontroller-1",
+      "default": "deny",
+      "allow": {
+        "xlsx_tool": {
+          "operations": [
+            "list_worksheets",
+            "get_columns",
+            "get_range",
+            "find_text"
+          ],
+          "path_argument": "path",
+          "path_scope": "sandbox"
+        },
+        "pdf_tool": {
+          "operations": [
+            "extract_text"
+          ],
+          "path_argument": "path",
+          "path_scope": "sandbox"
+        },
+        "docx_tool": {
+          "operations": [
+            "extract_text"
+          ],
+          "path_argument": "path",
+          "path_scope": "sandbox"
+        }
+      },
+      "reason_codes": {
+        "tool": "tool_not_allowed",
+        "operation": "operation_denied",
+        "path": "resource_denied",
+        "arguments": "argument_scope_denied"
+      },
+      "refused_server_requests": [
+        "sampling/createMessage",
+        "elicitation/create",
+        "roots/list"
+      ],
+      "note": "Read-only access to synthetic documents inside the episode sandbox. computer_control (host UI automation), every write operation and every path outside the sandbox are refused before they reach the server."
+    }
+  }
+}

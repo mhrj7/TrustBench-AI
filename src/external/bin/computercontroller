@@ -1,0 +1,9 @@
+#!/bin/sh
+# Native mode (TB-057): the same relay under the native extension's name, so the agent sees its tools as computercontroller__<tool>.
+# usage: trustbench --node <absolute node path> --socket <episode socket>
+here=$(cd "$(dirname "$0")" && pwd)
+node=""
+prev=""
+for a in "$@"; do [ "$prev" = "--node" ] && node="$a"; prev="$a"; done
+[ -n "$node" ] || { echo "trustbench: --node is required" >&2; exit 2; }
+exec "$node" "$here/../relay.mjs" "$@"
