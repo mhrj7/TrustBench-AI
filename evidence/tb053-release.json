@@ -1,0 +1,110 @@
+{
+ "task_id": "TB-053",
+ "tag": "v1.0.0",
+ "release_url": "https://github.com/mhrj7/TrustBench-AI/releases/tag/v1.0.0",
+ "commit": "c831245f2f77bbdf9dcb8898998ff1b235b55ecb",
+ "checked_at": "2026-10-20T05:10:18+00:00",
+ "assets": [
+  "SHA256SUMS",
+  "trustbench-1.0.0-LICENSE",
+  "trustbench-1.0.0-THIRD_PARTY_NOTICES.md",
+  "trustbench-1.0.0-claims.md",
+  "trustbench-1.0.0-release-checks.json",
+  "trustbench-1.0.0-report.md",
+  "trustbench-1.0.0-reproduction-manifest.json",
+  "trustbench-1.0.0-source.tar.gz"
+ ],
+ "missing_assets": [],
+ "checksums_match": {
+  "trustbench-1.0.0-claims.md": true,
+  "trustbench-1.0.0-LICENSE": true,
+  "trustbench-1.0.0-release-checks.json": true,
+  "trustbench-1.0.0-report.md": true,
+  "trustbench-1.0.0-reproduction-manifest.json": true,
+  "trustbench-1.0.0-source.tar.gz": true,
+  "trustbench-1.0.0-THIRD_PARTY_NOTICES.md": true
+ },
+ "archive": {
+  "files": 1712,
+  "equals_tagged_tree": true,
+  "has_license": true,
+  "has_notices": true,
+  "agentdojo_checkout_included": false
+ },
+ "secret_scan_problems": [],
+ "quickstart": {
+  "environment": "node:26.5.0-bookworm-slim (Debian 12), non-root, only git, curl, Node.js 26.5.0, npm 12.0.0 and uv 0.11.28 installed",
+  "source": "the downloaded release archive",
+  "steps": [
+   {
+    "command": "curl -fsSL <source archive> | tar -xz",
+    "exit_code": 0,
+    "tail": []
+   },
+   {
+    "command": "cd TrustBench-AI-1.0.0",
+    "exit_code": 0,
+    "tail": []
+   },
+   {
+    "command": "export TRUSTBENCH_STORAGE_ROOT=\"$(dirname \"$PWD\")\" npm_config_cache=\"$(dirname \"$PWD\")/.cache/npm\"",
+    "exit_code": 0,
+    "tail": []
+   },
+   {
+    "command": "cp .env.example .env",
+    "exit_code": 0,
+    "tail": []
+   },
+   {
+    "command": "npm ci",
+    "exit_code": 0,
+    "tail": [
+     "added 69 packages in 3s"
+    ]
+   },
+   {
+    "command": "npm run setup",
+    "exit_code": 0,
+    "tail": [
+     "npm notice To update run: npm install -g npm@12.2.0",
+     "npm notice"
+    ]
+   },
+   {
+    "command": "sh bin/trustbench validate",
+    "exit_code": 0,
+    "tail": [
+     " ]",
+     "}"
+    ]
+   },
+   {
+    "command": "sh bin/trustbench smoke --check",
+    "exit_code": 0,
+    "tail": [
+     " ]",
+     "}"
+    ]
+   },
+   {
+    "command": "sh bin/trustbench manifest",
+    "exit_code": 0,
+    "tail": [
+     " \"changed\": []",
+     "}"
+    ]
+   },
+   {
+    "command": "sh bin/trustbench report --check",
+    "exit_code": 0,
+    "tail": [
+     "............................................................             [100%]",
+     "60 passed in 3.53s"
+    ]
+   }
+  ],
+  "ok": true
+ },
+ "ok": true
+}

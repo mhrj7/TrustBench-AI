@@ -82,7 +82,7 @@ def notes(tag):
 - the release-check record;
 - `SHA256SUMS`.
 
-**Quickstart** (needs git, Node.js 26.5.0 with npm 12.0.0, and uv; no key, model or network after installing):
+**Quickstart** (needs git, curl, Node.js 26.5.0 with npm 12.0.0, and uv; no key, model or network after installing):
 
 ```bash
 {cmds}
@@ -120,8 +120,11 @@ def scan(data: dict[str, bytes]) -> list[str]:
 
 
 def run_quickstart(v: str, source: str, mount: Path | None) -> dict:
-    image = 'trustbench-readme:quickstart'
+    image = 'trustbench-release:quickstart'
     dockerfile = (ROOT / 'scripts/check-readme.py').read_text().split('DOCKERFILE = """', 1)[1].split('"""', 1)[0]
+    # The README's clean image plus curl: the release quickstart downloads the archive with curl, and its notes list it.
+    assert 'install -y --no-install-recommends git ca-certificates' in dockerfile
+    dockerfile = dockerfile.replace('install -y --no-install-recommends git ca-certificates', 'install -y --no-install-recommends git curl ca-certificates')
     with tempfile.TemporaryDirectory(dir=ROOT.parent, prefix='.tb053-') as tmp:
         (Path(tmp) / 'Dockerfile').write_text(dockerfile)
         subprocess.run(['docker', 'build', '-q', '-t', image, tmp], check=True, capture_output=True)
@@ -138,7 +141,7 @@ def run_quickstart(v: str, source: str, mount: Path | None) -> dict:
     for i, c in enumerate(cmds):
         m = re.search(rf'@@BEGIN {i}\n(.*?)@@END (\d+)', log, re.S)
         steps.append({'command': c.replace(source, '<source archive>'), 'exit_code': int(m.group(2)) if m else None, 'tail': (m.group(1).strip().splitlines()[-2:] if m else [])})
-    return {'environment': 'node:26.5.0-bookworm-slim (Debian 12), non-root, only git, Node.js 26.5.0, npm 12.0.0 and uv 0.11.28 installed',
+    return {'environment': 'node:26.5.0-bookworm-slim (Debian 12), non-root, only git, curl, Node.js 26.5.0, npm 12.0.0 and uv 0.11.28 installed',
             'source': 'the downloaded release archive' if source.startswith('http') else 'a local archive', 'steps': steps,
             'ok': all(s['exit_code'] == 0 for s in steps)}
 

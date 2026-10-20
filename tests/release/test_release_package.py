@@ -32,6 +32,18 @@ def test_the_quickstart_is_the_readme_install_and_checks_from_an_archive():
     assert cmds[0].startswith('curl -fsSL https://example.invalid/x.tar.gz | tar -xz') and cmds[1] == 'cd TrustBench-AI-1.0.0'
 
 
+def test_the_notes_list_every_tool_the_quickstart_runs():
+    """The v1.0.0 notes first said git, Node.js and uv, but the quickstart starts with curl: a user with only the listed
+    tools stopped at step one (found by verify, which runs the quickstart in a clean image)."""
+    import re
+    text = NS['notes']('v1.0.0')
+    needs = re.search(r'\*\*Quickstart\*\* \(needs ([^;]+);', text).group(1)
+    for c in NS['quickstart_commands']('1.0.0', 'https://example.invalid/x.tar.gz'):
+        tool = c.split()[0]
+        if tool in ('curl', 'git', 'uv'):
+            assert tool in needs, f'the quickstart runs {tool} but the notes do not list it: {needs}'
+
+
 def test_the_project_is_mit_licensed_and_notices_cover_agentdojo():
     assert (ROOT / 'LICENSE').read_text().startswith('MIT License')
     assert json.loads((ROOT / 'package.json').read_text())['license'] == 'MIT'

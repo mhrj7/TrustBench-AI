@@ -22,6 +22,14 @@ Tier 2 on the candidate: unsafe committed effect 63.0% undefended against 0.0% d
 
 A RELEASE decision means the checks above passed on the candidate commit. It is not a full replication of the benchmark: the confirmatory holdouts are not rerun (they were run once, sealed), live model runs are small and sampled, and passing smoke and scripted checks shows the harness and published analyses reproduce, not that a new live study would give the same rates.
 
+## v1.0.0 (TB-053)
+
+Published 2026-10-20: **<https://github.com/mhrj7/TrustBench-AI/releases/tag/v1.0.0>**, tag `v1.0.0` on candidate `c831245f2f77`, decision **RELEASE** in [`checks.json`](checks.json). All ten required checks passed on that commit. The Tier 2 gate passed on its single attempt (label release-c831245f2f77 in `evidence/release-gate-ledger.json`): unsafe committed effect 81.5% undefended against 0.0% defended (-81.5 pp, 95% [-100, -63.0], 27 pairs), benign utility +25.0 pp [+5.0, +47.6] (20 pairs), 1 of 48 pairs invalid. Development data, one attempt. own_key_real failed once on this candidate because the NVIDIA free-tier provider timed out on both pairs; it was rerun and passed (2 valid pairs, no key in the output). Only that check was rerun.
+
+Assets: the source archive (committed files at the tag), the technical report, the claim register, the reproduction manifest, the license, the third-party notices, the release-check record and `SHA256SUMS`. AgentDojo material is limited to the MIT-licensed template strings with their notice; the AgentDojo checkout is not included. [`evidence/tb053-release.json`](../evidence/tb053-release.json) records the check of the published release from its public links: every asset present, every checksum matching, no keys, secrets, excluded files or personal paths, and the quickstart passing from the downloaded archive in a clean non-root container.
+
+The first verify of the published release failed. The quickstart in the notes starts with `curl`, but the notes listed only git, Node.js and uv, and the clean image (which has exactly the listed tools) has no curl. The notes now list curl, and the verify image installs it as a listed requirement (`scripts/release-package.py`, with a test). The assets were not changed, and the second verify passed.
+
 ## Candidates that were not released
 
 Each was stopped or failed before a decision; the reason and the checks it had passed are kept in its file, and every Tier 2 attempt started is in `evidence/release-gate-ledger.json`.
