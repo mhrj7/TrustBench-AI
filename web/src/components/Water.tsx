@@ -1,7 +1,7 @@
 // Water under the cursor, in every browser (the field itself is lib/fluid.ts):
-//  - the wake: a fixed, pointer-transparent WebGL canvas over the page draws the moving water as a lit liquid surface (clear
+//  - the wake: a fixed, pointer-transparent 2D canvas over the page draws the moving water as a lit liquid surface (clear
 //    blue body, white highlight, blue shade, iridescent rim); it is the same in every browser, Safari and phones included,
-//    and clears when the water settles;
+//    is never dropped (no WebGL context to lose), and clears when the water settles;
 //  - the WebGL scenes distort what they draw by the same field (components/FluidFX.tsx);
 //  - in Chromium browsers with a mouse (Chrome, Brave, Edge), the page under the water ripples too: an SVG displacement
 //    filter used as backdrop-filter, applied only to a box around the moving water (cropped to the cells that are moving),
@@ -24,62 +24,64 @@ export function WaterCursor() {
   return <><WaterWake />{refract && <WaterRefraction />}</>;
 }
 
-const VERT = `attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
-const FRAG = `precision highp float; varying vec2 uv; uniform sampler2D field; uniform vec2 texel;
-float h(vec2 p){ vec2 v = (texture2D(field, p).rg - 0.5) * 2.0; return length(v); }
-void main(){
-  vec2 q = vec2(uv.x, 1.0 - uv.y);
-  vec2 v = (texture2D(field, q).rg - 0.5) * 2.0;
-  float m = length(v);
-  float body = smoothstep(0.015, 0.2, m);
-  if (body < 0.003) { gl_FragColor = vec4(0.0); return; }
-  // A liquid surface: the flow speed is the height of the water and its slope the normal, lit from the top left like the
-  // page. Clear blue body, a white highlight on the lit side, a deeper blue on the far side and an iridescent rim, blended
-  // as premultiplied colour. The same canvas in every browser, so the water reads in Safari and on phones as in Chrome.
-  vec2 g = vec2(h(q + vec2(texel.x, 0.0)) - h(q - vec2(texel.x, 0.0)), h(q - vec2(0.0, texel.y)) - h(q + vec2(0.0, texel.y)));
-  vec3 n = normalize(vec3(-g * 3.0, 0.35));
-  vec3 L = normalize(vec3(-0.5, 0.7, 0.6));
-  float spec = pow(clamp(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 16.0);
-  float shade = clamp(-dot(n.xy, normalize(L.xy)) * 2.0, 0.0, 1.0);
-  vec2 d = v / max(m, 0.0001);                       // no angle of a zero vector (NaN on some GPUs)
-  float hue = 0.5 + 0.5 * (d.x * d.x - d.y * d.y);   // cos(2 * angle), without atan
-  vec3 tint = mix(vec3(0.35, 0.55, 1.0), vec3(1.0, 0.5, 0.82), hue);
-  float rim = smoothstep(0.05, 0.13, m) * (1.0 - smoothstep(0.13, 0.3, m));
-  vec3 rgb = mix(vec3(0.5, 0.7, 1.0), vec3(0.24, 0.34, 0.86), shade * 0.7);
-  rgb = mix(rgb, tint, rim * 0.6);
-  float a = body * (0.18 + 0.16 * shade + 0.14 * rim);
-  float s = clamp(spec * 1.3, 0.0, 0.9) * body;
-  gl_FragColor = vec4(rgb * a * (1.0 - s) + vec3(s), a * (1.0 - s) + s);
-}`;
-
-/** The visible wake over the page, in every browser. */
+/** The visible wake over the page, in every browser. Drawn with Canvas 2D, not WebGL: browsers cap how many WebGL
+ *  contexts a page may hold (Safari and iPhone the fewest) and, past the cap or on a refresh before the old page's
+ *  contexts are released, silently drop the oldest one, which made the water vanish on some loads. A 2D canvas has no
+ *  such limit, is never dropped, and is never blocked.
+ *
+ *  Each frame the water field (one cell per grid square) is shaded as a lit liquid surface (the flow speed is its height
+ *  and the slope its normal, lit from the top left): a clear blue body, a white highlight on the lit side, a deeper blue
+ *  on the far side and an iridescent rim. The small image is then drawn smoothly scaled over the whole window. */
 function WaterWake() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
-    if (!c) return;
-    const gl = c.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
-    if (!gl) return;
-    const sh = (type: number, src: string) => { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); return s; };
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(prog); gl.useProgram(prog);
-    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    const texelLoc = gl.getUniformLocation(prog, 'texel');
-    const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    const ctx = c?.getContext('2d');
+    if (!c || !ctx) return;
+    const cell = document.createElement('canvas');
+    const cctx = cell.getContext('2d')!;
+    let img: ImageData | null = null;
     const scale = 0.5;   // the wake is soft: half resolution is plenty
-    const size = () => { c.width = Math.round(innerWidth * scale); c.height = Math.round(innerHeight * scale); gl.viewport(0, 0, c.width, c.height); };
+    const size = () => { c.width = Math.round(innerWidth * scale); c.height = Math.round(innerHeight * scale); };
     size();
     addEventListener('resize', size);
+    const Lx = -0.5, Ly = 0.7, Lz = 0.6, Ln = Math.hypot(Lx, Ly, Lz), lx = Lx / Ln, ly = Ly / Ln, lz = Lz / Ln, lxy = Math.hypot(lx, ly);
+    const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const draw = () => {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fluid.cols, fluid.rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, fluid.data);
-      gl.uniform2f(texelLoc, 1 / fluid.cols, 1 / fluid.rows);
-      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-      if (fluid.active) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      ctx.clearRect(0, 0, c.width, c.height);
+      if (!fluid.active) return;
+      const { cols, rows, data } = fluid;
+      if (cell.width !== cols || cell.height !== rows || !img) { cell.width = cols; cell.height = rows; img = cctx.createImageData(cols, rows); }
+      const out = img.data;
+      const speed = (i: number, j: number) => {
+        i = Math.min(cols - 1, Math.max(0, i)); j = Math.min(rows - 1, Math.max(0, j));
+        const k = (j * cols + i) * 4, vx = (data[k] - 128) / 127, vy = (data[k + 1] - 128) / 127;
+        return Math.hypot(vx, vy);
+      };
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const k = (j * cols + i) * 4, vx = (data[k] - 128) / 127, vy = (data[k + 1] - 128) / 127, m = Math.hypot(vx, vy);
+        const body = smooth(0.015, 0.2, m);
+        if (body < 0.003) { out[k + 3] = 0; continue; }
+        const gx = speed(i + 1, j) - speed(i - 1, j), gy = speed(i, j - 1) - speed(i, j + 1);
+        let nx = -gx * 3, ny = gy * 3, nz = 0.35; const nn = Math.hypot(nx, ny, nz); nx /= nn; ny /= nn; nz /= nn;
+        const dl = nx * lx + ny * ly + nz * lz, rz = 2 * dl * nz - lz;            // the reflected light, seen from the front
+        const spec = Math.pow(Math.min(1, Math.max(0, rz)), 16);
+        const shade = Math.min(1, Math.max(0, -(nx * lx + ny * ly) / lxy * 2));
+        const dx = vx / m, dy = vy / m, hue = 0.5 + 0.5 * (dx * dx - dy * dy);
+        const rim = smooth(0.05, 0.13, m) * (1 - smooth(0.13, 0.3, m));
+        let r = 0.5 + (0.24 - 0.5) * shade * 0.7, g = 0.7 + (0.34 - 0.7) * shade * 0.7, b = 1 + (0.86 - 1) * shade * 0.7;
+        const tr = 0.35 + 0.65 * hue, tg = 0.55 - 0.05 * hue, tb = 1 - 0.18 * hue, w = rim * 0.6;
+        r += (tr - r) * w; g += (tg - g) * w; b += (tb - b) * w;
+        const a = body * (0.18 + 0.16 * shade + 0.14 * rim), s = Math.min(0.9, spec * 1.3) * body;
+        const A = a * (1 - s) + s;                                                 // the highlight over the body
+        out[k] = Math.round(255 * Math.min(1, (r * a * (1 - s) + s) / A));
+        out[k + 1] = Math.round(255 * Math.min(1, (g * a * (1 - s) + s) / A));
+        out[k + 2] = Math.round(255 * Math.min(1, (b * a * (1 - s) + s) / A));
+        out[k + 3] = Math.round(255 * Math.min(0.9, A));
+      }
+      cctx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(cell, 0, 0, c.width, c.height);
     };
     const off = fluid.on(draw);
     return () => { off(); removeEventListener('resize', size); };
