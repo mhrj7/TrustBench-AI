@@ -6,21 +6,26 @@ contract version, recorded before any run that uses it. The threats each rule an
 
 ## Process model
 
-One episode runs as four processes, all started and stopped by the TrustBench harness:
+One episode runs as five processes, all started and stopped by the TrustBench harness:
 
 1. **Tool backend:** the episode's tool service, as for the built-in agents. Baseline arm: the permissive `src.tools.app`
    on loopback. Defended arm: `src.gateway.app` in front of the same backend (`configs/baseline.yaml`,
    `configs/defended.yaml`).
-2. **TrustBench MCP adapter:** an MCP server over streamable HTTP on `127.0.0.1` with a random port, started by the
-   harness. It holds the episode's gateway session token (defended arm) and forwards each tool call. goose connects to it
-   by URL (`--with-streamable-http-extension`); goose does not launch it, so the token never enters goose's process,
-   environment or command line (EX-10, EX-23).
-3. **Model proxy:** an OpenAI-compatible pass-through on `127.0.0.1` that holds the real provider key, forwards to the
+2. **TrustBench MCP adapter:** an MCP server in the harness process, listening on a per-episode local socket. It holds
+   the episode's gateway session token (defended arm) and forwards each tool call (EX-10, EX-23).
+3. **`trustbench` relay:** a small stdio MCP relay that goose launches as its only extension
+   (`--with-extension "<path>/trustbench --socket <socket path>"`). It copies MCP messages between goose and the adapter's
+   socket and holds no token, key or configuration of its own, so nothing secret enters goose's process, environment,
+   command line or children. A stdio command is used, not goose's HTTP extension, because goose prefixes tool names with
+   the command's name for stdio extensions (`trustbench__<tool>`, the same in every episode and arm) but with the URL's
+   host, port and path for HTTP extensions, which would change the tool names with every port (observed:
+   `evidence/tb056-goose-observations/observations.json`, `contract_checks`).
+4. **Model proxy:** an OpenAI-compatible pass-through on `127.0.0.1` that holds the real provider key, forwards to the
    configured provider and records the system-prompt hash, model identity, usage and any compaction request (EX-02,
    EX-18, EX-22, EX-23). goose is given the proxy's address and a placeholder key.
-4. **goose:** the pinned binary, run headless with the invocation below, in a fresh sandbox.
+5. **goose:** the pinned binary, run headless with the invocation below, in a fresh sandbox.
 
-The adapter and proxy are TrustBench code (trusted). goose and everything it emits are untrusted.
+The adapter, relay and proxy are TrustBench code (trusted). goose and everything it emits are untrusted.
 
 ## goose invocation (identical in both arms)
 
@@ -30,12 +35,13 @@ folder. Both are deleted after the episode.
 ```sh
 goose run --no-session --no-profile \
   --provider openai --model <registered model id> \
-  --with-streamable-http-extension http://127.0.0.1:<adapter port>/mcp \
+  --with-extension "<relay path>/trustbench --socket <episode socket>" \
   --max-turns <run limit> --max-tool-repetitions <run limit> \
   -q --output-format json -t "<task user text>"
 ```
 
-Environment: an allowlist, nothing inherited from the harness shell.
+Environment: an allowlist, nothing inherited from the harness shell (goose is started as `env -i <allowlisted variables>
+goose ...`; observed to run normally that way).
 
 | Variable | Value | Why |
 | --- | --- | --- |
@@ -46,7 +52,7 @@ Environment: an allowlist, nothing inherited from the harness shell.
 | `GOOSE_MODE` | `auto` | No interactive approval prompts; approvals are TrustBench's (EX-17) |
 | `GOOSE_DISABLE_KEYRING` | `1` | No keychain access (EX-19) |
 | `GOOSE_TELEMETRY_ENABLED` | `false` | No usage data (EX-22) |
-| `GOOSE_TEMPERATURE` | the run's registered temperature | Same generation settings as the built-in agents; goose sends none otherwise (observed) |
+| `GOOSE_TEMPERATURE` | the run's registered temperature | Same generation settings as the built-in agents; goose sends none otherwise, and sends this value when set (both observed) |
 | `GOOSE_MAX_TOKENS`, `GOOSE_SUBAGENT_MAX_TURNS`, `GOOSE_AUTO_COMPACT_THRESHOLD` | the run's registered limits | Bounded execution, identical across arms (EX-16, EX-18) |
 | `OPENAI_HOST`, `OPENAI_BASE_PATH`, `OPENAI_API_KEY` | the model proxy's address and a placeholder | The real provider key stays in the proxy (EX-23) |
 
@@ -56,10 +62,10 @@ EX-21). The harness starts goose with a constructed environment, so these cannot
 
 ## Tool surface
 
-- **Names:** the adapter's MCP server is named `trustbench`; it exposes every tool in
-  `src/policy/capability-manifests.json` `argument_schemas`, the same list both built-in arms give the model
-  (`src/arms/arms.ts`). goose shows them to the model as `trustbench__<tool>`; the adapter and the trace use the
-  TrustBench name without the prefix.
+- **Names:** the adapter exposes every tool in `src/policy/capability-manifests.json` `argument_schemas`, the same list
+  both built-in arms give the model (`src/arms/arms.ts`). Because goose launches the relay as the command `trustbench`,
+  the model sees them as `trustbench__<tool>` (observed); the adapter and the trace use the TrustBench name without the
+  prefix.
 - **Argument schemas:** copied verbatim from `argument_schemas` (strict: no extra fields, ID patterns, length limits).
 - **Descriptions:** copied verbatim from `configs/tool-descriptions.json`, identical in both arms.
 - **Nothing else:** no resources, prompts, sampling, elicitation or roots requests from the adapter (EX-13).
@@ -93,8 +99,13 @@ The adapter and the model proxy together write one trace per episode that valida
 | `tool_call_started`, `tool_call_finished` | adapter | Only after an allow; the outcome and status |
 | `run_finished` | adapter | goose's exit status, turns, the final text from `--output-format json`, and the terminal reason (`completed`, `max_turns`, `timeout`, `error`) |
 
-goose's own logs are not trace evidence; they may be kept beside the trace for debugging. No token, key or credential-shaped
-value is ever written (TB-004 secret rules).
+**Fail closed (TB-002, trace boundary):** the adapter writes `tool_call_proposed` and `policy_decision` before it forwards
+a call. If a trace write fails, it refuses that call and every later one with `{"detail": "tool_unavailable"}` and the
+run ends with reason `error`, so no effect can happen without its evidence.
+
+goose's `--output-format json` result (observed: the messages, the tools advertised to the model, token counts and a
+final `status`) is read for `run_finished`; goose's own logs are not trace evidence and may only be kept beside the trace
+for debugging. No token, key or credential-shaped value is ever written (TB-004 secret rules).
 
 ## Limits
 
@@ -112,8 +123,10 @@ value is ever written (TB-004 secret rules).
 2. Gateway denials reach goose with the exact codes above; a tool outside the list never reaches the backend.
 3. The gateway session token and the provider key never appear in goose's environment, command line, prompt, tool schemas
    or saved output (scan every captured artifact).
-4. With the invocation above, the model is offered only the `trustbench` tools and `load_skill`, and no project context
-   file reaches the prompt (repeat the TB-056 observation inside the harness).
-5. goose cannot reach the tool backend, the gateway or the network except through the adapter and the model proxy
+4. With the invocation above, the model is offered only the `trustbench__` tools and `load_skill`, and no project context
+   file reaches the prompt (repeat the TB-056 observation inside the harness), and none of the never-set variables
+   is present in goose's environment.
+5. A trace write failure makes the adapter refuse the call and every later one (fail closed).
+6. goose cannot reach the tool backend, the gateway or the network except through the adapter and the model proxy
    (a deliberately planted direct request fails).
-6. Paired runs differ only in the tool backend the adapter forwards to (configuration hashes compared).
+7. Paired runs differ only in the tool backend the adapter forwards to (configuration hashes compared).
