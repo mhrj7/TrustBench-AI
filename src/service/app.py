@@ -20,6 +20,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
 from src.service import secrets as sec
@@ -651,6 +652,21 @@ def bearer(request: Request) -> Optional[str]:
 STORAGE_FREE_PATHS = {'/api/health', '/api/catalog', '/api/docs', '/api/openapi.json'}  # what still works without the data volume
 
 
+# Text the site loads (scripts, styles, JSON data, SVG) is sent gzip-compressed when the browser accepts it: the run data
+# shrinks about tenfold and the scripts about fourfold, which is most of the first page's download. Already-compressed
+# files (models, images, the film) are sent as they are, so nothing is spent compressing them and byte ranges still work.
+COMPRESSIBLE = ('.js', '.mjs', '.css', '.json', '.svg', '.map', '.txt', '.html', '.wasm')
+
+
+def compressed(static_app):
+    gz = GZipMiddleware(static_app, minimum_size=1024, compresslevel=6)
+
+    async def app(scope, receive, send):
+        target = gz if scope['type'] == 'http' and scope['path'].lower().endswith(COMPRESSIBLE) else static_app
+        await target(scope, receive, send)
+    return app
+
+
 def create_app(service: Optional[Service] = None) -> FastAPI:
     svc = service or Service()
     sec.install_log_redaction()
@@ -907,9 +923,9 @@ def create_app(service: Optional[Service] = None) -> FastAPI:
 
     site = ROOT / CFG['static_site']
     if site.exists():
-        api.mount('/assets', StaticFiles(directory=site / 'assets'), name='assets')
+        api.mount('/assets', compressed(StaticFiles(directory=site / 'assets')), name='assets')
         if (site / 'data').exists():
-            api.mount('/data', StaticFiles(directory=site / 'data'), name='data')
+            api.mount('/data', compressed(StaticFiles(directory=site / 'data')), name='data')
 
         @api.get('/{path:path}', include_in_schema=False)
         def spa(path: str):

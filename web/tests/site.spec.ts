@@ -63,7 +63,8 @@ for (const [name, path, heading] of PAGES) {
     // Headings never exceed two lines (house rule), measured from the rendered line boxes.
     const tall = await page.evaluate(() => [...document.querySelectorAll('h1, h2')].map((h) => {
       const lh = parseFloat(getComputedStyle(h).lineHeight) || parseFloat(getComputedStyle(h).fontSize);
-      return { text: h.textContent?.slice(0, 40), lines: Math.round(h.getBoundingClientRect().height / lh) };
+      // offsetHeight is the laid-out height: scroll-driven transforms (the barrel tilt) do not inflate it.
+      return { text: h.textContent?.slice(0, 40), lines: Math.round((h as HTMLElement).offsetHeight / lh) };
     }).filter((h) => h.lines > 2));
     expect(tall, 'headings over two lines').toEqual([]);
     // Body copy is at least 14px everywhere and 16px for paragraphs.

@@ -1,5 +1,5 @@
 import { AnimatePresence, LayoutGroup, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
-import { Suspense, lazy, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { aggregate, type Group, type Run } from '../lib/aggregate';
 import { loadHeadline, loadSpans, runPath, useAsync, useDataset, type Dataset, type Headline } from '../lib/data';
@@ -13,7 +13,7 @@ import { CountUp, Reveal } from '../components/Motion';
 import { Barrel, GrowCard, Ribbon, Roll } from '../components/Interactive';
 import type { HeroScore } from '../components/PhysicsHero';
 import { RateBars } from '../components/Charts';
-import { useEvidence } from '../components/Shell';
+import { glideTo, useEvidence } from '../components/Shell';
 import { TimedWaterfall } from '../components/Waterfall';
 import { Loading } from './Common';
 import { FilmPlayer } from '../components/FilmPlayer';
@@ -27,6 +27,21 @@ const Journey = lazy(() => import('../components/Journey'));
 const StickerSpace = lazy(() => import('../components/StickerSpace'));
 const JOURNEY_MODELS = JOURNEY_READY ? { astronaut: ASTRONAUT_URL!, ipad: IPAD_URL!, imac: IMAC_URL!, earth: EARTH_URL! } : null;
 const SPRING = { type: 'spring', bounce: 0, duration: 0.55 } as const;
+
+/** True once the element comes within about two screens of the viewport (and stays true): the far-down 3D scenes and their
+ *  models load only then, so they do not compete with the hero for the first download. */
+function useNear(ref: React.RefObject<HTMLElement | null>) {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    if (typeof IntersectionObserver === 'undefined') { setNear(true); return; }
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setNear(true); io.disconnect(); } }, { rootMargin: '200% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, near]);
+  return near;
+}
 
 /** The defended system each report evaluates, read from its defended runs (baseline runs carry "baseline"). */
 export function reportSystems(runs: Run[]) {
@@ -160,9 +175,10 @@ function OverviewBody({ d }: { d: Dataset }) {
 function SpaceCta() {
   const ref = useRef<HTMLElement>(null);
   const reduce = useLite3D();
+  const near = useNear(ref);
   return (
     <section ref={ref} className="space" aria-labelledby="cta-title">
-      {!SOFTWARE_GL && <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>}
+      {!SOFTWARE_GL && near && <Suspense fallback={null}><StickerSpace reduce={reduce} source={ref} modelUrl={ASTRONAUT_URL} /></Suspense>}
       <div className="space-copy wrap">
         <p className="caps">Think you can beat it?</p>
         <h2 id="cta-title" className="headline">Try to trick it <span className="tail">yourself.</span></h2>
@@ -183,6 +199,7 @@ function JourneySection({ h, runs }: { h: Headline; runs: number }) {
   const ref = useRef<HTMLElement>(null);
   const reduce = useLite3D();
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const near = useNear(ref);
   const [active, setActive] = useState(-1);
   const g = T.grid[0], span = T.grid[1] - T.grid[0];
   const stops = [
@@ -191,6 +208,18 @@ function JourneySection({ h, runs }: { h: Headline; runs: number }) {
     { at: g + span * 0.68, kicker: 'Lane 3 · checked twice', title: `${h.audit.sampled} runs`, tail: 're-labelled blind.', text: `Two AI reviewers re-scored them: ${h.audit.security_errors} safety-label errors, ${h.audit.oracle_defects} rule mistake found and fixed.` },
     { at: T.corridor[0], kicker: 'The way out · rebuilt', title: `${h.reproduction.steps} offline steps`, tail: 'rebuild every number.', text: `In a clean container: ${h.reproduction.outcome.toLowerCase()}.` },
   ];
+  // When the astronaut leaps out of the desktop (scrolling down), the page glides on its own to the ending below, where it
+  // lands; scrolling back above the cracked glass re-arms it.
+  const leapt = useRef(false);
+  useMotionValueEvent(p, 'change', (v) => {
+    const prev = p.getPrevious() ?? 0;
+    if (v < T.crack[0]) leapt.current = false;
+    else if (!leapt.current && prev < T.burst[0] + 0.01 && v >= T.burst[0] + 0.01) {
+      leapt.current = true;
+      const end = ref.current?.nextElementSibling;
+      if (end instanceof HTMLElement) glideTo(end, 2.4);
+    }
+  });
   useMotionValueEvent(p, 'change', (v) => {
     let a = -1;
     stops.forEach((st, i) => { if (v >= st.at && v < (stops[i + 1]?.at ?? T.pull[0]) - 0.012) a = i; });
@@ -221,7 +250,7 @@ function JourneySection({ h, runs }: { h: Headline; runs: number }) {
     <section ref={ref} className="journey" aria-labelledby="journey-title">
       <div className="journey-sticky">
         <motion.div className="journey-dark" style={{ opacity: dark }} />
-        <Suspense fallback={<div className="journey-canvas" />}><Journey progress={p} reduce={reduce} models={JOURNEY_MODELS!} /></Suspense>
+        {near ? <Suspense fallback={<div className="journey-canvas" />}><Journey progress={p} reduce={reduce} models={JOURNEY_MODELS!} /></Suspense> : <div className="journey-canvas" />}
         <motion.div className="journey-intro wrap" style={{ opacity: intro, y: introY, visibility: introVis }}>
           <h2 id="journey-title" className="headline">Every claim <span className="tail">meets a test.</span></h2>
           <p className="body ink-2">A benchmark is only worth what you can check. So the helper goes through every stage the project ran: the development runs, the sealed test, the second look by two reviewers, and a rebuild from scratch. Scroll to send it in.</p>

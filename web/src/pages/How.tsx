@@ -2,7 +2,7 @@
 // is pinned while you scroll: the camera starts on the whole system, then visits each part in the order a run flows
 // through it, with a caption naming what happens there and the files that do it. Every number is read from
 // pipeline.json and headline.json (scripts/export-site-data.py).
-import { AnimatePresence, motion, useReducedMotion, useScroll } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useLite3D } from '../lib/lite3d';
 import { Suspense, lazy, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -133,6 +133,10 @@ function HowBody({ pl, h }: { pl: Pipeline; h: Headline }) {
 function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step: number; setStep: (i: number) => void }) {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  // The scene arrives as a rounded card (like the pile on the first page), grows to fill the screen as it pins, and
+  // shrinks back to a card when the last part has played. A clip, so the 3D canvas is never resized while it plays.
+  const k = useTransform(scrollYProgress, [0, 0.03, 0.97, 1], [1, 0, 0, 1]);
+  const clip = useTransform(k, (v) => `inset(calc(${v} * (var(--nav-h) + var(--margin))) calc(${v} * var(--margin)) calc(${v} * var(--margin)) calc(${v} * var(--margin)) round calc(${v} * var(--radius-lg)))`);
   const cur = step >= 0 && step < pl.flow.length ? pl.flow[step] : null;
   const [replay, setReplay] = useState(0);
   // Clicking a part scrolls the page to that part's place in the pinned section, so scroll stays the one source of truth.
@@ -144,7 +148,7 @@ function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step
   const fact = cur ? caseFact(cur.id as StepId, h) : null;
   return (
     <section ref={ref} className="sm" aria-labelledby="sm-title">
-      <div className="sm-sticky">
+      <motion.div className="sm-sticky" style={{ clipPath: clip, WebkitClipPath: clip, ['--fk' as string]: k }}>
         <Suspense fallback={<div className="sm-canvas" />}><SystemModel pl={pl} ex={h.example} imacUrl={IMAC_URL!} models={HOW_URLS} progress={scrollYProgress} reduce={false} onStep={setStep} onPick={pick} replay={replay} /></Suspense>
         <h2 id="sm-title" className="sr-only">One live run, part by part</h2>
         <div className="sm-side">
@@ -174,7 +178,7 @@ function FlowSection({ pl, h, step, setStep }: { pl: Pipeline; h: Headline; step
             </motion.div>
           </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

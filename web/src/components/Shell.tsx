@@ -82,6 +82,15 @@ export function Footer() {
 }
 
 /** Smooth scrolling (Lenis) for pointer devices; native scrolling under reduced motion. Resets scroll on navigation. */
+// The page's smooth scroller, so a scene can move the page itself (the journey's ending scrolls to where the astronaut lands).
+let activeLenis: Lenis | null = null;
+/** Glide the page to an element's top (or a scroll position) over `seconds`; uses the smooth scroller when it is on. */
+export function glideTo(target: HTMLElement | number, seconds: number) {
+  const top = typeof target === 'number' ? target : target.getBoundingClientRect().top + scrollY;
+  if (activeLenis) activeLenis.scrollTo(top, { duration: seconds, easing: (x: number) => 1 - Math.pow(1 - x, 3), lock: true });
+  else window.scrollTo({ top, behavior: 'smooth' });
+}
+
 export function useSmoothScroll() {
   const reduce = useReducedMotion();
   const loc = useLocation();
@@ -91,8 +100,8 @@ export function useSmoothScroll() {
     // lerp-based smoothing (Lenis default feel), its own frame loop, smooth in-page anchor links offset under the bar,
     // and nested scrollers (drawer, run lists, menu sheet) keep their native scrolling.
     const l = new Lenis({ lerp: 0.085, smoothWheel: true, autoRaf: true, anchors: { offset: -72 }, allowNestedScroll: true });
-    lenis.current = l;
-    return () => { l.destroy(); lenis.current = null; };
+    lenis.current = l; activeLenis = l;
+    return () => { l.destroy(); lenis.current = null; activeLenis = null; };
   }, [reduce]);
   useEffect(() => { lenis.current ? lenis.current.scrollTo(0, { immediate: true }) : window.scrollTo(0, 0); }, [loc.pathname]);
 }

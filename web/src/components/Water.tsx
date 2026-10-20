@@ -1,6 +1,7 @@
 // Water under the cursor, in every browser (the field itself is lib/fluid.ts):
-//  - the wake: a fixed, pointer-transparent WebGL canvas over the page draws the moving water as a light, smoky trail with a
-//    faint blue and pink edge, after the reference site; it works in Safari and on phones, and clears when the water settles;
+//  - the wake: a fixed, pointer-transparent WebGL canvas over the page draws the moving water as a lit liquid surface (clear
+//    blue body, white highlight, blue shade, iridescent rim); it is the same in every browser, Safari and phones included,
+//    and clears when the water settles;
 //  - the WebGL scenes distort what they draw by the same field (components/FluidFX.tsx);
 //  - in Chromium browsers with a mouse (Chrome, Brave, Edge), the page under the water ripples too: an SVG displacement
 //    filter used as backdrop-filter, applied only to a box around the moving water (cropped to the cells that are moving),
@@ -24,22 +25,31 @@ export function WaterCursor() {
 }
 
 const VERT = `attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
-const FRAG = `precision mediump float; varying vec2 uv; uniform sampler2D field;
+const FRAG = `precision highp float; varying vec2 uv; uniform sampler2D field; uniform vec2 texel;
+float h(vec2 p){ vec2 v = (texture2D(field, p).rg - 0.5) * 2.0; return length(v); }
 void main(){
-  vec4 f = texture2D(field, vec2(uv.x, 1.0 - uv.y));
-  vec2 v = (f.rg - 0.5) * 2.0;
+  vec2 q = vec2(uv.x, 1.0 - uv.y);
+  vec2 v = (texture2D(field, q).rg - 0.5) * 2.0;
   float m = length(v);
-  float a = smoothstep(0.03, 0.3, m);
-  // Shaded like a liquid surface, so it reads on the light page as well as over the dark scenes: the side facing the
-  // light is a white highlight, the other a blue-violet shade, with a thin iridescent rim whose hue follows the flow.
-  vec2 d = m > 0.0001 ? v / m : vec2(0.0);
-  float lit = dot(d, normalize(vec2(-0.6, -0.8)));
-  vec3 col = mix(vec3(0.28, 0.30, 0.78), vec3(1.0), 0.5 + 0.5 * lit);
-  vec3 tint = mix(vec3(0.35, 0.45, 1.0), vec3(1.0, 0.42, 0.78), 0.5 + 0.5 * sin(atan(v.y, v.x) * 2.0));
-  float edge = smoothstep(0.06, 0.18, m) * (1.0 - smoothstep(0.18, 0.5, m));
-  col = mix(col, tint, edge * 0.9);
-  float alpha = a * 0.36;
-  gl_FragColor = vec4(col * alpha, alpha);
+  float body = smoothstep(0.015, 0.2, m);
+  if (body < 0.003) { gl_FragColor = vec4(0.0); return; }
+  // A liquid surface: the flow speed is the height of the water and its slope the normal, lit from the top left like the
+  // page. Clear blue body, a white highlight on the lit side, a deeper blue on the far side and an iridescent rim, blended
+  // as premultiplied colour. The same canvas in every browser, so the water reads in Safari and on phones as in Chrome.
+  vec2 g = vec2(h(q + vec2(texel.x, 0.0)) - h(q - vec2(texel.x, 0.0)), h(q - vec2(0.0, texel.y)) - h(q + vec2(0.0, texel.y)));
+  vec3 n = normalize(vec3(-g * 3.0, 0.35));
+  vec3 L = normalize(vec3(-0.5, 0.7, 0.6));
+  float spec = pow(clamp(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 16.0);
+  float shade = clamp(-dot(n.xy, normalize(L.xy)) * 2.0, 0.0, 1.0);
+  vec2 d = v / max(m, 0.0001);                       // no angle of a zero vector (NaN on some GPUs)
+  float hue = 0.5 + 0.5 * (d.x * d.x - d.y * d.y);   // cos(2 * angle), without atan
+  vec3 tint = mix(vec3(0.35, 0.55, 1.0), vec3(1.0, 0.5, 0.82), hue);
+  float rim = smoothstep(0.05, 0.13, m) * (1.0 - smoothstep(0.13, 0.3, m));
+  vec3 rgb = mix(vec3(0.5, 0.7, 1.0), vec3(0.24, 0.34, 0.86), shade * 0.7);
+  rgb = mix(rgb, tint, rim * 0.6);
+  float a = body * (0.18 + 0.16 * shade + 0.14 * rim);
+  float s = clamp(spec * 1.3, 0.0, 0.9) * body;
+  gl_FragColor = vec4(rgb * a * (1.0 - s) + vec3(s), a * (1.0 - s) + s);
 }`;
 
 /** The visible wake over the page, in every browser. */
@@ -56,6 +66,7 @@ function WaterWake() {
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const texelLoc = gl.getUniformLocation(prog, 'texel');
     const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -66,6 +77,7 @@ function WaterWake() {
     addEventListener('resize', size);
     const draw = () => {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fluid.cols, fluid.rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, fluid.data);
+      gl.uniform2f(texelLoc, 1 / fluid.cols, 1 / fluid.rows);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       if (fluid.active) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };

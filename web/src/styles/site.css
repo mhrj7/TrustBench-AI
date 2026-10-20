@@ -524,10 +524,13 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 
 /* The 3D system model (components/SystemModel.tsx), pinned while you scroll */
 .sm { position: relative; height: 1300vh; margin-top: var(--space-64); }
-.sm-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #07080c; color: #fff; }
+.sm-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #07080c; color: #fff; will-change: clip-path; }
+/* The side controls stay inside the card while it is framed (--fk is 1 as a card, 0 at full screen). */
+.sm-copy.wrap { padding-left: calc(var(--margin) * (1 + var(--fk, 0))); padding-right: calc(var(--margin) * (1 + var(--fk, 0))); }
+.sm-side { translate: calc(var(--fk, 0) * -1 * var(--margin)) calc(var(--fk, 0) * -1 * var(--margin)); }
 .sm-canvas { position: absolute; inset: 0; z-index: 0; isolation: isolate; }   /* the scene's labels stay beneath the caption */
 .sm-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
-.sm-copy { position: absolute; inset: auto 0 0 0; z-index: 20; padding-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
+.sm-copy { position: absolute; inset: auto 0 calc(var(--fk, 0) * var(--margin)) 0; z-index: 20; padding-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
 .sm-copy::before { content: ''; position: absolute; inset: -160px -50vw 0 -50vw; z-index: -1; background: linear-gradient(180deg, transparent, rgba(5, 6, 9, 0.85)); }
 .sm-cap { max-width: 640px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; }
 .sm-cap .caps { color: rgba(255, 255, 255, 0.65); }
@@ -552,7 +555,7 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 @media (max-width: 640px) {
   .sm-copy { padding-bottom: 20px; }
   /* Phones: the caption takes the full width and a few lines; the replay button sits in the top corner. */
-  .sm-side { top: calc(var(--nav-h) + 12px); bottom: auto; right: 16px; }
+  .sm-side { top: calc(var(--nav-h) + 12px); bottom: auto; right: 16px; translate: calc(var(--fk, 0) * -1 * var(--margin)) calc(var(--fk, 0) * var(--margin)); }
   .sm-replay { padding: 8px 14px; font-size: 12px; }
   .sm-cap .body { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   /* The bottom spacing is a border in the box's own colour: padding would sit inside the clip and show a cut line. */
