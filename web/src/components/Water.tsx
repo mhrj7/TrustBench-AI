@@ -66,18 +66,18 @@ function WaterWake() {
         let nx = -gx * 3, ny = gy * 3, nz = 0.35; const nn = Math.hypot(nx, ny, nz); nx /= nn; ny /= nn; nz /= nn;
         const dl = nx * lx + ny * ly + nz * lz, rz = 2 * dl * nz - lz;            // the reflected light, seen from the front
         const spec = Math.pow(Math.min(1, Math.max(0, rz)), 16);
-        const shade = Math.min(1, Math.max(0, -(nx * lx + ny * ly) / lxy * 2));
-        const dx = vx / m, dy = vy / m, hue = 0.5 + 0.5 * (dx * dx - dy * dy);
-        const rim = smooth(0.05, 0.13, m) * (1 - smooth(0.13, 0.3, m));
-        let r = 0.5 + (0.24 - 0.5) * shade * 0.7, g = 0.7 + (0.34 - 0.7) * shade * 0.7, b = 1 + (0.86 - 1) * shade * 0.7;
-        const tr = 0.35 + 0.65 * hue, tg = 0.55 - 0.05 * hue, tb = 1 - 0.18 * hue, w = rim * 0.6;
-        r += (tr - r) * w; g += (tg - g) * w; b += (tb - b) * w;
-        const a = body * (0.18 + 0.16 * shade + 0.14 * rim), s = Math.min(0.9, spec * 1.3) * body;
-        const A = a * (1 - s) + s;                                                 // the highlight over the body
+        // After the reference site (lusion.co): a thin, glassy trail. A faint white haze for the body, a rainbow fringe on
+        // its edges whose hues turn with the direction of the flow, and a white glint where the surface catches the light.
+        const dx = vx / m, dy = vy / m, phase = 0.5 + 0.5 * (dx * dx - dy * dy) + m * 2.5;
+        const rim = smooth(0.04, 0.12, m) * (1 - smooth(0.12, 0.34, m));
+        const tr = 0.62 + 0.38 * Math.cos(6.2832 * phase), tg = 0.62 + 0.38 * Math.cos(6.2832 * (phase + 0.33)), tb = 0.72 + 0.28 * Math.cos(6.2832 * (phase + 0.67));
+        const r = 0.97 + (tr - 0.97) * rim, g = 0.97 + (tg - 0.97) * rim, b = 1 + (tb - 1) * rim;
+        const a = body * 0.2 + rim * 0.42 * body, s = Math.min(0.8, spec * 1.2) * body;
+        const A = a * (1 - s) + s;
         out[k] = Math.round(255 * Math.min(1, (r * a * (1 - s) + s) / A));
         out[k + 1] = Math.round(255 * Math.min(1, (g * a * (1 - s) + s) / A));
         out[k + 2] = Math.round(255 * Math.min(1, (b * a * (1 - s) + s) / A));
-        out[k + 3] = Math.round(255 * Math.min(0.9, A));
+        out[k + 3] = Math.round(255 * Math.min(0.8, A));
       }
       cctx.putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';

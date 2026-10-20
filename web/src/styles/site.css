@@ -581,9 +581,11 @@ html.rv-ready [data-rv='in'] { opacity: 1; translate: 0 0; filter: none; }
 .sm-replay { white-space: nowrap; }
 .sm-dots button { all: unset; display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
 .sm-dots li { cursor: pointer; }
-.water-wake { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 69; pointer-events: none; }
+/* Safari paints 3D-transformed content (the barrel and bento tilts) in its own compositing layers, which can cover fixed
+   overlays whatever their z-index; a translateZ puts the overlay in front in the 3D order as well (no visible change). */
+.water-wake { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 69; pointer-events: none; transform: translate3d(0, 0, 400px); }
 /* The ripple of the page under the water (Chromium): a box that follows the moving water. */
-.water { position: fixed; inset: 0; z-index: 68; pointer-events: none; overflow: hidden; }
+.water { position: fixed; inset: 0; z-index: 68; pointer-events: none; overflow: hidden; transform: translate3d(0, 0, 399px); }
 /* No mask on the box: Chrome misplaces a masked backdrop filter (a ghost copy of the page). Its edges are invisible because
    the map's outer cells are still water (components/Water.tsx). */
 .water-layer { position: absolute; pointer-events: none; }

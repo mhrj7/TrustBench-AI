@@ -5,7 +5,7 @@
 // RGBA bytes: R = x velocity and G = y velocity around 128, B = speed. The field sleeps when still; `version` changes
 // whenever the bytes do, and `size` whenever the grid is reallocated.
 export const COLS = 72;
-const DECAY = 0.94, RADIUS = 4.5;   // a wide, slow wake: it reads as water, not a smudge
+const DECAY = 0.93, RADIUS = 3.2;   // a thin trail that lingers a moment, after the reference site
 
 type Listener = () => void;
 
