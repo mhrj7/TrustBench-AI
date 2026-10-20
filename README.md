@@ -9,6 +9,8 @@ synthetic data and mock tools; no real email is sent and no real record changes.
   stored artifact). What is and is not claimed: [`research/claims.md`](research/claims.md).
 - **How it fits together**, with a walkthrough of real runs and a video: [`docs/architecture.md`](docs/architecture.md).
 - **Reproduce the published numbers offline** from a clean clone: [`repro/README.md`](repro/README.md).
+- **Handover:** open failure modes, supported versions, the next experiment, maintenance triggers and the backlog:
+  [`docs/handover.md`](docs/handover.md).
 
 ## Try it live (nothing to install)
 
