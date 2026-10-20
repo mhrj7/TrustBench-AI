@@ -90,10 +90,20 @@ def attack_info(attacks):
     return {a['attack_id']: {'goal': goal_only(a['untrusted_text']), 'exposure_marker': exposure_marker(a['untrusted_text'])} for a in attacks}
 
 
-def materialize(benign_path=ROOT / 'data/benign.jsonl', attacks_path=ROOT / 'data/attacks.jsonl', rendering='as_authored', model_name=None):
+def sealed_fixture_ids():
+    """Fixture and attack IDs of every sealed set (data/splits.json holdout_manifest, holdout2_manifest)."""
+    splits = json.loads((ROOT / 'data/splits.json').read_text())
+    return {f for key in ('holdout_manifest', 'holdout2_manifest') if splits.get(key) for f in splits[key]['fixture_ids']}
+
+
+def materialize(benign_path=ROOT / 'data/benign.jsonl', attacks_path=ROOT / 'data/attacks.jsonl', rendering='as_authored', model_name=None, exclude_sealed=False):
     benign = _jsonl(benign_path)
     by_id = {row['fixture_id']: row for row in benign}
     attacks = _jsonl(attacks_path)
+    if exclude_sealed:  # development runs never load a sealed fixture, not even into the tool service's fixture file
+        sealed = sealed_fixture_ids()
+        benign = [row for row in benign if row['fixture_id'] not in sealed]
+        attacks = [a for a in attacks if a['attack_id'] not in sealed and a['base_fixture_id'] not in sealed]
     attacked = [attacked_fixture(by_id[a['base_fixture_id']], a, rendering, model_name) for a in attacks]
     return benign + attacked, attack_info(attacks)
 

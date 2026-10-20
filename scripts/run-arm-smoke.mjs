@@ -99,6 +99,9 @@ const reportPrefix = flag("--report-prefix", "tb024");
 const agentName = flag("--agent", "trustbench");
 if (agentName !== "trustbench" && !(agentName in externalAgents.agents)) throw new Error(`--agent must be trustbench or one of ${Object.keys(externalAgents.agents).join(", ")}`);
 const externalAgent = agentName === "trustbench" ? null : externalAgents.agents[agentName];
+// One sandbox folder per run and pair: concurrent runs (live-service workers, tests) must never share or clear each
+// other's folder. Both arms of a pair use the same folder name, so the paths goose reports are identical across arms.
+const sandboxRunTag = createHash("sha256").update(`${process.pid}:${Date.now()}:${Math.random()}`).digest("hex").slice(0, 10);
 // A longer run timeout only takes effect if the budget's elapsed-time limit grows with it, so the override raises both.
 let budgetOverridePath = null;
 if (reliability?.timeout_ms) {
@@ -188,7 +191,11 @@ const obsConfig = observabilityConfig();
 const spanFile = path.join(work, "spans.jsonl");
 const tracing = createTracing(spanFile, "trustbench-arm-smoke");
 const fixturesPath = path.join(work, "fixtures.jsonl");
-await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : [])]);
+await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : []), ...(confirmatory ? [] : ["--exclude-sealed"])]);
+// TB-059: a development run loads no sealed fixture at all. Asserted on the file the tool services actually read.
+const loadedFixtureIds = (await readFile(fixturesPath, "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l).fixture_id);
+const sealedLoaded = confirmatory ? [] : loadedFixtureIds.filter((id) => id.split("--").some((part) => holdoutIds.has(part)));
+if (sealedLoaded.length) throw new Error(`development run loaded sealed fixtures: ${sealedLoaded.slice(0, 5).join(", ")}`);
 const attackInfo = JSON.parse(await readFile(`${fixturesPath}.attack-info.json`, "utf8"));
 const fixtures = new Map((await readFile(fixturesPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line)).map((row) => [row.fixture_id, row]));
 
@@ -350,7 +357,7 @@ async function runArm(arm, testCase, fixture, rep) {
     await mkdir(traceDir, { recursive: true });
     const pace = live ? async (req) => { const wait = lastCall + minIntervalMs - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); await paceTokens(req); lastCall = Date.now(); } : undefined;
     external = await runGooseAgent({
-      arm, config: built.config, registry: tracedTools, budgetConfig: built.budget, sandboxKey: `${testCase.case_id}-r${rep}`,
+      arm, config: built.config, registry: tracedTools, budgetConfig: built.budget, sandboxKey: `${sandboxRunTag}-${testCase.case_id}-r${rep}`,
       model: live ? { mode: "forward", baseUrl: modelSpec.base_url, apiKey: provider.api_key_env ? process.env[provider.api_key_env] ?? null : null, modelId, extraBody: provider.generation_overrides ?? {} } : { mode: "scripted", outcomes: scriptedOutcomes(testCase) },
       modelInfo: { provider: live ? providerName : "scripted", name: live ? modelId : "mock-arm-smoke", revision: "unpinned" },
       evaluatorVersion: externalAgents.evaluator_version, policyVersion: arm === "defended" ? `gateway_${defendedVariant}` : "none",
@@ -417,7 +424,7 @@ const report = {
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, sealed_fixtures_loaded: confirmatory ? null : 0, fixtures_loaded: loadedFixtureIds.length, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   agent: externalAgent ? { name: agentName, version: externalAgent.version, commit: externalAgent.commit, contract_version: externalAgent.contract_version, seed_sent_to_model: externalAgent.seed_supported, note: "external agent run unmodified through docs/external/integration-contract.md; both arms run it, only the tool path differs" } : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
   ...(endedEarly && !confirmatory ? { ended_early: endedEarly } : {}),

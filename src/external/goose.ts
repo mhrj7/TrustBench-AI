@@ -17,6 +17,9 @@ import { TraceRecorder } from "./trace.ts";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 export const externalAgents = JSON.parse(readFileSync(path.join(root, "configs/external-agents.yaml"), "utf8"));
+// goose processes still running; killed if the harness exits, so an interrupted run leaves no agent behind.
+const running = new Set<import("node:child_process").ChildProcess>();
+process.on("exit", () => { for (const c of running) c.kill("SIGKILL"); });
 
 export interface GooseRunInput {
   arm: "baseline" | "defended";
@@ -131,10 +134,11 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   const exitCode = await new Promise<number | null>((resolve) => {
     const [command, commandArgs] = launch.kind === "none" ? [binary.path, args] : [launch.command, launch.args];
     const child = spawn(command, commandArgs, { cwd: work, env: { ...goEnv, OPENAI_HOST: proxyUrl }, stdio: ["ignore", "pipe", "pipe"] });
+    running.add(child);
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, config.timeout_ms);
-    child.on("close", (code) => { clearTimeout(timer); resolve(code); });
+    child.on("close", (code) => { clearTimeout(timer); running.delete(child); resolve(code); });
   });
   controller.abort();
   await adapter.close(); await proxy.close();
