@@ -29,6 +29,9 @@ export interface ProxyOptions {
 export interface ProviderFailure { code: string; status: number | null; message: string }
 
 export class ModelProxy {
+  /** Provider requests sent and not yet answered: a run cut off by its time limit while one is open ended on the
+   *  provider, not on the agent, and is reported as a provider fault (invalid), like the built-in agents' runs. */
+  inFlight = 0;
   readonly requests: Array<{ messages: Array<{ role: string; content: string }>; tools: string[]; settings: Record<string, unknown> }> = [];
   readonly responseModels = new Set<string>();
   readonly failures: ProviderFailure[] = [];
@@ -89,15 +92,18 @@ export class ModelProxy {
       const forward: Record<string, unknown> = { ...body, ...p.extraBody, model: p.modelId, stream: false };
       delete forward.stream_options;
       let response: Response;
+      this.inFlight++;
       try {
         response = await fetch(`${p.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { "content-type": "application/json", ...(p.apiKey ? { authorization: `Bearer ${p.apiKey}` } : {}) }, body: JSON.stringify(forward), signal: AbortSignal.timeout(this.o.timeoutMs) });
       } catch (e) {
+        this.inFlight--;
         const code = (e as Error)?.name === "TimeoutError" ? "timeout" : "network";
         this.failures.push({ code, status: null, message: String(e).slice(0, 200) });
         this.fail(res, 502, code, "provider unreachable");
         return;
       }
-      const text = await response.text();
+      let text: string;
+      try { text = await response.text(); } finally { this.inFlight--; }
       if (!response.ok) {
         const code = response.status === 429 ? "rate_limit" : response.status === 401 || response.status === 403 ? "authentication" : response.status >= 500 ? "server" : "invalid_request";
         this.failures.push({ code, status: response.status, message: text.slice(0, 200) });

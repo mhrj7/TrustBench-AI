@@ -151,6 +151,9 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   const status: string | null = parsed?.metadata?.status ?? null;
   const advertised: string[] = [...messages].reverse().map((m) => m.metadata?.operations?.llm?.advertised_tools).find(Boolean) ?? proxy.requests[0]?.tools ?? [];
   const failures: AgentFailure[] = proxy.failures.map((f) => ({ node: "model", code: f.code, message: f.message, call_id: null }));
+  // Cut off by the run's time limit while the provider still had not answered: the run ended on the provider, not on
+  // the agent, so it is a provider fault (invalid, never counted), as for the built-in agents.
+  if (timedOut && proxy.inFlight > 0) failures.push({ node: "model", code: "timeout", message: "the provider had not answered when the run's time limit was reached", call_id: null });
   if (exitCode !== 0 && !timedOut && !proxy.budgetExhausted && failures.length === 0) failures.push({ node: "termination", code: "agent_error", message: stderr.slice(-300) || `goose exited ${exitCode}`, call_id: null });
   if (trace.broken) failures.push({ node: "tool", code: "trace_write_failed", message: "trace write failed; adapter failed closed", call_id: null });
   const outcome: BaselineAgentResult["outcome"] = timedOut ? "timeout" : proxy.budgetExhausted ? "budget_exhausted" : failures.length ? "failure" : "success";
