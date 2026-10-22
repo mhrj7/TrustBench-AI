@@ -164,3 +164,39 @@ test("config: the evaluator version recorded in external-agent traces is the eva
   const source = readFileSync(path.join(root, "src/evaluators/outcomes_v2.py"), "utf8");
   assert.equal(externalAgents.evaluator_version, /EVALUATOR_VERSION = "([^"]+)"/.exec(source)![1]);
 });
+
+/** A fake OpenAI-compatible provider: answers 500 to the first `failFirst` requests (all when -1), then a plain reply. */
+async function fakeProvider(failFirst: number) {
+  const http = await import("node:http");
+  let n = 0;
+  const server = http.createServer((req, res) => {
+    req.resume(); req.on("end", () => {
+      n++;
+      if (failFirst < 0 || n <= failFirst) { res.writeHead(500, { "content-type": "application/json" }); res.end(JSON.stringify({ error: { message: "overloaded" } })); return; }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 0, model: "fake-model", choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "Done." } }], usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  return { url: `http://127.0.0.1:${(server.address() as net.AddressInfo).port}/v1`, close: () => new Promise<void>((r) => server.close(() => r())), count: () => n };
+}
+
+test("provider faults: one goose recovers from is counted, not a failure; one it ends on makes the run invalid", { skip: gooseBin ? false : `set ${externalAgents.agents.goose.binary_env} to the pinned goose binary`, timeout: 300_000 }, async () => {
+  const config: AgentRunConfig = { run_id: "run-goose-faults", task_id: "task-goose-faults", system_prompt: "Answer briefly.", user_prompt: "Say done.",
+    generation_settings: { temperature: 0, max_output_tokens: 64 } as any, tools, max_steps: 6, timeout_ms: 120000, planned_input_tokens_per_call: 2000, on_tool_error: "continue" };
+  const run = async (failFirst: number, key: string) => {
+    const p = await fakeProvider(failFirst);
+    try {
+      return await runGooseAgent({ arm: "baseline", config, registry: fakeRegistry([]), budgetConfig: await allToolsBudget(), sandboxKey: key,
+        model: { mode: "forward", baseUrl: p.url, apiKey: null, modelId: "fake-model", extraBody: {} }, modelInfo: { provider: "fake", name: "fake-model", revision: "none" },
+        evaluatorVersion: "test", policyVersion: "none", traceFile: null });
+    } finally { await p.close(); }
+  };
+  const recovered = await run(1, "test-fault-recovered");
+  assert.equal(recovered.invalid, false, "a fault goose retried past is not a provider failure of the run");
+  assert.equal(recovered.goose.recovered_provider_errors, 1);
+  assert.equal(recovered.result.final_text.trim(), "Done.");
+  const ended = await run(-1, "test-fault-ended");
+  assert.equal(ended.invalid, true, "control: a run that never gets an answer is invalid");
+  assert.ok(ended.result.failures.some((f) => f.node === "model" && f.code === "server"));
+});

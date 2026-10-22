@@ -44,6 +44,9 @@ export class ModelProxy {
   readonly requests: Array<{ messages: Array<{ role: string; content: string }>; tools: string[]; settings: Record<string, unknown> }> = [];
   readonly responseModels = new Set<string>();
   readonly failures: ProviderFailure[] = [];
+  /** Every model request's result in order (a provider fault, or ok), so a fault the agent recovered from (a later request
+   *  succeeded) can be told apart from one the run ended on, as the built-in agents' retries are. */
+  readonly outcomes: Array<{ ok: true } | { ok: false; failure: ProviderFailure }> = [];
   usage = { input_tokens: 0, output_tokens: 0, model_calls: 0 };
   budgetExhausted: string | null = null;
   private server: http.Server | null = null;
@@ -111,19 +114,20 @@ export class ModelProxy {
         } catch (e) {
           this.inFlight--;
           const code = (e as Error)?.name === "TimeoutError" ? "timeout" : "network";
-          this.failures.push({ code, status: null, message: String(e).slice(0, 200) });
+          { const f = { code, status: null, message: String(e).slice(0, 200) }; this.failures.push(f); this.outcomes.push({ ok: false, failure: f }); }
           throw new ProxyFailure(502, code, "provider unreachable");
         }
         let text: string;
         try { text = await response.text(); } finally { this.inFlight--; }
         if (!response.ok) {
           const code = response.status === 429 ? "rate_limit" : response.status === 401 || response.status === 403 ? "authentication" : response.status >= 500 ? "server" : "invalid_request";
-          this.failures.push({ code, status: response.status, message: text.slice(0, 200) });
+          { const f = { code, status: response.status, message: text.slice(0, 200) }; this.failures.push(f); this.outcomes.push({ ok: false, failure: f }); }
           throw new ProxyFailure(response.status, code, "provider error");
         }
-        try { completion = JSON.parse(text); } catch { this.failures.push({ code: "invalid_response", status: response.status, message: "non-JSON body" }); throw new ProxyFailure(502, "invalid_response", "invalid provider response"); }
+        try { completion = JSON.parse(text); } catch { { const f = { code: "invalid_response", status: response.status, message: "non-JSON body" }; this.failures.push(f); this.outcomes.push({ ok: false, failure: f }); } throw new ProxyFailure(502, "invalid_response", "invalid provider response"); }
         if (completion.model) this.responseModels.add(String(completion.model));
       }
+      this.outcomes.push({ ok: true });
       return { completion, usage: { input_tokens: Number(completion.usage?.prompt_tokens ?? 0), output_tokens: Number(completion.usage?.completion_tokens ?? 0) },
         finish_reason: String(completion.choices?.[0]?.finish_reason ?? "other"), tool_calls: completion.choices?.[0]?.message?.tool_calls ?? [] };
     };

@@ -381,7 +381,7 @@ async function runArm(arm, testCase, fixture, rep) {
   const exposed = marker === null ? null : requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));
   const faultsInjected = transport ? transport.injected.length : 0;
-  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: adapter.providerRetries, elapsedMs,
+  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: external ? external.goose.recovered_provider_errors : adapter.providerRetries, elapsedMs,
     external: external ? { ...external.goose, stderr_tail: undefined, trace: { ...external.trace, file: external.trace.file ? path.relative(root, external.trace.file) : null } } : null };
 }
 

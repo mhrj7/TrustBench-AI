@@ -60,7 +60,7 @@ export interface GooseRunOutput {
   responseModels: string[];
   invalid: boolean;
   trace: { file: string | null; events: number; valid: boolean; error: string | null };
-  goose: { exit_code: number | null; status: string | null; stderr_tail: string; advertised_tools: string[]; system_prompt_sha256: string | null; protocol_methods: string[]; binary_sha256: string; configuration_sha256: string; environment_names: string[]; confinement: string };
+  goose: { exit_code: number | null; status: string | null; stderr_tail: string; advertised_tools: string[]; system_prompt_sha256: string | null; protocol_methods: string[]; binary_sha256: string; configuration_sha256: string; environment_names: string[]; confinement: string; recovered_provider_errors: number };
 }
 
 function platformKey(): string {
@@ -152,7 +152,12 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   const finalText = (lastAssistant?.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
   const status: string | null = parsed?.metadata?.status ?? null;
   const advertised: string[] = [...messages].reverse().map((m) => m.metadata?.operations?.llm?.advertised_tools).find(Boolean) ?? proxy.requests[0]?.tools ?? [];
-  const failures: AgentFailure[] = proxy.failures.map((f) => ({ node: "model", code: f.code, message: f.message, call_id: null }));
+  // As for the built-in agents (src/agent/recovery.ts), a provider fault the agent recovered from (a later model request
+  // succeeded) is a retry, counted but not a failure; only faults after the last successful request end the run on the
+  // provider and make it invalid.
+  const lastOk = proxy.outcomes.map((o) => o.ok).lastIndexOf(true);
+  const recoveredProviderErrors = proxy.outcomes.slice(0, lastOk + 1).filter((o) => !o.ok).length;
+  const failures: AgentFailure[] = proxy.outcomes.slice(lastOk + 1).flatMap((o) => (o.ok ? [] : [{ node: "model" as const, code: o.failure.code, message: o.failure.message, call_id: null }]));
   // Cut off by the run's time limit while the provider still had not answered: the run ended on the provider, not on
   // the agent, so it is a provider fault (invalid, never counted), as for the built-in agents.
   if (timedOut && proxy.inFlight > 0) failures.push({ node: "model", code: "timeout", message: "the provider had not answered when the run's time limit was reached", call_id: null });
@@ -176,6 +181,6 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
     },
     requests: proxy.requests, responseModels: [...proxy.responseModels], invalid: providerFault,
     trace: { file: input.traceFile, events: trace.events.length, valid: traceError === null, error: traceError },
-    goose: { exit_code: exitCode, status, stderr_tail: stderr.slice(-1500), advertised_tools: advertised, system_prompt_sha256: firstSystem ? sha256Hex(firstSystem) : null, protocol_methods: [...new Set(adapter.protocol.map((p) => p.method))], binary_sha256: binary.sha256, configuration_sha256: configurationSha256, environment_names: Object.keys({ ...goEnv, OPENAI_HOST: proxyUrl }).sort(), confinement: launch.kind },
+    goose: { exit_code: exitCode, status, stderr_tail: stderr.slice(-1500), advertised_tools: advertised, system_prompt_sha256: firstSystem ? sha256Hex(firstSystem) : null, protocol_methods: [...new Set(adapter.protocol.map((p) => p.method))], binary_sha256: binary.sha256, configuration_sha256: configurationSha256, environment_names: Object.keys({ ...goEnv, OPENAI_HOST: proxyUrl }).sort(), confinement: launch.kind, recovered_provider_errors: recoveredProviderErrors },
   };
 }
