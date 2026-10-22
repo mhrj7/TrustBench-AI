@@ -23,7 +23,16 @@ export interface ProxyOptions {
   /** Removed from recorded copies only (the agent's per-turn clock), so paired runs compare like for like. */
   normalise: RegExp;
   pace?: (request: { messages: unknown[]; tools?: unknown[] }) => Promise<void>;
+  /** Wraps each model request in a span (the runner's RunSpans.model), so external-agent runs export model spans like the
+   *  built-in agents: queueing, tokens, finish reason, tool calls and provider errors. */
+  span?: <T extends { usage: { input_tokens: number; output_tokens: number }; finish_reason: string; tool_calls: unknown[] }>(requestId: string, wait: (() => Promise<void>) | null, call: () => Promise<T>) => Promise<T>;
   timeoutMs: number;
+}
+
+/** A provider or scripted fault, answered to the agent with this status and code. */
+export class ProxyFailure extends Error {
+  readonly status: number; readonly code: string;
+  constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code; }
 }
 
 export interface ProviderFailure { code: string; status: number | null; message: string }
@@ -75,43 +84,56 @@ export class ModelProxy {
       if (e instanceof BudgetExhaustedError) { this.budgetExhausted = e.message; this.fail(res, 400, "budget_exhausted", "run budget exhausted"); return; }
       throw e;
     }
-    if (this.o.pace) await this.o.pace({ messages: body.messages ?? [], tools: body.tools ?? [] });
-    const t0 = Date.now();
+    const wait = this.o.pace ? () => this.o.pace!({ messages: body.messages ?? [], tools: body.tools ?? [] }) : null;
+    let t0 = Date.now();
+    // The provider request (or the scripted answer). A provider fault is thrown as a ProxyFailure, so the span records it
+    // as an error and the agent gets the provider's status.
+    const produce = async () => {
+      t0 = Date.now();
+      let completion: any;
+      if (this.o.mode === "scripted") {
+        const next = this.o.scripted?.[Math.min(this.step - 1, (this.o.scripted?.length ?? 1) - 1)];
+        if (!next) throw new ProxyFailure(500, "invalid_response", "no scripted outcome");
+        completion = {
+          id: callId, object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "scripted",
+          choices: [{ index: 0, finish_reason: next.tool_calls.length ? "tool_calls" : "stop", message: { role: "assistant", content: next.output_text || null,
+            ...(next.tool_calls.length ? { tool_calls: next.tool_calls.map((c) => ({ id: c.call_id, type: "function", function: { name: `${this.o.toolPrefix}${c.tool_name}`, arguments: JSON.stringify(c.arguments) } })) } : {}) } }],
+          usage: { prompt_tokens: next.usage?.input_tokens ?? 400, completion_tokens: next.usage?.output_tokens ?? 40, total_tokens: (next.usage?.input_tokens ?? 400) + (next.usage?.output_tokens ?? 40) },
+        };
+      } else {
+        const p = this.o.provider!;
+        const forward: Record<string, unknown> = { ...body, ...p.extraBody, model: p.modelId, stream: false };
+        delete forward.stream_options;
+        let response: Response;
+        this.inFlight++;
+        try {
+          response = await fetch(`${p.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { "content-type": "application/json", ...(p.apiKey ? { authorization: `Bearer ${p.apiKey}` } : {}) }, body: JSON.stringify(forward), signal: AbortSignal.timeout(this.o.timeoutMs) });
+        } catch (e) {
+          this.inFlight--;
+          const code = (e as Error)?.name === "TimeoutError" ? "timeout" : "network";
+          this.failures.push({ code, status: null, message: String(e).slice(0, 200) });
+          throw new ProxyFailure(502, code, "provider unreachable");
+        }
+        let text: string;
+        try { text = await response.text(); } finally { this.inFlight--; }
+        if (!response.ok) {
+          const code = response.status === 429 ? "rate_limit" : response.status === 401 || response.status === 403 ? "authentication" : response.status >= 500 ? "server" : "invalid_request";
+          this.failures.push({ code, status: response.status, message: text.slice(0, 200) });
+          throw new ProxyFailure(response.status, code, "provider error");
+        }
+        try { completion = JSON.parse(text); } catch { this.failures.push({ code: "invalid_response", status: response.status, message: "non-JSON body" }); throw new ProxyFailure(502, "invalid_response", "invalid provider response"); }
+        if (completion.model) this.responseModels.add(String(completion.model));
+      }
+      return { completion, usage: { input_tokens: Number(completion.usage?.prompt_tokens ?? 0), output_tokens: Number(completion.usage?.completion_tokens ?? 0) },
+        finish_reason: String(completion.choices?.[0]?.finish_reason ?? "other"), tool_calls: completion.choices?.[0]?.message?.tool_calls ?? [] };
+    };
     let completion: any;
-    if (this.o.mode === "scripted") {
-      const next = this.o.scripted?.[Math.min(this.step - 1, (this.o.scripted?.length ?? 1) - 1)];
-      if (!next) { this.fail(res, 500, "invalid_response", "no scripted outcome"); return; }
-      completion = {
-        id: callId, object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "scripted",
-        choices: [{ index: 0, finish_reason: next.tool_calls.length ? "tool_calls" : "stop", message: { role: "assistant", content: next.output_text || null,
-          ...(next.tool_calls.length ? { tool_calls: next.tool_calls.map((c) => ({ id: c.call_id, type: "function", function: { name: `${this.o.toolPrefix}${c.tool_name}`, arguments: JSON.stringify(c.arguments) } })) } : {}) } }],
-        usage: { prompt_tokens: next.usage?.input_tokens ?? 400, completion_tokens: next.usage?.output_tokens ?? 40, total_tokens: (next.usage?.input_tokens ?? 400) + (next.usage?.output_tokens ?? 40) },
-      };
-    } else {
-      const p = this.o.provider!;
-      const forward: Record<string, unknown> = { ...body, ...p.extraBody, model: p.modelId, stream: false };
-      delete forward.stream_options;
-      let response: Response;
-      this.inFlight++;
-      try {
-        response = await fetch(`${p.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { "content-type": "application/json", ...(p.apiKey ? { authorization: `Bearer ${p.apiKey}` } : {}) }, body: JSON.stringify(forward), signal: AbortSignal.timeout(this.o.timeoutMs) });
-      } catch (e) {
-        this.inFlight--;
-        const code = (e as Error)?.name === "TimeoutError" ? "timeout" : "network";
-        this.failures.push({ code, status: null, message: String(e).slice(0, 200) });
-        this.fail(res, 502, code, "provider unreachable");
-        return;
-      }
-      let text: string;
-      try { text = await response.text(); } finally { this.inFlight--; }
-      if (!response.ok) {
-        const code = response.status === 429 ? "rate_limit" : response.status === 401 || response.status === 403 ? "authentication" : response.status >= 500 ? "server" : "invalid_request";
-        this.failures.push({ code, status: response.status, message: text.slice(0, 200) });
-        this.fail(res, response.status, code, "provider error");
-        return;
-      }
-      try { completion = JSON.parse(text); } catch { this.failures.push({ code: "invalid_response", status: response.status, message: "non-JSON body" }); this.fail(res, 502, "invalid_response", "invalid provider response"); return; }
-      if (completion.model) this.responseModels.add(String(completion.model));
+    try {
+      const out = this.o.span ? await this.o.span(callId, wait, produce) : (wait && (await wait()), await produce());
+      completion = out.completion;
+    } catch (e) {
+      if (e instanceof ProxyFailure) { this.fail(res, e.status, e.code, e.message); return; }
+      throw e;
     }
     const inTok = Number(completion.usage?.prompt_tokens ?? 0), outTok = Number(completion.usage?.completion_tokens ?? 0);
     this.usage.input_tokens += inTok; this.usage.output_tokens += outTok; this.usage.model_calls += 1;

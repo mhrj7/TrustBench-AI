@@ -362,6 +362,7 @@ async function runArm(arm, testCase, fixture, rep) {
       modelInfo: { provider: live ? providerName : "scripted", name: live ? modelId : "mock-arm-smoke", revision: "unpinned" },
       evaluatorVersion: externalAgents.evaluator_version, policyVersion: arm === "defended" ? `gateway_${defendedVariant}` : "none",
       traceFile: path.join(traceDir, `${testCase.case_id}-r${rep}-${arm}.trace.jsonl`), approvalLog, ...(pace ? { pace } : {}),
+      span: (requestId, wait, call) => spans.model("agent", requestId, wait, call),
     });
     for (const m of external.responseModels) observedResponseModels.add(m);
   }

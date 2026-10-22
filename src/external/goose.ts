@@ -35,6 +35,8 @@ export interface GooseRunInput {
   traceFile: string | null;
   approvalLog?: Array<Record<string, unknown>>;
   pace?: (request: { messages: unknown[]; tools?: unknown[] }) => Promise<void>;
+  /** The runner's model span (RunSpans.model), so goose's model calls are exported like the built-in agents'. */
+  span?: ConstructorParameters<typeof ModelProxy>[0]["span"];
   /** Native mode: serve a different extension on the socket (the MCP gateway in front of the agent's own integration),
    * launched under the given relay command name. Default: the TrustBench MCP adapter as `trustbench`. */
   extension?: { relayCommand: string; serve: (socketPath: string, trace: TraceRecorder, signal: AbortSignal, sandbox: { home: string; work: string; service: string }) => Promise<ExtensionServer>;
@@ -109,7 +111,7 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   trace.append({ event_type: "run_started", model: { provider: input.modelInfo.provider, name: input.modelInfo.name.replace(/[^a-zA-Z0-9._:-]/g, "_").slice(0, 128), revision: input.modelInfo.revision }, prompt_sha256: sha256Hex(canonicalJson({ system: config.system_prompt, user: config.user_prompt })), seed: null, evaluator_version: input.evaluatorVersion, limits: { max_model_calls: limits.max_model_calls, max_tool_calls: limits.max_tool_calls, max_elapsed_ms: limits.max_elapsed_ms, max_retries: limits.max_retries, max_input_tokens: limits.max_input_tokens, max_output_tokens: limits.max_output_tokens, max_cost_microusd: limits.max_cost_microusd }, configuration_sha256: configurationSha256 } as any);
 
   const controller = new AbortController();
-  const proxy = new ModelProxy({ mode: input.model.mode, ...(input.model.mode === "forward" ? { provider: input.model } : { scripted: input.model.outcomes }), toolPrefix: input.extension ? `${input.extension.relayCommand}__` : agent.tool_prefix, budget, plannedInputTokens: config.planned_input_tokens_per_call, plannedOutputTokens: Number(settings.max_output_tokens ?? 1024), trace, normalise: new RegExp(agent.turn_context_time_pattern, "g"), pace: input.pace, timeoutMs: config.timeout_ms });
+  const proxy = new ModelProxy({ mode: input.model.mode, ...(input.model.mode === "forward" ? { provider: input.model } : { scripted: input.model.outcomes }), toolPrefix: input.extension ? `${input.extension.relayCommand}__` : agent.tool_prefix, budget, plannedInputTokens: config.planned_input_tokens_per_call, plannedOutputTokens: Number(settings.max_output_tokens ?? 1024), trace, normalise: new RegExp(agent.turn_context_time_pattern, "g"), pace: input.pace, span: input.span, timeoutMs: config.timeout_ms });
   const proxyUrl = await proxy.listen();
   let adapter: ExtensionServer;
   if (input.extension) adapter = await input.extension.serve(socketPath, trace, controller.signal, { home, work, service });
