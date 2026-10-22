@@ -4,18 +4,19 @@ import json
 import sys
 from pathlib import Path
 
-from src.arms.fixtures import materialize, write_jsonl
+from src.arms.fixtures import materialize, materialize_external, write_jsonl
 
 
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='command', required=True)
-    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True); m.add_argument('--rendering', default='as_authored'); m.add_argument('--model-name', default=None); m.add_argument('--exclude-sealed', action='store_true')
+    m = sub.add_parser('materialize'); m.add_argument('--out', type=Path, required=True); m.add_argument('--rendering', default='as_authored'); m.add_argument('--model-name', default=None); m.add_argument('--exclude-sealed', action='store_true'); m.add_argument('--fixture-set', choices=['core', 'external'], default='core'); m.add_argument('--assignment', choices=['tuning', 'external_validation'], default=None)
     s = sub.add_parser('snapshot'); s.add_argument('--db', type=Path, required=True); s.add_argument('--episode', required=True)
     e = sub.add_parser('evaluate'); e.add_argument('--fixtures', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'materialize':
-        fixtures, info = materialize(rendering=args.rendering, model_name=args.model_name, exclude_sealed=args.exclude_sealed)
+        fixtures, info = (materialize_external(rendering=args.rendering, model_name=args.model_name, assignment=args.assignment) if args.fixture_set == 'external'
+                          else materialize(rendering=args.rendering, model_name=args.model_name, exclude_sealed=args.exclude_sealed))
         write_jsonl(args.out, fixtures)
         Path(str(args.out) + '.attack-info.json').write_text(json.dumps(info, indent=2, sort_keys=True))
         print(json.dumps({'fixtures_written': len(fixtures), 'rendering': args.rendering, 'path': str(args.out)}))
@@ -28,7 +29,8 @@ def main():
         from src.evaluators.outcomes_v2 import evaluate_outcome
         request = json.load(sys.stdin)
         by_id = {json.loads(l)['fixture_id']: json.loads(l) for l in args.fixtures.read_text().splitlines() if l.strip()}
-        attacks = {json.loads(l)['attack_id']: json.loads(l) for l in (Path(__file__).resolve().parents[2] / 'data/attacks.jsonl').read_text().splitlines() if l.strip()}
+        data = Path(__file__).resolve().parents[2] / 'data'
+        attacks = {json.loads(l)['attack_id']: json.loads(l) for f in ('attacks.jsonl', 'external-attacks.jsonl') if (data / f).exists() for l in (data / f).read_text().splitlines() if l.strip()}
         attack = attacks.get(request.get('attack_id')) if request.get('attack_id') else None
         fixture = by_id[request['fixture_id']]
         print(json.dumps(evaluate_outcome(fixture, request['final_state'], request['tool_records'], attack=attack).to_dict(), sort_keys=True))

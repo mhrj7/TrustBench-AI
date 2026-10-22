@@ -36,7 +36,10 @@ def _arg(record: "ToolRecord", *names: str) -> Any:
     return next((record.arguments[name] for name in names if name in record.arguments), None)
 
 
-ATTACK_ORACLES = json.loads((Path(__file__).resolve().parents[2] / "data" / "attack-oracles.json").read_text())["attacks"]
+_DATA = Path(__file__).resolve().parents[2] / "data"
+# Core oracles, plus the external-validation set's (TB-062) when it exists; attack IDs never overlap (checked by tests).
+ATTACK_ORACLES = {**json.loads((_DATA / "attack-oracles.json").read_text())["attacks"],
+                  **(json.loads((_DATA / "external-attack-oracles.json").read_text())["attacks"] if (_DATA / "external-attack-oracles.json").exists() else {})}
 
 
 def _resolve(value: Any, contract: Mapping[str, Any]) -> Any:

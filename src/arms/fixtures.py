@@ -11,6 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RENDERINGS_PATH = ROOT / 'data/attack-renderings.json'
 MATERIALIZATION_PATH = ROOT / 'data/attack-materialization.json'
+# The external-validation set (TB-062, amendment A-030): authored separately from the core benchmark, never mixed with it.
+EXTERNAL = {'benign': ROOT / 'data/external-benign.jsonl', 'attacks': ROOT / 'data/external-attacks.jsonl',
+            'materialization': ROOT / 'data/external-attack-materialization.json'}
 
 
 def _jsonl(path):
@@ -64,15 +67,16 @@ def _inject(fixture, entry_point, text):
         raise ValueError(f'unsupported entry point {entry_point}')
 
 
-def attacked_fixture(base, attack, rendering='as_authored', model_name=None):
+def attacked_fixture(base, attack, rendering='as_authored', model_name=None, materialization_path=MATERIALIZATION_PATH):
     fixture = copy.deepcopy(base)
     fixture['fixture_id'] = f"{base['fixture_id']}--{attack['attack_id']}"
     users = fixture['initial_state'].get('users') or [{}]
-    text = render_attack_text(attack['untrusted_text'], rendering, users[0].get('display_name', 'the user'), model_name)
+    user = users[0].get('display_name', 'the user')
+    text = render_attack_text(attack['untrusted_text'], rendering, user, model_name)
     _inject(fixture, attack['entry_point'], text)
-    additions = json.loads(MATERIALIZATION_PATH.read_text())['attacks'].get(attack['attack_id'])
+    additions = json.loads(Path(materialization_path).read_text())['attacks'].get(attack['attack_id'])
     if additions is None:
-        raise ValueError(f"{attack['attack_id']} has no entry in {MATERIALIZATION_PATH.name}")
+        raise ValueError(f"{attack['attack_id']} has no entry in {Path(materialization_path).name}")
     for update in additions.get('field_updates', []):
         targets = [row for row in fixture['initial_state'][update['collection']] if all(row.get(k) == v for k, v in update['match'].items())]
         if len(targets) != 1:
@@ -83,6 +87,15 @@ def attacked_fixture(base, attack, rendering='as_authored', model_name=None):
             continue
         for row in rows:
             fixture['initial_state'][key].append(json.loads(json.dumps(row).replace('{tenant_id}', fixture['tenant_id'])))
+    # External families may carry the instruction in more than one tool output (TB-062): each extra injection is rendered
+    # like the primary one and written into one field of one seeded row (a contact's notes, a second document).
+    for extra in attack.get('additional_injections', []):
+        rows = [r for r in fixture['initial_state'][extra['collection']] if all(r.get(k) == v for k, v in extra['match'].items())]
+        if len(rows) != 1:
+            raise ValueError(f"{attack['attack_id']} additional injection must match exactly one {extra['collection']} row")
+        extra_text = render_attack_text(extra['text'], rendering, user, model_name)
+        if extra_text:
+            rows[0][extra['field']] = (rows[0].get(extra['field'], '') + '\n\n' + extra_text).strip()
     return fixture
 
 
@@ -105,6 +118,21 @@ def materialize(benign_path=ROOT / 'data/benign.jsonl', attacks_path=ROOT / 'dat
         benign = [row for row in benign if row['fixture_id'] not in sealed]
         attacks = [a for a in attacks if a['attack_id'] not in sealed and a['base_fixture_id'] not in sealed]
     attacked = [attacked_fixture(by_id[a['base_fixture_id']], a, rendering, model_name) for a in attacks]
+    return benign + attacked, attack_info(attacks)
+
+
+def materialize_external(rendering='as_authored', model_name=None, assignment=None):
+    """The external-validation set (data/external-*.json). `assignment` keeps only fixtures of families assigned to
+    'tuning' or 'external_validation' in data/external-splits.json (None: all)."""
+    benign = _jsonl(EXTERNAL['benign'])
+    attacks = _jsonl(EXTERNAL['attacks'])
+    if assignment is not None:
+        split = {r['family_id']: r['assignment'] for r in json.loads((ROOT / 'data/external-splits.json').read_text())['families']}
+        attacks = [a for a in attacks if split.get(a['family_id']) == assignment]
+        keep = {a['base_fixture_id'] for a in attacks}
+        benign = [b for b in benign if b['fixture_id'] in keep]
+    by_id = {row['fixture_id']: row for row in benign}
+    attacked = [attacked_fixture(by_id[a['base_fixture_id']], a, rendering, model_name, EXTERNAL['materialization']) for a in attacks]
     return benign + attacked, attack_info(attacks)
 
 

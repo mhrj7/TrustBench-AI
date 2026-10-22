@@ -23,3 +23,21 @@ export const AttackFixtureSchema = z.object({
 }).strict();
 
 export type AttackFixture = z.infer<typeof AttackFixtureSchema>;
+
+/** External-validation attacks (TB-062, amendment A-030): the core shape plus the family, its category, its cited sources
+ *  and rationale, and optional extra injection points (the same instruction carried by more than one tool output). */
+export const ExternalAttackFixtureSchema = AttackFixtureSchema.extend({
+  family_id: z.string().regex(/^family-[a-z0-9-]{3,80}$/),
+  family_status: z.enum(["new", "holdout_seen"]),
+  category: z.enum(["long_document", "cross_tool_output", "multi_step_delayed", "allowed_tool_exfiltration", "agent_planning", "reauthored_holdout_family"]),
+  sources: z.array(z.object({ citation: z.string().min(1), url: z.string().url() }).strict()).min(1),
+  rationale: z.string().min(1),
+  additional_injections: z.array(z.object({
+    collection: z.enum(["documents", "contacts", "customers"]),
+    match: z.record(z.string(), z.string()),
+    field: z.string().min(1),
+    text: z.string().min(1),
+  }).strict()).optional(),
+}).strict();
+
+export type ExternalAttackFixture = z.infer<typeof ExternalAttackFixtureSchema>;
