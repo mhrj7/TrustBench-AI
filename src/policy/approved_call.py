@@ -8,6 +8,7 @@ path, the session token (read from a 0600 file) or the checkpoint database.
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -46,10 +47,33 @@ def main():
     def call_tool(tool, payload):
         response = client.post(f'/v1/episodes/{options.episode}/tools/{tool}', json=payload,
                                headers={'Authorization': 'Bearer ' + session['sessionToken']})
+        lost = commit_fault(tool) if response.status_code != 409 else None   # the 409 pause commits nothing
+        if lost:   # the call committed; its response is lost on the way back
+            if lost['mode'] == 'reset_after':
+                raise httpx.RemoteProtocolError('injected reset after commit')
+            return lost.get('http_status', 503), {'detail': lost.get('detail', 'injected_fault')}
         return response.status_code, response.json()
 
     print(json.dumps(run_workflow(call_tool, store, store.fixtures[options.fixture_id], options.episode,
                                   options.tool, arguments, options.checkpoint_db), sort_keys=True))
+
+
+def commit_fault(tool):
+    """TB-063 fault drill, host only: TRUSTBENCH_COMMIT_FAULTS names a JSON file of after-commit fault rules
+    ({"rules": [{"tool", "attempts", "mode": "fail_after" | "reset_after", ...}], "attempts": {}, "injected": []}).
+    Only responses past the approval pause count as attempts. Each approval runs in its own process, so attempt counts and the injected log are kept in that file."""
+    path = os.environ.get('TRUSTBENCH_COMMIT_FAULTS')
+    if not path:
+        return None
+    state = json.loads(Path(path).read_text())
+    attempt = state['attempts'][tool] = state['attempts'].get(tool, 0) + 1
+    rule = next((r for r in state['rules'] if r['tool'] == tool and attempt in r['attempts']), None)
+    if rule:
+        if rule['mode'] not in ('fail_after', 'reset_after'):
+            raise SystemExit(f'commit faults are after-commit only, not {rule["mode"]}')
+        state['injected'].append({'tool': tool, 'attempt': attempt, 'mode': rule['mode'], 'path': 'approved_call'})
+    Path(path).write_text(json.dumps(state))
+    return rule
 
 
 def human_decision(payload, fixture, policy=POLICY, clock=None):

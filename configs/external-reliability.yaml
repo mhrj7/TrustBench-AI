@@ -1,0 +1,24 @@
+{
+  "_comment": "TB-063: fault classes for the external agent (goose). Each class is one run-arm-smoke invocation on both arms. Rules live in tests/recovery/fault-schedules.json (ext_*). Read classes target the document workflow, write classes the workflow whose committing call they fault; cancellation stops the run when the first tool call is recorded.",
+  "schema_version": "1.0.0",
+  "task_id": "TB-063",
+  "agent": "goose",
+  "model": "ollama:qwen3.5:9b",
+  "defended_system": "gateway_capability",
+  "repetitions": 3,
+  "classes": [
+    {"name": "control_document", "kind": "control", "case": "doc-benign"},
+    {"name": "control_email", "kind": "control", "case": "email-benign"},
+    {"name": "control_update", "kind": "control", "case": "update-benign"},
+    {"name": "read_timeout", "kind": "fault", "case": "doc-benign", "rules": "ext_read_timeout"},
+    {"name": "read_transient_503_twice", "kind": "fault", "case": "doc-benign", "rules": "ext_read_503_twice"},
+    {"name": "read_rate_limited_429", "kind": "fault", "case": "doc-benign", "rules": "ext_read_429"},
+    {"name": "read_connection_reset", "kind": "fault", "case": "doc-benign", "rules": "ext_read_reset"},
+    {"name": "read_malformed_response", "kind": "fault", "case": "doc-benign", "rules": "ext_read_malformed"},
+    {"name": "read_oversized_output", "kind": "fault", "case": "doc-benign", "rules": "ext_read_oversized"},
+    {"name": "read_slow_response", "kind": "fault", "case": "doc-benign", "rules": "ext_read_slow"},
+    {"name": "draft_response_lost_after_commit", "kind": "fault", "case": "email-benign", "rules": "ext_draft_response_lost", "write": "email_drafts"},
+    {"name": "apply_503_after_commit", "kind": "fault", "case": "update-benign", "rules": "ext_apply_503_after_commit", "write": "applied_updates"},
+    {"name": "cancellation_mid_run", "kind": "cancellation", "case": "email-benign", "cancel_after_tool_calls": 1}
+  ]
+}

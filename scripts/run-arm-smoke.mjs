@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { runBaselineAgent } from "../src/agent/index.ts";
 import { AgentDefenses } from "../src/agent/defenses.ts";
 import { runCamelAgent } from "../src/agent/camel.ts";
-import { rateFaultyFetch } from "../src/reliability/faults.ts";
+import { faultyFetch, rateFaultyFetch } from "../src/reliability/faults.ts";
 import { createTracing, observabilityConfig } from "../src/observability/tracing.ts";
 import { RunSpans } from "../src/observability/run-spans.ts";
 import { MockModelAdapter, ProviderErrorCodeSchema, createAdapterFromSpec } from "../src/models/index.ts";
@@ -46,6 +46,14 @@ const recoveryClasses = JSON.parse(await readFile(path.join(root, "configs/recov
 const faultProfile = faultProfileName ? { ...faultSchedules.live_profiles[faultProfileName], read_tools: recoveryClasses.read, write_tools: recoveryClasses.write } : null;
 if (faultProfileName && !live) throw new Error("--fault-profile is for live runs; scripted fault behavior is covered by tests/recovery");
 if (faultProfileName && !faultSchedules.live_profiles[faultProfileName]) throw new Error(`unknown --fault-profile ${faultProfileName}`);
+// TB-063: a fixed fault schedule (tests/recovery/fault-schedules.json rules), applied with fresh attempt counters to each
+// arm run, so both arms of a pair meet the same faults; and a cancellation drill for an external agent.
+const faultRulesName = flag("--fault-rules", null);
+const approvalGatedTools = ["apply_record_update"];  // the tools src/arms/arms.ts routes through the approval workflow
+const faultRules = faultRulesName ? faultSchedules.rules[faultRulesName] : null;
+if (faultRulesName && !faultRules) throw new Error(`unknown --fault-rules ${faultRulesName}`);
+if (faultRulesName && faultProfileName) throw new Error("--fault-rules and --fault-profile are exclusive");
+const cancelAfterToolCalls = flag("--cancel-after-tool-calls", null) === null ? undefined : Number(flag("--cancel-after-tool-calls"));
 const promptProfile = flag("--prompt-profile", null); // null = the default registered in configs/baseline.yaml
 const defendedConfig = JSON.parse(await readFile(path.join(root, "configs/defended.yaml"), "utf8"));
 const defensesRegistry = JSON.parse(await readFile(path.join(root, "configs/defenses.yaml"), "utf8"));
@@ -311,7 +319,13 @@ async function runArm(arm, testCase, fixture, rep) {
   }
   let built, port, dbPath, auditFile, gatewayProcess = null; const approvalLog = [];
   const control = positiveControl && testCase.attack_id ? { extraUserInstruction: renderingRegistry.renderings[rendering].instruction_template.replace("{goal}", attackInfo[testCase.attack_id].goal) } : {};
-  const transport = faultProfile ? rateFaultyFetch(fetch, { ...faultProfile, seed: baseSeed }, `${testCase.case_id}:${rep}`) : undefined; // same stream for both arms
+  // On the gateway arm an approval-gated write commits inside the host approval workflow (src/policy/approved_call.py),
+  // not on this transport (which only sees the gateway's 409 pause). After-commit faults on those tools go to that
+  // workflow instead, so both arms lose the response of the same committing attempt.
+  const gatedWrite = (r) => arm === "defended" && defendedSystem.transport !== "direct" && approvalGatedTools.includes(r.tool) && ["fail_after", "reset_after"].includes(r.mode);
+  const commitFaultFile = faultRules?.some(gatedWrite) ? path.join(work, `commit-faults-${testCase.case_id}-r${rep}.json`) : null;
+  if (commitFaultFile) await writeFile(commitFaultFile, JSON.stringify({ rules: faultRules.filter(gatedWrite), attempts: {}, injected: [] }));
+  const transport = faultProfile ? rateFaultyFetch(fetch, { ...faultProfile, seed: baseSeed }, `${testCase.case_id}:${rep}`) : faultRules ? faultyFetch(fetch, faultRules.filter((r) => !gatedWrite(r))) : undefined; // same stream for both arms
   const common = { ...control, promptProfile, ...(transport ? { fetchImpl: transport } : {}), arm, fixture, episodeId, runId: `run-${testCase.case_id}-r${rep}`, taskId, ...runOptions(rep) };
   if (arm === "baseline") {
     port = baselinePort; dbPath = baselineDb;
@@ -332,7 +346,7 @@ async function runArm(arm, testCase, fixture, rep) {
     await waitFor(port);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
     built = await buildArm({ ...common, baseUrl: `http://127.0.0.1:${port}`,
-      gateway: { sessionToken: session.sessionToken, signingKey: session.signingKey, sessionFile, fixtureId: testCase.fixture_id, checkpointDb: path.join(work, `checkpoints-${tag}.sqlite`), env: serviceEnv(defendedDb), approvalLog } });
+      gateway: { sessionToken: session.sessionToken, signingKey: session.signingKey, sessionFile, fixtureId: testCase.fixture_id, checkpointDb: path.join(work, `checkpoints-${tag}.sqlite`), env: { ...serviceEnv(defendedDb), ...(commitFaultFile ? { TRUSTBENCH_COMMIT_FAULTS: commitFaultFile } : {}) }, approvalLog } });
   }
   const started = Date.now();
   let defenses;
@@ -363,6 +377,7 @@ async function runArm(arm, testCase, fixture, rep) {
       evaluatorVersion: externalAgents.evaluator_version, policyVersion: arm === "defended" ? `gateway_${defendedVariant}` : "none",
       traceFile: path.join(traceDir, `${testCase.case_id}-r${rep}-${arm}.trace.jsonl`), approvalLog, ...(pace ? { pace } : {}),
       span: (requestId, wait, call) => spans.model("agent", requestId, wait, call),
+      ...(cancelAfterToolCalls !== undefined ? { cancelAfterToolCalls } : {}),
     });
     for (const m of external.responseModels) observedResponseModels.add(m);
   }
@@ -381,7 +396,7 @@ async function runArm(arm, testCase, fixture, rep) {
   const exposed = marker === null ? null : requests.some((r) => r.messages.some((m) => m.content.includes(marker)));
   const invalid = result.failures.some((f) => f.node === "model" && providerFaultCodes.has(f.code));
   const faultsInjected = transport ? transport.injected.length : 0;
-  return { faultsInjected, exposed, invalid, engaged: result.tool_records.length > 0, result, requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: external ? external.goose.recovered_provider_errors : adapter.providerRetries, elapsedMs,
+  return { faultsInjected, transportInjected: [...(transport ? transport.injected : []), ...(commitFaultFile ? JSON.parse(await readFile(commitFaultFile, "utf8")).injected : [])], exposed, invalid, engaged: result.tool_records.length > 0, result, requests, snapshot, evaluation, decisions, approvalLog, configEpisode: built.config, providerRetries: external ? external.goose.recovered_provider_errors : adapter.providerRetries, elapsedMs,
     external: external ? { ...external.goose, stderr_tail: undefined, trace: { ...external.trace, file: external.trace.file ? path.relative(root, external.trace.file) : null } } : null };
 }
 
@@ -425,7 +440,7 @@ const report = {
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
-  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName, holdout_excluded_cases: excludedHoldout, sealed_fixtures_loaded: confirmatory ? null : 0, fixtures_loaded: loadedFixtureIds.length, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
+  backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName ?? (faultRulesName ? `rules:${faultRulesName}` : null), cancel_after_tool_calls: cancelAfterToolCalls ?? null, holdout_excluded_cases: excludedHoldout, sealed_fixtures_loaded: confirmatory ? null : 0, fixtures_loaded: loadedFixtureIds.length, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   agent: externalAgent ? { name: agentName, version: externalAgent.version, commit: externalAgent.commit, contract_version: externalAgent.contract_version, seed_sent_to_model: externalAgent.seed_supported, note: "external agent run unmodified through docs/external/integration-contract.md; both arms run it, only the tool path differs" } : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],
   ...(endedEarly && !confirmatory ? { ended_early: endedEarly } : {}),
@@ -457,7 +472,7 @@ for (const { testCase, rep, order, arms, entry: scheduled } of runs) {
   entry.same_tool_call_sequence = canon(baseline.result.tool_records.map((r) => [r.tool_name, r.arguments])) === canon(defended.result.tool_records.map((r) => [r.tool_name, r.arguments]));
   entry.final_state_identical = canon(baseline.snapshot.state) === canon(defended.snapshot.state);
   entry.provider_retries = { baseline: baseline.providerRetries, defended: defended.providerRetries };
-  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null, camel: a.result.defense.camel ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), external: a.external ?? null, invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
+  const side = (a) => ({ faults_injected: a.faultsInjected ?? 0, defense: a.result.defense ? { defenses: a.result.defense.defenses, model_calls: a.result.defense.model_calls, input_tokens: a.result.defense.input_tokens, output_tokens: a.result.defense.output_tokens, checks: a.result.defense.checks, vetoes: a.result.defense.vetoes.length, filtered_tools: a.result.defense.filtered_tools, filter_parse_failed: a.result.defense.filter_parse_failed, classifications: a.result.defense.classifications ?? null, camel: a.result.defense.camel ?? null } : null, recovery: a.result.recovery ? { model_retries: a.result.recovery.model_retries, tool_retries: a.result.recovery.tool_retries, retry_budget: a.result.recovery.retry_budget, suppressed_duplicate_writes: a.result.recovery.suppressed_duplicate_writes, unknown_outcome_writes: a.result.recovery.unknown_outcome_writes, backoff_ms_total: a.result.recovery.backoff_ms_total } : null, tool_trace: a.result.tool_records.map((r) => ({ tool: r.tool_name, status: r.status, error: r.error_code, attempts: r.attempts ?? null, args: r.arguments, provenance_trust: r.output?.provenance?.trust ?? null, provenance_reason: r.output?.provenance?.reason ?? null })), final_text: a.result.final_text.slice(0, 400), external: a.external ?? null, invalid: a.invalid, engaged: a.engaged, injection_exposed: a.exposed, outcome: a.result.outcome, tool_calls: a.result.tool_records.length, failures: a.result.failures.map((f) => f.code), final_tool_calls: a.snapshot.tool_calls, committed_writes: { research_notes: a.snapshot.state.research_notes.length, email_drafts: a.snapshot.state.email_drafts.length, sent_emails: a.snapshot.state.sent_emails.length, applied_updates: a.snapshot.state.applied_updates.length }, gateway_replays: (a.decisions ?? []).filter((x) => x.replayed).length, faults: (a.transportInjected ?? []).map((f) => `${f.tool}#${f.attempt}:${f.mode}`), evaluation: a.evaluation, elapsed_ms: a.elapsedMs, tokens: { input: a.result.budget.input_tokens, output: a.result.budget.output_tokens } });
   entry.baseline = side(baseline);
   entry.defended = { ...side(defended), policy_decisions: defended.decisions.map((x) => ({ seq: x.seq, tool: x.tool, decision: x.decision, reason: x.reason ?? null, status: x.status ?? null, executed: x.executed ?? null, replayed: x.replayed ?? false, request_id: x.request_id ?? null })), approvals: defended.approvalLog };
   for (const decision of defended.decisions) traces.push({ case_id: testCase.case_id, repetition: rep, arm: "defended", ...decision });
@@ -500,7 +515,7 @@ report.summary = {
 };
 function median(values) { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; }
 
-const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}${reliability ? `-rel-${reliability.name}` : ""}${externalAgent ? `-agent-${agentName}` : ""}`;
+const suffix = `${live ? modelArg.replace(/[^A-Za-z0-9.]+/g, "-") : "scripted"}-${rendering}-${effectiveProfile}-${defendedSystemName}${toolMode === "contract" ? "-contract-backend" : ""}${faultProfileName ? `-faults-${faultProfileName}` : ""}${faultRulesName ? `-rules-${faultRulesName}` : ""}${cancelAfterToolCalls !== undefined ? `-cancel${cancelAfterToolCalls}` : ""}${suiteTag}${subsetTag}${schedule ? `-sched-${schedule.order_sha256.slice(0, 8)}` : ""}${reliability ? `-rel-${reliability.name}` : ""}${externalAgent ? `-agent-${agentName}` : ""}`;
 await mkdir(path.join(root, "reports"), { recursive: true });
 const mech = "";
 await mkdir(path.join(root, live ? "reports" : "reports/tests"), { recursive: true });

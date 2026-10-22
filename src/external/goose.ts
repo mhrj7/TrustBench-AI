@@ -17,6 +17,7 @@ import { TraceRecorder } from "./trace.ts";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 export const externalAgents = JSON.parse(readFileSync(path.join(root, "configs/external-agents.yaml"), "utf8"));
+const recoveryPolicy = JSON.parse(readFileSync(path.join(root, "configs/recovery.yaml"), "utf8"));
 // goose processes still running; killed if the harness exits, so an interrupted run leaves no agent behind.
 const running = new Set<import("node:child_process").ChildProcess>();
 process.on("exit", () => { for (const c of running) c.kill("SIGKILL"); });
@@ -50,6 +51,9 @@ export interface GooseRunInput {
   /** TB-058: run goose confined (default: configs/external-agents.yaml sandbox.required). Only tests that exercise the
    * adapter itself may pass false; every run that produces results is confined. */
   confined?: boolean;
+  /** TB-063 cancellation drill: the harness cancels the run after this many tool calls (the adapter then refuses every
+   *  call, and goose is stopped). */
+  cancelAfterToolCalls?: number;
 }
 
 export interface ExtensionServer { records: BaselineAgentResult["tool_records"]; protocol: Array<{ method: string }>; close(): Promise<void> }
@@ -113,10 +117,17 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   const controller = new AbortController();
   const proxy = new ModelProxy({ mode: input.model.mode, ...(input.model.mode === "forward" ? { provider: input.model } : { scripted: input.model.outcomes }), toolPrefix: input.extension ? `${input.extension.relayCommand}__` : agent.tool_prefix, budget, plannedInputTokens: config.planned_input_tokens_per_call, plannedOutputTokens: Number(settings.max_output_tokens ?? 1024), trace, normalise: new RegExp(agent.turn_context_time_pattern, "g"), pace: input.pace, span: input.span, timeoutMs: config.timeout_ms });
   const proxyUrl = await proxy.listen();
+  // Cancellation drill: the run is cancelled the moment the N-th tool call is recorded, before goose sees its result,
+  // so every later call meets an aborted episode and is refused.
+  let killChild: (() => void) | null = null, cancelled = false;
+  const onRecorded = input.cancelAfterToolCalls === undefined ? undefined : (n: number) => {
+    if (n >= input.cancelAfterToolCalls! && !cancelled) { cancelled = true; controller.abort(); killChild?.(); }
+  };
   let adapter: ExtensionServer;
+  if (input.extension && onRecorded) throw new Error("the cancellation drill runs on the MCP adapter only, not a native extension");
   if (input.extension) adapter = await input.extension.serve(socketPath, trace, controller.signal, { home, work, service });
   else {
-    const a = new McpAdapter({ socketPath, serverName: "trustbench", serverVersion: agent.contract_version, tools: toolSpecs, registry: input.registry, arm: input.arm, trace, runId: config.run_id, taskId: config.task_id, signal: controller.signal, denialCodes: new Set(externalAgents.gateway_denial_codes), rules: externalAgents.trace, policyVersion: input.policyVersion, approvalLog: input.approvalLog });
+    const a = new McpAdapter({ socketPath, serverName: "trustbench", serverVersion: agent.contract_version, tools: toolSpecs, registry: input.registry, arm: input.arm, trace, runId: config.run_id, taskId: config.task_id, signal: controller.signal, denialCodes: new Set(externalAgents.gateway_denial_codes), rules: externalAgents.trace, policyVersion: input.policyVersion, approvalLog: input.approvalLog, attemptTimeoutMs: recoveryPolicy.retry.attempt_timeout_ms, onRecorded });
     await a.listen();
     adapter = a;
   }
@@ -137,6 +148,7 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
     const [command, commandArgs] = launch.kind === "none" ? [binary.path, args] : [launch.command, launch.args];
     const child = spawn(command, commandArgs, { cwd: work, env: { ...goEnv, OPENAI_HOST: proxyUrl }, stdio: ["ignore", "pipe", "pipe"] });
     running.add(child);
+    killChild = () => child.kill("SIGTERM");
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, config.timeout_ms);
@@ -161,9 +173,9 @@ export async function runGooseAgent(input: GooseRunInput): Promise<GooseRunOutpu
   // Cut off by the run's time limit while the provider still had not answered: the run ended on the provider, not on
   // the agent, so it is a provider fault (invalid, never counted), as for the built-in agents.
   if (timedOut && proxy.inFlight > 0) failures.push({ node: "model", code: "timeout", message: "the provider had not answered when the run's time limit was reached", call_id: null });
-  if (exitCode !== 0 && !timedOut && !proxy.budgetExhausted && failures.length === 0) failures.push({ node: "termination", code: "agent_error", message: stderr.slice(-300) || `goose exited ${exitCode}`, call_id: null });
+  if (exitCode !== 0 && !timedOut && !cancelled && !proxy.budgetExhausted && failures.length === 0) failures.push({ node: "termination", code: "agent_error", message: stderr.slice(-300) || `goose exited ${exitCode}`, call_id: null });
   if (trace.broken) failures.push({ node: "tool", code: "trace_write_failed", message: "trace write failed; adapter failed closed", call_id: null });
-  const outcome: BaselineAgentResult["outcome"] = timedOut ? "timeout" : proxy.budgetExhausted ? "budget_exhausted" : failures.length ? "failure" : "success";
+  const outcome: BaselineAgentResult["outcome"] = cancelled ? "cancelled" : timedOut ? "timeout" : proxy.budgetExhausted ? "budget_exhausted" : failures.length ? "failure" : "success";
   const executed = trace.events.filter((e) => e.event_type === "tool_call_started").length;
   const elapsed = Date.now() - started;
   try {

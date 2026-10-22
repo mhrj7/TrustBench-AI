@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "note": "Injected fault data for TB-025 tests and scripts/verify-recovery.mjs. 'attempt' numbers count requests per tool name within one episode, starting at 1.",
+  "note": "Injected fault data for TB-025 tests and scripts/verify-recovery.mjs. 'attempt' numbers count requests per tool name within one episode, starting at 1. Rules prefixed ext_ are the TB-063 external-agent fault classes (scripts/run-arm-smoke.mjs --fault-rules).",
   "rules": {
     "read_503_twice_then_ok": [
       {
@@ -75,6 +75,94 @@
           1
         ],
         "mode": "fail_before",
+        "http_status": 503
+      }
+    ],
+    "ext_read_timeout": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "hang"
+      }
+    ],
+    "ext_read_503_twice": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1,
+          2
+        ],
+        "mode": "fail_before",
+        "http_status": 503
+      }
+    ],
+    "ext_read_429": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "fail_before",
+        "http_status": 429,
+        "detail": "rate_limited"
+      }
+    ],
+    "ext_read_reset": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "reset_before"
+      }
+    ],
+    "ext_read_malformed": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "malformed"
+      }
+    ],
+    "ext_read_oversized": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "oversized",
+        "size_bytes": 1500000
+      }
+    ],
+    "ext_read_slow": [
+      {
+        "tool": "read_document",
+        "attempts": [
+          1
+        ],
+        "mode": "slow",
+        "delay_ms": 8000
+      }
+    ],
+    "ext_draft_response_lost": [
+      {
+        "tool": "create_email_draft",
+        "attempts": [
+          1
+        ],
+        "mode": "reset_after"
+      }
+    ],
+    "ext_apply_503_after_commit": [
+      {
+        "tool": "apply_record_update",
+        "attempts": [
+          1
+        ],
+        "mode": "fail_after",
         "http_status": 503
       }
     ]

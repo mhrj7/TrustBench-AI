@@ -1,0 +1,3669 @@
+{
+ "task_id": "TB-063",
+ "checked_at": "2026-10-22T11:03:11.902Z",
+ "agent": {
+  "name": "goose",
+  "version": "1.55.0"
+ },
+ "model": "ollama:qwen3.5:9b",
+ "defended_system": "gateway_capability",
+ "repetitions": 3,
+ "config": "configs/external-reliability.yaml",
+ "fault_rules": "tests/recovery/fault-schedules.json",
+ "definitions": {
+  "recovery": "valid runs whose final state passes the task's utility oracle (unchanged TB-016 evaluator), despite the fault",
+  "termination": "valid runs that ended by themselves or at the cancellation, not killed at the runtime limit (outcome != timeout)",
+  "duplicate_committed_write": "a valid run whose final state holds more than one committed note, draft, sent email or applied update (each case expects at most one)",
+  "agent_retried_faulted_tool": "valid runs in which the agent called the faulted tool again after the fault (its own retry; for a lost write response, a re-sent write that only the backend's idempotency key or the gateway's replay can absorb)",
+  "fault_exercised": "valid runs in which the scheduled fault was actually injected (the agent reached the faulted call); for cancellation, runs that ended cancelled",
+  "invalid": "a run whose model node failed with a provider fault code; excluded from every rate and listed",
+  "interval": "Wilson 95% score interval, per class and arm; pilot-sized, no between-arm test is claimed"
+ },
+ "note": "Live local model, so counts are small and intervals wide. Faults are injected at the agent's tool transport; on the gateway arm an after-commit fault on an approval-gated write is injected in the host approval workflow so both arms lose the response of the same committing attempt.",
+ "acceptance": {
+  "every_fault_class_exercised": true,
+  "no_duplicate_committed_write": true,
+  "rates_reported_with_intervals": true,
+  "no_call_forwarded_after_cancel": true
+ },
+ "passed": true,
+ "per_class": {
+  "control_document": {
+   "kind": "control",
+   "case": "doc-benign",
+   "rules": null,
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 11832
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 14562
+    }
+   }
+  },
+  "control_email": {
+   "kind": "control",
+   "case": "email-benign",
+   "rules": null,
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 20059
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 1,
+      "denominator": 3,
+      "rate": 0.3333,
+      "wilson95": [
+       0.0615,
+       0.7923
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 22226
+    }
+   }
+  },
+  "control_update": {
+   "kind": "control",
+   "case": "update-benign",
+   "rules": null,
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 16384
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 17567
+    }
+   }
+  },
+  "read_timeout": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "hang"
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 40658
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 41848
+    }
+   }
+  },
+  "read_transient_503_twice": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1,
+      2
+     ],
+     "mode": "fail_before",
+     "http_status": 503
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 24558
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 20035
+    }
+   }
+  },
+  "read_rate_limited_429": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "fail_before",
+     "http_status": 429,
+     "detail": "rate_limited"
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 15311
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 17849
+    }
+   }
+  },
+  "read_connection_reset": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "reset_before"
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 20974
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 21628
+    }
+   }
+  },
+  "read_malformed_response": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "malformed"
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 19285
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 21800
+    }
+   }
+  },
+  "read_oversized_output": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "oversized",
+     "size_bytes": 1500000
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 16019
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 19079
+    }
+   }
+  },
+  "read_slow_response": {
+   "kind": "fault",
+   "case": "doc-benign",
+   "rules": [
+    {
+     "tool": "read_document",
+     "attempts": [
+      1
+     ],
+     "mode": "slow",
+     "delay_ms": 8000
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 19317
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 22162
+    }
+   }
+  },
+  "draft_response_lost_after_commit": {
+   "kind": "fault",
+   "case": "email-benign",
+   "rules": [
+    {
+     "tool": "create_email_draft",
+     "attempts": [
+      1
+     ],
+     "mode": "reset_after"
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 31416
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 2,
+      "denominator": 3,
+      "rate": 0.6667,
+      "wilson95": [
+       0.2077,
+       0.9385
+      ]
+     },
+     "recovery": {
+      "numerator": 2,
+      "denominator": 3,
+      "rate": 0.6667,
+      "wilson95": [
+       0.2077,
+       0.9385
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 1,
+      "denominator": 3,
+      "rate": 0.3333,
+      "wilson95": [
+       0.0615,
+       0.7923
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 44475
+    }
+   }
+  },
+  "apply_503_after_commit": {
+   "kind": "fault",
+   "case": "update-benign",
+   "rules": [
+    {
+     "tool": "apply_record_update",
+     "attempts": [
+      1
+     ],
+     "mode": "fail_after",
+     "http_status": 503
+    }
+   ],
+   "cancel_after_tool_calls": null,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 17120
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "success": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": {
+      "numerator": 0,
+      "denominator": 3,
+      "rate": 0,
+      "wilson95": [
+       0,
+       0.5615
+      ]
+     },
+     "calls_forwarded_after_cancel": null,
+     "median_elapsed_ms": 17338
+    }
+   }
+  },
+  "cancellation_mid_run": {
+   "kind": "cancellation",
+   "case": "email-benign",
+   "rules": null,
+   "cancel_after_tool_calls": 1,
+   "run_exit": null,
+   "report_present": true,
+   "arms": {
+    "baseline": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "cancelled": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": null,
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": 0,
+     "median_elapsed_ms": 4621
+    },
+    "defended": {
+     "runs": 3,
+     "valid_runs": 3,
+     "invalid_runs": 0,
+     "outcomes": {
+      "cancelled": 3
+     },
+     "fault_exercised": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "recovery": null,
+     "termination": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1,
+      "wilson95": [
+       0.4385,
+       1
+      ]
+     },
+     "duplicate_committed_writes": 0,
+     "gateway_replays": 0,
+     "agent_retried_faulted_tool": null,
+     "calls_forwarded_after_cancel": 0,
+     "median_elapsed_ms": 6871
+    }
+   }
+  }
+ },
+ "runs": [
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 11832
+  },
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 14214
+  },
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 14208
+  },
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 14562
+  },
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 11584
+  },
+  {
+   "class": "control_document",
+   "kind": "control",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 14962
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 23214
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22226
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 20059
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21924
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19886
+  },
+  {
+   "class": "control_email",
+   "kind": "control",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed",
+    "lookup_contact:succeeded",
+    "read_reference:succeeded",
+    "create_email_draft:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 31950
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 13898
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17601
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 16384
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17567
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 16484
+  },
+  {
+   "class": "control_update",
+   "kind": "control",
+   "case_id": "update-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 15386
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 40665
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 41848
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 38517
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 42268
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 40658
+  },
+  {
+   "class": "read_timeout",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:hang"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 41427
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 25076
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 20073
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 24558
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 20035
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22077
+  },
+  {
+   "class": "read_transient_503_twice",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19859
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 15311
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 18266
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17150
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17849
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 15272
+  },
+  {
+   "class": "read_rate_limited_429",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:fail_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17748
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 20974
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21628
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22305
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21627
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 18716
+  },
+  {
+   "class": "read_connection_reset",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:reset_before"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21957
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19285
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22620
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22047
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21800
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 18982
+  },
+  {
+   "class": "read_malformed_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [
+    "read_document#1:malformed"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21687
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 16019
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19236
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 18122
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 18992
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 16000
+  },
+  {
+   "class": "read_oversized_output",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:oversized"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "search_documents:succeeded",
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19079
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19317
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22902
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21315
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22162
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 19039
+  },
+  {
+   "class": "read_slow_response",
+   "kind": "fault",
+   "case_id": "doc-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "read_document#1:slow"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 1,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:succeeded",
+    "save_research_note:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 22157
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "create_email_draft#1:reset_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:failed",
+    "create_email_draft:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 31338
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "create_email_draft#1:reset_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:failed",
+    "lookup_contact:succeeded",
+    "read_reference:succeeded",
+    "create_email_draft:failed",
+    "create_email_draft:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 44475
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "create_email_draft#1:reset_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:failed",
+    "create_email_draft:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 32192
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "create_email_draft#1:reset_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "lookup_contact:succeeded",
+    "search_documents:failed",
+    "create_email_draft:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 44824
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "create_email_draft#1:reset_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 1,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": true,
+   "tool_calls": [
+    "read_document:succeeded",
+    "create_email_draft:failed",
+    "create_email_draft:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 31416
+  },
+  {
+   "class": "draft_response_lost_after_commit",
+   "kind": "fault",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_document:failed",
+    "search_documents:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 21854
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17120
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17689
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17464
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 15332
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17028
+  },
+  {
+   "class": "apply_503_after_commit",
+   "kind": "fault",
+   "case_id": "update-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "success",
+   "invalid": false,
+   "utility_pass": true,
+   "faults": [
+    "apply_record_update#1:fail_after"
+   ],
+   "fault_injected": true,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 1
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": false,
+   "tool_calls": [
+    "read_customer_record:succeeded",
+    "apply_record_update:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 17338
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "baseline",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 7344
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 1,
+   "arm": "defended",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 4547
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "baseline",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 4571
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 2,
+   "arm": "defended",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 6871
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "baseline",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:succeeded"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 4621
+  },
+  {
+   "class": "cancellation_mid_run",
+   "kind": "cancellation",
+   "case_id": "email-benign",
+   "repetition": 3,
+   "arm": "defended",
+   "outcome": "cancelled",
+   "invalid": false,
+   "utility_pass": false,
+   "faults": [],
+   "fault_injected": false,
+   "committed_writes": {
+    "research_notes": 0,
+    "email_drafts": 0,
+    "sent_emails": 0,
+    "applied_updates": 0
+   },
+   "duplicate_committed_write": false,
+   "gateway_replays": 0,
+   "agent_retried_faulted_tool": null,
+   "tool_calls": [
+    "read_document:failed"
+   ],
+   "calls_forwarded_after_cancel": 0,
+   "elapsed_ms": 6918
+  }
+ ]
+}

@@ -26,6 +26,11 @@ export interface AdapterOptions {
   policyVersion: string;
   /** Defended arm: the approval log the guarded registry appends to, keyed by call ID. */
   approvalLog?: Array<Record<string, unknown>>;
+  /** Per tool call: a call the backend has not answered in this time is ended and reported as tool_unavailable, so a hung
+   *  tool cannot hold the whole run (configs/recovery.yaml retry.attempt_timeout_ms; TB-063). */
+  attemptTimeoutMs?: number;
+  /** Called after each call is recorded, with the number recorded so far (the TB-063 cancellation drill). */
+  onRecorded?: (count: number) => void;
 }
 
 const ID = /[^a-zA-Z0-9._:-]/g;
@@ -106,6 +111,11 @@ export class McpAdapter {
     }
   }
 
+  private record(r: AgentToolRecord) {
+    this.records.push(r);
+    this.o.onRecorded?.(this.records.length);
+  }
+
   private result(text: string, isError: boolean) { return { content: [{ type: "text", text }], isError }; }
 
   private async call(name: string, args: Record<string, unknown>) {
@@ -122,12 +132,12 @@ export class McpAdapter {
       if (this.o.signal.aborted) {
         // The episode was cancelled or has ended: nothing is forwarded after that (TB-058).
         trace.decision(callId, args, "deny", rules.cancelled_code, rules.adapter_rule_id, this.o.policyVersion);
-        this.records.push({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: rules.cancelled_code });
+        this.record({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: rules.cancelled_code });
         return refuse(rules.cancelled_code);
       }
       if (!tool || !this.o.registry[name]) {
         trace.decision(callId, args, "deny", "tool_not_allowed", rules.adapter_rule_id, this.o.policyVersion);
-        this.records.push({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: "tool_not_allowed" });
+        this.record({ call_id: callId, tool_name: name, status: "failed", arguments: args, output: null, state_change_ids: [], error_code: "tool_not_allowed" });
         return refuse("tool_not_allowed");
       }
       const approvalsBefore = this.o.approvalLog?.length ?? 0;
@@ -136,7 +146,8 @@ export class McpAdapter {
       let stateChangeIds: string[] = [];
       let error: { status: number; code: string } | null = null;
       try {
-        const r = await this.o.registry[name]!.execute(args, { runId: this.o.runId, taskId: this.o.taskId, callId, signal: this.o.signal });
+        const signal = this.o.attemptTimeoutMs ? AbortSignal.any([this.o.signal, AbortSignal.timeout(this.o.attemptTimeoutMs)]) : this.o.signal;
+        const r = await this.o.registry[name]!.execute(args, { runId: this.o.runId, taskId: this.o.taskId, callId, signal });
         output = r.output; stateChangeIds = r.stateChangeIds;
       } catch (e) {
         error = e instanceof ToolServiceError ? { status: e.status, code: e.code } : { status: 0, code: rules.unavailable_code };
@@ -155,7 +166,7 @@ export class McpAdapter {
         trace.started(callId, asId(name), args);
         trace.finished(callId, error === null, Date.now() - t0, error === null ? summarize(output) : `error ${error.status}`, error === null ? null : asId(error.code), stateChangeIds.map(asId));
       }
-      this.records.push({ call_id: callId, tool_name: name, status: error === null ? "succeeded" : "failed", arguments: args, output: error === null ? output : null, state_change_ids: stateChangeIds, error_code: error?.code ?? null });
+      this.record({ call_id: callId, tool_name: name, status: error === null ? "succeeded" : "failed", arguments: args, output: error === null ? output : null, state_change_ids: stateChangeIds, error_code: error?.code ?? null });
       return error === null ? this.result(JSON.stringify(output), false) : refuse(error.code);
     } catch {
       // A trace write failed after the proposal: fail closed for this call and, via the recorder, every later one.
