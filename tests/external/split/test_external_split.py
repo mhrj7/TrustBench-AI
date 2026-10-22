@@ -30,7 +30,8 @@ def test_registered_parameters_match_the_amendment():
     amendment = (ROOT / 'protocol/amendments.md').read_text()
     assert '## A-030' in amendment and 'scripts/external-split.py' in amendment
     assert REG['amendment'] == 'A-030' and REG['split_seed'] == 2026102201 and REG['external_fraction'] == 0.6
-    assert REG['evaluation_runs_started'] is False, 'the procedure must be registered before any external evaluation run'
+    # The procedure was registered before any external evaluation run; a recorded start may not predate it (TB-064).
+    assert REG['evaluation_runs_started'] is False or REG['evaluation_runs_started_on'] >= REG['registered_on']
 
 
 def test_deterministic_for_its_seed_and_independent_of_input_order():

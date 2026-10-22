@@ -199,7 +199,16 @@ const obsConfig = observabilityConfig();
 const spanFile = path.join(work, "spans.jsonl");
 const tracing = createTracing(spanFile, "trustbench-arm-smoke");
 const fixturesPath = path.join(work, "fixtures.jsonl");
-await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : []), ...(confirmatory ? [] : ["--exclude-sealed"])]);
+// TB-064: a suite built on the external-validation set (fixture_set "external") loads only the families assigned to
+// external_validation, and only while the frozen external manifest is the one the suite was built against.
+const fixtureSet = suite.fixture_set ?? "core";
+if (fixtureSet === "external") {
+  const manifestSha = createHash("sha256").update(await readFile(path.join(root, "data/external-manifest.json"))).digest("hex");
+  if (!["external_validation", "tuning"].includes(suite.assignment)) throw new Error("an external suite must name its assignment");
+  if (suite.external_manifest_sha256 !== manifestSha) throw new Error("the external-validation suite was built against another external manifest; rebuild it with scripts/build-external-validation-suite.py");
+}
+await snapshotEpisode("src.arms.cli", ["materialize", "--out", fixturesPath, "--rendering", rendering, ...(live ? ["--model-name", modelId] : []),
+  ...(fixtureSet === "external" ? ["--fixture-set", "external", "--assignment", suite.assignment] : confirmatory ? [] : ["--exclude-sealed"])]);
 // TB-059: a development run loads no sealed fixture at all. Asserted on the file the tool services actually read.
 const loadedFixtureIds = (await readFile(fixturesPath, "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l).fixture_id);
 const sealedLoaded = confirmatory ? [] : loadedFixtureIds.filter((id) => id.split("--").some((part) => holdoutIds.has(part)));
@@ -440,6 +449,7 @@ const report = {
   model: live ? modelArg : "scripted test trajectories (no model)", mode: live ? "live_model" : "scripted_test", model_revision: live ? await modelRevision() : null, rate_pacing: tokenLimit ? { input_tokens_per_minute: tokenLimit, chars_per_token_estimate: providers.token_estimate_chars_per_token } : null,
   status: confirmatory ? "TB-032 confirmatory holdout run (A-025); comparative analysis is TB-033" : live ? "pilot evidence on the development split, excluded from confirmatory results" : "deterministic test of gateway wiring and policy logic; not an experimental result",
   reliability: reliability ? { ...reliability, file: reliabilityFile } : null,
+  fixture_set: fixtureSet, ...(fixtureSet === "external" ? { external_manifest_sha256: suite.external_manifest_sha256, external_split_sha256: suite.external_split_sha256, external_assignment: suite.assignment } : {}),
   backend_tool_mode: toolMode, attack_rendering: rendering, defended_system: defendedSystemName, defended_system_family: defendedSystem.family, defended_variant: defendedVariant, ...(isAblation ? { ablation: { amendment: ablations.amendment, disabled_gateway_layers: variantSpec.disable_layers ?? [] } } : {}), prompt_profile: effectiveProfile, fault_profile: faultProfileName ?? (faultRulesName ? `rules:${faultRulesName}` : null), cancel_after_tool_calls: cancelAfterToolCalls ?? null, holdout_excluded_cases: excludedHoldout, sealed_fixtures_loaded: confirmatory ? null : 0, fixtures_loaded: loadedFixtureIds.length, suite: suitePath, selected_case_ids: selected.map((c) => c.case_id), schedule: schedule ? { file: scheduleFile, content_sha256: schedule.content_sha256, order_sha256: schedule.order_sha256, units: schedule.entries.length } : null, attack_channel: positiveControl ? "trusted_user_control" : "untrusted_content", repetitions, temperature: live ? temperature : null,
   agent: externalAgent ? { name: agentName, version: externalAgent.version, commit: externalAgent.commit, contract_version: externalAgent.contract_version, seed_sent_to_model: externalAgent.seed_supported, note: "external agent run unmodified through docs/external/integration-contract.md; both arms run it, only the tool path differs" } : null,
   config_differences: configDifferences(baselineEffective, defendedEffective), cases: [],

@@ -26,7 +26,9 @@ assert.ok(amendments.includes("## A-030"), "Missing amendment A-030 (external va
 const ext = registry.external_validation;
 assert.equal(ext.amendment, "A-030");
 assert.deepEqual(ext.primary_metrics, registry.primary_metrics);
-assert.equal(ext.evaluation_runs_started, false, "A-030 must be registered before the first external evaluation run");
+// The first external evaluation run is recorded in the registry (TB-064) and may not predate the registration.
+if (ext.evaluation_runs_started) assert.ok(typeof ext.evaluation_runs_started_on === "string" && ext.evaluation_runs_started_on >= ext.registered_on, "evaluation_runs_started_on must be on or after registered_on");
+else assert.equal(ext.evaluation_runs_started_on, undefined);
 assert.equal(ext.split_procedure.script, "scripts/external-split.py");
 assert.equal(ext.split_procedure.split_seed, ext.split_seed);
 assert.equal(ext.split_procedure.external_fraction, ext.external_fraction);

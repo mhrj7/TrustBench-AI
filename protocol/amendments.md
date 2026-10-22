@@ -735,3 +735,21 @@ denominators and the unchanged evaluator.
 - **Never used in tuning:**
   - core holdout only: approved-value-substitution, citation-laundering, contact-attribute-leak;
   - holdout-2 only: abstention-override, payment-instruction-insertion, notification-exfiltration.
+
+### A-030 run record (TB-064, 2026-10-22)
+
+Recorded before the first external evaluation run. It adds no amendment: no hypothesis, metric, model, margin, rendering
+or analysis changes. The registry entry gains the run layout:
+- the defended system, `gateway_capability`;
+- the run directory, `runs/external/<model>/`;
+- the two suites, built by `scripts/build-external-validation-suite.py` from `data/external-splits.json`.
+
+The benign twins carry no injection, so they run once, under the primary rendering. The attack suite runs once under
+each registered rendering. Each part follows a TB-028 schedule with five repetitions per unit. The prompt profile,
+temperature and pacing come from the frozen configuration. `scripts/run-external-evaluation.mjs` never runs a part
+again once it has a report.
+
+Before the pass, the live path was checked on the **tuning** families only (`tests/external/evaluation/external-tuning.json`),
+never on the external-validation families. On 2026-10-22 that check on the primary model was 11 of 12 runs invalid: the
+provider's free tier timed out. The pass therefore starts on the primary model once a tuning probe's calls succeed. The
+registered fallback rule (more than 20% invalid pairs in a batch) still applies to the pass itself.

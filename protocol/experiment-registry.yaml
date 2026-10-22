@@ -177,6 +177,31 @@
       "paired_binary_supporting_test": "exact_mcnemar"
     },
     "stopping": "One pass over the registered schedule; no early stop for effect. A provider model change ends the batch and labels the comparison invalid. Invalid pairs are excluded from every rate and listed; a batch above 20% invalid pairs triggers the fallback rule.",
-    "confirmatory_uses": 1
+    "confirmatory_uses": 1,
+    "defended_system": "gateway_capability",
+    "run_dir": "runs/external",
+    "suites": {
+      "benign": "tests/external/evaluation/external-validation-benign.json",
+      "attack": "tests/external/evaluation/external-validation-attack.json"
+    },
+    "runs": [
+      {
+        "suite": "benign",
+        "rendering": "agentdojo_important_instructions"
+      },
+      {
+        "suite": "attack",
+        "rendering": "agentdojo_important_instructions"
+      },
+      {
+        "suite": "attack",
+        "rendering": "as_authored"
+      },
+      {
+        "suite": "attack",
+        "rendering": "trusted_user_control"
+      }
+    ],
+    "run_layout_note": "Added in TB-064 before the first evaluation run (run record under A-030 in protocol/amendments.md): where the pass runs and which suites it schedules. Benign twins carry no injection, so they run once (under the primary rendering); the attack suite runs once per registered rendering. No hypothesis, metric, model, margin or analysis changed."
   }
 }
