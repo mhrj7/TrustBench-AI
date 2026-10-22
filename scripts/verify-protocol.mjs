@@ -20,4 +20,14 @@ assert.equal(registry.model_revision_mixing, "forbidden");
 assert.equal(registry.results_seen_before_freeze, false);
 assert.match(document, /TB-005 has a real provider pilot/);
 assert.match(document, /may not claim universal prompt-injection resistance/);
-console.log(JSON.stringify({ ok: true, protocol_version: registry.protocol_version, required_sections: requiredSections.length, primary_metrics: registry.primary_metrics, holdout_fraction: registry.holdout.holdout_fraction, bootstrap_resamples: registry.uncertainty.bootstrap_resamples }));
+// TB-061: the external validation is pre-registered (A-030) before any external evaluation run.
+const amendments = await readFile("protocol/amendments.md", "utf8");
+assert.ok(amendments.includes("## A-030"), "Missing amendment A-030 (external validation)");
+const ext = registry.external_validation;
+assert.equal(ext.amendment, "A-030");
+assert.deepEqual(ext.primary_metrics, registry.primary_metrics);
+assert.equal(ext.evaluation_runs_started, false, "A-030 must be registered before the first external evaluation run");
+assert.equal(ext.split_procedure.script, "scripts/external-split.py");
+assert.equal(ext.split_procedure.split_seed, ext.split_seed);
+assert.equal(ext.split_procedure.external_fraction, ext.external_fraction);
+console.log(JSON.stringify({ ok: true, protocol_version: registry.protocol_version, required_sections: requiredSections.length, primary_metrics: registry.primary_metrics, holdout_fraction: registry.holdout.holdout_fraction, bootstrap_resamples: registry.uncertainty.bootstrap_resamples, external_validation: { amendment: ext.amendment, protocol_version: ext.protocol_version } }));
