@@ -33,7 +33,7 @@ export function Nav() {
   return (
     <header className="nav" data-scrolled={scrolled || open} data-open={open} data-lenis-prevent={open || undefined}>
       <div className="wrap">
-        <Link to="/" className="wordmark" aria-label="TrustBench, home"><span className="wordmark-mark" aria-hidden="true" />TrustBench</Link>
+        <Link to="/" className="wordmark" aria-label="TrustBench, home"><svg className="wordmark-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="2" fill="#0D0E10" /><rect x="7" y="9" width="18" height="3" fill="#EDEBE6" /><rect x="14.5" y="12" width="3" height="12" fill="#EDEBE6" /><rect x="20" y="20" width="5" height="4" fill="#FFB21F" /></svg>TrustBench</Link>
         <nav className="nav-links" aria-label="Main">
           {LINKS.map(([to, label]) => <NavLink key={to} to={to} className="roll-host"><Roll>{label}</Roll></NavLink>)}
         </nav>
