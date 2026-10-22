@@ -150,7 +150,7 @@ Where each test lives:
 | 3 | The paired-report check scans every output file for credential-shaped values and the provider keys in its environment; the goose test checks the environment goose gets is exactly the allowlist | TB-057, passing |
 | 4 | The goose test plants `AGENTS.md` and `.goosehints` in the working folder and checks they never reach the model, checks the offered tools, and checks that no never-set variable is present | TB-057, passing |
 | 5 | Adapter unit test: a failing trace write refuses that call and every later one | TB-057, passing |
-| 6 | Network confinement and bypass tests | TB-058 |
+| 6 | `tests/external/authorization/` (TB-058): five bypass categories in both modes, each with a positive control and the audit check; `evidence/external-authorization-report.json`, `evidence/external-authorization-report-linux.json` | macOS 12/12; Linux 10/12 (Mode B `direct_calls` and `unlisted_tools` open, see the threat model's uncovered list) |
 | 7 | The paired-report check compares the configuration and system-prompt hashes of both arms of every pair | TB-057, passing |
 
 ## Changes in 1.1.0
@@ -170,7 +170,7 @@ Found while building the adapter (TB-057); every run in TB-057's evidence used 1
 
 ## Changes in 1.2.0
 
-Made in TB-058 (in progress). TB-057's evidence ran under 1.1.0.
+Made in TB-058. TB-057's evidence ran under 1.1.0.
 
 - **Sandbox.** goose and every process it starts run inside an OS sandbox (`src/external/sandbox.ts`, configured in
   `configs/external-agents.yaml` `sandbox`): `sandbox-exec` on macOS, Landlock on Linux
@@ -187,6 +187,9 @@ Made in TB-058 (in progress). TB-057's evidence ran under 1.1.0.
 - **Native-mode data.** The native integration's synthetic data lives in a service folder outside the agent's sandbox, so
   the agent reaches it only through the gateway.
 
-Not yet demonstrated: the bypass tests that would show these controls hold against deliberate attempts (TB-058
-acceptance). Until they pass, no claim says goose cannot reach a tool except through the adapter or gateway.
+Tested in TB-058 (`tests/external/authorization/`):
+- **macOS (sandbox-exec):** all 12 checks pass in both modes. Each bypass is refused and audited, each positive control
+  detects a working bypass, and no tool effect happens without a gateway allow (`evidence/external-authorization-report.json`).
+- **Linux (Landlock, the service container):** Mode A passes all 6 checks. Mode B has two open checks (`evidence/external-authorization-report-linux.json`), so no
+  claim covers the native integration on Linux. The live service runs Mode A only.
 

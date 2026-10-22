@@ -105,9 +105,9 @@ Results are in `evidence/tb057-paired-check.json`.
 
 ## Not covered here
 
-- **Network confinement of the goose process** (EX-22) and the bypass tests (direct calls, forged tokens, argument
-  smuggling, calls after cancellation, in both modes) belong to TB-058. Until then no claim says goose cannot reach a
-  tool except through the adapter or gateway.
+- **Bypass resistance** is tested in TB-058 (`tests/external/authorization/`). On macOS all 12 checks pass in both
+  modes. On Linux, Mode A passes all 6, but Mode B has two open checks (`evidence/external-authorization-report-linux.json`), so no claim covers the native
+  integration on Linux.
 - **Mode B covers one integration.** It is a file-reading one; goose's SQL or HTTP integrations are not exercised.
   The allowed operations are read-only, so Mode B shows interposition and per-call decisions, not a defense against
   harmful writes.
