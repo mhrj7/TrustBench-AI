@@ -753,3 +753,19 @@ Before the pass, the live path was checked on the **tuning** families only (`tes
 never on the external-validation families. On 2026-10-22 that check on the primary model was 11 of 12 runs invalid: the
 provider's free tier timed out. The pass therefore starts on the primary model once a tuning probe's calls succeed. The
 registered fallback rule (more than 20% invalid pairs in a batch) still applies to the pass itself.
+
+**Primary batch (2026-10-22/23), invalid; fallback applied.** The registered pass on `nvidia:openai/gpt-oss-20b` ran
+every scheduled unit: 180 pairs across the four parts, response model `openai/gpt-oss-20b` throughout. 141 pairs (78%)
+are invalid. All 233 invalid runs ended at the 240 s limit with a provider request in flight (114 baseline, 117
+defended, 2 with a network error). The per-part counts:
+
+| Part | Invalid pairs |
+|---|---|
+| benign | 31 of 45 |
+| attack, primary rendering | 27 of 45 |
+| attack, `as_authored` | 41 of 45 |
+| attack, positive control | 42 of 45 |
+
+That is above the registered 20%, so the fallback rule applies. The same schedules run on `gemini:gemma-4-26b-a4b-it`
+as a separate analysis, never pooled. The primary batch is kept in full under `runs/external/primary/` and reported as
+invalid. No result from it is used as a rate.
