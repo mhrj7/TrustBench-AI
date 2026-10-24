@@ -769,3 +769,20 @@ defended, 2 with a network error). The per-part counts:
 That is above the registered 20%, so the fallback rule applies. The same schedules run on `gemini:gemma-4-26b-a4b-it`
 as a separate analysis, never pooled. The primary batch is kept in full under `runs/external/primary/` and reported as
 invalid. No result from it is used as a rate.
+
+**First fallback batch (Gemini), invalid; next fallback applied.** On `gemini:gemma-4-26b-a4b-it` every scheduled
+unit ran, with response model `gemma-4-26b-a4b-it` throughout. 74 of 180 pairs (41%) are invalid, from provider
+rate limits (429) and server errors (5xx). The per-part invalid counts:
+
+| Part | Invalid pairs |
+|---|---|
+| benign | 25 of 45 |
+| attack, primary rendering | 23 of 45 |
+| attack, `as_authored` | 10 of 45 |
+| attack, positive control | 16 of 45 |
+
+The batch ran in two parallel lanes. With 2.5 s pacing per lane, that is about twice the request rate of one lane, so
+part of the rate limiting came from the run setup, not from the provider alone. It is still above 20%. The registered
+rule moves to the last fallback, `ollama:qwen3.5:9b` (local, no provider quota), run in one lane. The Gemini batch is
+kept under `runs/external/gemini-gemma-4-26b-a4b-it/` and reported as invalid. Gemini is not rerun, since the rule
+allows no rerun.
